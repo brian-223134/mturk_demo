@@ -1,0 +1,1146 @@
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script><crowd-form>
+<section class="entire-UI">
+<div class="instruction-panel">
+<div class="panel panel-primary">
+<div class="panel-heading"><strong>Instructions</strong></div>
+
+<div class="panel-body instruction-content">
+<div class="example-content p-3 mlr-2">&nbsp;</div>
+
+<p id="Instruction"><span class="highlight-yellow"><strong>Your task is to evaluate the relationship between Chunks and Atomic Facts.<br />
+​</strong></span><strong style="background-color: rgb(254, 243, 199);">For each Chunk, identify which Atomic Facts are grounded by the information contained in that Chunk.</strong></p>
+
+<h2><strong>Important Notes:</strong></h2>
+
+<p><strong>Grounding Criteria:&nbsp;</strong>An Atomic Fact is considered<strong> grounded</strong> by a Chunk if&nbsp;<strong>You can confirm whether the fact is true or false using only the information in that Chunk.</strong></p>
+
+<ul>
+	<li>Atomic Facts don&#39;t need to contain <em>exact wording</em> from the Chunk. Synonyms, alternative phrasings, or paraphrased information are acceptable if the meaning is supported by the Chunk.</li>
+	<li>An Atomic Fact can be supported by multiple different Chunks (<strong>Do not exclude a fact from evaluation&nbsp;just because it appeared in a previous chunk</strong>).</li>
+	<li>Each Chunk should be evaluated independently - focus only on what information that specific Chunk provides.</li>
+</ul>
+</div>
+</div>
+
+<div class="example-content p-3 mlr-2">
+<p><strong class="notice-heading"><u>NOTICE</u></strong></p>
+
+<ul>
+	<li style="margin: 5px 0"><strong>IMPORTANT:</strong> Some questions include attention checks to evaluate the accuracy of your judgments.<br />
+	​<strong>Submissions that fail these attention checks will be rejected. </strong>These are fundamental requirements that must be passed.</li>
+</ul>
+</div>
+
+<div class="task-description">
+<div class="panel panel-primary">
+<div class="panel-heading evaluation-header"><strong>Evaluation Section: Chunk-based fact grounding assessment</strong></div>
+
+<div class="example-content" style="background: white; padding: 20px;">
+<div style="max-width: 800px; margin: 0 auto; text-align: center;">
+<div style="line-height: 1.6; margin-top: 20px;">For each Chunk, evaluate each Atomic Fact that is grounded by the information contained in that Chunk.​
+<div style="margin-top: 20px; padding: 10px; border: 2px solid #000; border-radius: 5px; display: inline-block; background-color: #f9f9f9;"><strong>Thank you for following our instructions; we sincerely appreciate your time and effort.</strong></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="panel-body"><strong><span style="font-size: 12px;">Your current progress</span></strong>
+
+<div id="progressBarContainer">
+<div id="progressBar"><strong><span id="progressPercentage">0%</span></strong></div>
+</div>
+</div>
+
+<div class="panel-body highlight-remaining">
+<div id="incompleteContent"><strong>&nbsp;</strong></div>
+</div>
+
+<div class="navigation-instruction">
+<div class="instruction-box"><strong><span class="instruction-text">Click the tab numbers below to navigate between chunks</span></strong></div>
+</div>
+
+<div id="summary-container"><strong><crowd-tabs id="summary-tabs"></crowd-tabs></strong>
+
+<div style="text-align: center; margin-top: 30px;"><strong><button disabled="disabled" id="submitButton" onclick="handleFormSubmit()">Submit</button></strong></div>
+
+<form action="https://www.mturk.com/mturk/externalSubmit" id="mturk_form" method="post" style="display: none;"><strong><input id="inputAnswers" name="input_answers" type="hidden" /></strong></form>
+</div>
+<script>
+var idx = ${idx};
+var qid = ${qid};
+var query = ${query};
+var retrieved_chunk = ${retrieved_chunk};
+var atomic_facts = ${atomic_facts};
+var keycount = ${key_counts};
+var decomposed_query = ${decomposed_query};
+var query_fact_relevance_check = ${query_fact_relevance_check};
+var chunk_fact_relevance_check = ${chunk_fact_relevance_check};
+var query_fact_coverage_check = ${query_fact_coverage_check};
+var query_chunk_coverage_check = ${query_chunk_coverage_check};
+var attention_check = ${attention_check};
+var atomicFactSelections = {};
+var tabsContainer = document.getElementById("summary-tabs");
+
+ function el(tag, attrs, html) {
+ var e = document.createElement(tag);
+ if (attrs) Object.keys(attrs).forEach(function(k){ e.setAttribute(k, attrs[k]); });
+ if (html !== undefined) e.innerHTML = html;
+ return e;
+ }
+ 
+ query.forEach((queryText, queryIdx) => {
+ var displayedQuery = queryText;
+ var allChunks = retrieved_chunk;
+ if (typeof allChunks === 'string') {
+ try { allChunks = JSON.parse(allChunks); } catch (e) { allChunks = []; }
+ }
+ var displayedChunk = allChunks[queryIdx] || '';
+ var displayedAtomic = atomic_facts[queryIdx];
+ var tempkeycount = keycount[queryIdx];
+ var attention_check_label = Number(attention_check[queryIdx]) || 0;
+ var inputName = attention_check_label === 1 ? 'attention_' + queryIdx : ('general_' + queryIdx);
+ 
+ var tab = document.createElement("crowd-tab");
+ tab.setAttribute("header", "Tab " + (queryIdx + 1));
+ 
+ var atomicFactCount = tempkeycount[1];
+ var chipsHTML = '';
+ for (let j = 0; j < atomicFactCount; j++) {
+chipsHTML += '<button type="button" class="atomic-chip" id="fact-chip-'+queryIdx+'-'+j+'" data-tab="'+queryIdx+'" data-fact="'+j+'">Fact '+(j+1)+'</button>';
+ }
+ 
+ tab.innerHTML =
+ '<div class="tab-content">' +
+ '<div class="query-section"><h3 class="section-title">Chunk Evaluation</h3></div>' +
+ '<div class="evaluation-section">' +
+ '<div class="chunk-atomic-container">' +
+ '<div class="chunk-section">' +
+ '<div class="chunk-card">' +
+ '<div class="chunk-header"><h4>Chunk ' + (queryIdx + 1) + '</h4></div>' +
+ '<div class="chunk-content"><div class="chunk-text">' + displayedChunk + '</div></div>' +
+ '</div>' +
+ '</div>' +
+ '<div class="atomic-section">' +
+ '<div class="atomic-container">' +
+ '<div class="atomic-header"><h4>Select Atomic Facts to Evaluate</h4></div>' +
+ '<div class="atomic-content">' +
+ '<div class="chips-row" id="chips-row-'+queryIdx+'">' + chipsHTML + '</div>' +
+ '<div class="atomic-fact-display" id="atomic-display-' + queryIdx + '">' +
+ '<p style="margin:0; text-align:center; color:#6b7280; width:100%;">Drag left/right to browse facts, then click a chip</p>' +
+ '</div>' +
+ '</div>' +
+ '</div>' +
+ '</div>' +
+ '</div>' +
+ '</div>' +
+ '</div>';
+ 
+ tabsContainer.appendChild(tab);
+ 
+ setTimeout(function() {
+ var tabElement = tabsContainer.children[queryIdx];
+ if (tabElement) {
+ var headerElement = tabElement.shadowRoot ?
+ tabElement.shadowRoot.querySelector('[slot="header"]') :
+ tabElement.querySelector('[slot="header"]');
+ if (!headerElement) headerElement = tabElement.querySelector('.tab-header');
+ if (headerElement) headerElement.innerHTML = "Tab " + (queryIdx + 1) + ' <span class="tab-status" id="tab-status-' + queryIdx + '"><span class="tab-indicator pending">•</span></span>';
+ }
+ 
+ var row = document.getElementById('chips-row-'+queryIdx);
+ if (row) enableDragScroll(row);
+ 
+ row.querySelectorAll('.atomic-chip').forEach(function(btn){
+btn.addEventListener('click', function(e){
+  e.preventDefault();       
+  e.stopPropagation();      
+  var t = Number(e.currentTarget.getAttribute('data-tab'));
+  var f = Number(e.currentTarget.getAttribute('data-fact'));
+  showAtomicFact(t, f);  
+  row.querySelectorAll('.atomic-chip').forEach(function(b){ b.classList.remove('active'); });
+  e.currentTarget.classList.add('active');
+});
+
+ });
+ }, 100);
+ });
+ 
+ function showAtomicFact(tabIndex, factIndex) {
+ var displayedAtomic = atomic_facts[tabIndex];
+ var attention_check_label = Number(attention_check[tabIndex]) || 0;
+ var inputName = attention_check_label === 1 ? 'attention_' + tabIndex : ('general_' + tabIndex);
+ var displayDiv = document.getElementById('atomic-display-' + tabIndex);
+ var checkboxName = inputName + '_' + (factIndex + 1);
+ 
+ var currentRadio = displayDiv.querySelector('input[type="radio"]:checked');
+ if (currentRadio) atomicFactSelections[currentRadio.name] = currentRadio.value;
+ 
+ displayDiv.style.background = 'white';
+ displayDiv.style.border = '2px solid #3b82f6';
+ displayDiv.style.borderLeft = '4px solid #3b82f6';
+ displayDiv.style.padding = '20px';
+ displayDiv.style.alignItems = 'flex-start';
+ 
+ displayDiv.innerHTML =
+ '<div class="current-atomic-fact">' +
+ '<div class="atomic-fact-header"><h4>Atomic Fact ' + (factIndex + 1) + '</h4></div>' +
+ '<div class="atomic-fact-content">' +
+ '<p class="atomic-fact-text">' + displayedAtomic[factIndex] + '</p>' +
+ '<div class="relevance-selection">' +
+ '<p class="question">Is this atomic fact grounded by the chunk?</p>' +
+ '<div class="radio-options">' +
+ '<label class="radio-option" data-role="opt">' +
+ '<input type="radio" name="' + checkboxName + '" value="grounded">' +
+ '<span class="radio-custom"></span>' +
+ '<span class="radio-text">Grounded</span>' +
+ '</label>' +
+ '<label class="radio-option" data-role="opt">' +
+ '<input type="radio" name="' + checkboxName + '" value="not_grounded">' +
+ '<span class="radio-custom"></span>' +
+ '<span class="radio-text">Not Grounded</span>' +
+ '</label>' +
+ '</div>' +
+ '</div>' +
+ '<div class="nav-row">' +
+ '<button type="button" class="nav-btn" data-dir="-1" data-tab="'+tabIndex+'" data-fact="'+factIndex+'">Prev</button>' +
+ '<button type="button" class="nav-btn" data-dir="1" data-tab="'+tabIndex+'" data-fact="'+factIndex+'">Next</button>' +
+ '</div>' +
+ '</div>' +
+ '</div>';
+ 
+displayDiv.querySelectorAll('label.radio-option input[type="radio"]').forEach(function(r){
+    r.addEventListener('change', function(e){
+        var group = displayDiv.querySelectorAll('label.radio-option');
+        group.forEach(function(l){ 
+            l.classList.remove('selected'); 
+            l.querySelector('.radio-custom').classList.remove('selected'); 
+        });
+        
+        var lab = e.target.closest('label.radio-option');
+        if (lab) { 
+            lab.classList.add('selected'); 
+            var dot = lab.querySelector('.radio-custom'); 
+            if (dot) dot.classList.add('selected'); 
+        }
+        
+        atomicFactSelections[e.target.name] = e.target.value;
+        
+        updateFactStatus(tabIndex, factIndex, true);
+        updateProgress();
+        setChipState(tabIndex, factIndex, e.target.value); 
+    });
+});
+ 
+ var saved = atomicFactSelections[checkboxName];
+ if (saved) {
+ var radioToCheck = displayDiv.querySelector('input[name="'+checkboxName+'"][value="'+saved+'"]');
+ if (radioToCheck) {
+ radioToCheck.checked = true;
+ var lab = radioToCheck.closest('label.radio-option');
+ if (lab) { lab.classList.add('selected'); var dot = lab.querySelector('.radio-custom'); if (dot) dot.classList.add('selected'); }
+ }
+ }
+ 
+ displayDiv.querySelectorAll('.nav-btn').forEach(function(btn){
+ btn.addEventListener('click', function(e){
+ var dir = Number(e.currentTarget.getAttribute('data-dir'));
+ var t = Number(e.currentTarget.getAttribute('data-tab'));
+ var f = Number(e.currentTarget.getAttribute('data-fact'));
+ var max = keycount[t][1];
+ var nf = Math.min(Math.max(f + dir, 0), max - 1);
+ var row = document.getElementById('chips-row-'+t);
+ if (row) {
+ var old = document.getElementById('fact-chip-'+t+'-'+f);
+ var neu = document.getElementById('fact-chip-'+t+'-'+nf);
+ if (old) old.classList.remove('active');
+ if (neu) { neu.classList.add('active'); row.scrollTo({left: neu.offsetLeft - 24, behavior: 'smooth'}); }
+ }
+ showAtomicFact(t, nf);
+ });
+ });
+ }
+ 
+ function updateTabStatus(tabIndex) {
+ var atomicFactCount = keycount[tabIndex][1];
+ var attention_check_label = Number(attention_check[tabIndex]) || 0;
+ var inputPrefix = attention_check_label === 1 ? 'attention_' + tabIndex : ('general_' + tabIndex);
+ var completedFacts = 0;
+ for (var j = 0; j < atomicFactCount; j++) {
+ var radioName = inputPrefix + '_' + (j + 1);
+ var checkedRadio = document.querySelector('input[name="' + radioName + '"]:checked');
+ if (checkedRadio || atomicFactSelections[radioName]) completedFacts++;
+ }
+ var tabStatusElement = document.getElementById('tab-status-' + tabIndex);
+ if (!tabStatusElement) return;
+ var indicator = tabStatusElement.querySelector('.tab-indicator');
+ if (completedFacts === atomicFactCount) { indicator.className = 'tab-indicator completed'; indicator.innerHTML = '✓'; }
+ else if (completedFacts > 0) { indicator.className = 'tab-indicator partial'; indicator.innerHTML = completedFacts + '/' + atomicFactCount; }
+ else { indicator.className = 'tab-indicator pending'; indicator.innerHTML = '•'; }
+ }
+ 
+ function updateAllTabStatuses() {
+ for (var i = 0; i < query.length; i++) updateTabStatus(i);
+ }
+ 
+ function updateFactStatus(tabIndex, factIndex, isAnswered) {
+ var statusIndicator = document.getElementById('status-' + tabIndex + '-' + factIndex);
+ var inputPrefix = (Number(attention_check[tabIndex]) || 0) === 1 ? 'attention_' + tabIndex : ('general_' + tabIndex);
+ var radioName = inputPrefix + '_' + (factIndex + 1);
+ 
+ if (statusIndicator) {
+ if (isAnswered) {
+ statusIndicator.className = 'status-indicator completed';
+ statusIndicator.innerHTML = '✓';
+ var checkedRadio = document.querySelector('input[name="' + radioName + '"]:checked');
+ if (checkedRadio) atomicFactSelections[radioName] = checkedRadio.value;
+ } else {
+ statusIndicator.className = 'status-indicator pending';
+ statusIndicator.innerHTML = '•';
+ }
+ }
+ 
+ var val = (function(){
+ var cr = document.querySelector('input[name="' + radioName + '"]:checked');
+ if (cr) return cr.value;
+ return atomicFactSelections[radioName];
+ })();
+ setChipState(tabIndex, factIndex, val);
+ }
+ 
+ 
+ function initializeFactStatuses() {
+ for (var i = 0; i < query.length; i++) {
+ var atomicFactCount = keycount[i][1];
+ var inputPrefix = (Number(attention_check[i]) || 0) === 1 ? 'attention_' + i : ('general_' + i);
+ for (var j = 0; j < atomicFactCount; j++) {
+ var radioName = inputPrefix + '_' + (j + 1);
+ var checkedRadio = document.querySelector('input[name="' + radioName + '"]:checked');
+ var hasSelection = checkedRadio || atomicFactSelections[radioName];
+ updateFactStatus(i, j, !!hasSelection);
+ setChipState(i, j, checkedRadio ? checkedRadio.value : atomicFactSelections[radioName]);
+ }
+ }
+ }
+ 
+function handleFormSubmit() {
+  var isCoverageMode = typeof subquerySelections !== 'undefined' && subquerySelections !== null;
+  var selections = isCoverageMode ? (subquerySelections || {}) : (atomicFactSelections || {});
+  var countAt = function(tabIdx) {
+    if (keycount[tabIdx] && keycount[tabIdx][isCoverageMode ? 0 : 1]) {
+      return keycount[tabIdx][isCoverageMode ? 0 : 1];
+    }
+    return 0;
+  };
+
+  var checkedMap = {};
+  Array.prototype.forEach.call(document.querySelectorAll('input[type="radio"]:checked'), function(input) {
+    checkedMap[input.name] = input.value;
+  });
+
+  var merged = {};
+  for (var k in selections) {
+    if (Object.prototype.hasOwnProperty.call(selections, k)) merged[k] = selections[k];
+  }
+  for (var k2 in checkedMap) {
+    if (Object.prototype.hasOwnProperty.call(checkedMap, k2)) merged[k2] = checkedMap[k2];
+  }
+
+  var ordered = [];
+  var totalTabs = Array.isArray(query) ? query.length : 0;
+  for (var i = 0; i < totalTabs; i++) {
+    var prefix = (Number(attention_check[i]) || 0) === 1 ? ('attention_' + i) : ('general_' + i);
+    var cnt = countAt(i);
+    for (var j = 1; j <= cnt; j++) {
+      var name = prefix + '_' + j;
+      if (Object.prototype.hasOwnProperty.call(merged, name)) {
+        ordered.push({ name: name, value: merged[name] });
+      }
+    }
+  }
+
+  var crowdForm = document.querySelector('crowd-form');
+  if (!crowdForm) return;
+
+  var hidden = crowdForm.querySelector('input[name="input_answers"]');
+  if (!hidden) {
+    hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'input_answers';
+    hidden.id = 'inputAnswers_crowd';
+    crowdForm.appendChild(hidden);
+  }
+  hidden.value = JSON.stringify(ordered);
+
+  var radios = Array.prototype.slice.call(document.querySelectorAll('input[type="radio"]'));
+  radios.forEach(function(r) {
+    r.setAttribute('data-name-bak', r.getAttribute('name') || '');
+    r.removeAttribute('name');
+  });
+
+  crowdForm.submit();
+
+  setTimeout(function() {
+    radios.forEach(function(r) {
+      var bak = r.getAttribute('data-name-bak');
+      if (bak) r.setAttribute('name', bak);
+      r.removeAttribute('data-name-bak');
+    });
+  }, 0);
+}
+ 
+function updateProgress() {
+var totalTabs = Array.isArray(query) ? query.length : 0;
+
+var totalFacts = 0;
+var answeredFacts = 0;
+var completedTabs = 0;
+var remainingTabs = [];
+
+for (var i = 0; i < totalTabs; i++) {
+var atomicFactCount = (keycount[i] && keycount[i][1]) ? keycount[i][1] : 0;
+totalFacts += atomicFactCount;
+
+var inputPrefix = (Number(attention_check[i]) || 0) === 1 ? ('attention_' + i) : ('general_' + i);
+var allFactsAnswered = true;
+
+for (var j = 0; j < atomicFactCount; j++) {
+	var radioName = inputPrefix + '_' + (j + 1);
+	var checkedRadio = document.querySelector('input[name="' + radioName + '"]:checked');
+	var hasAnswer = !!checkedRadio || !!atomicFactSelections[radioName];
+
+	if (hasAnswer) answeredFacts++;
+	if (!hasAnswer) allFactsAnswered = false;
+}
+
+if (allFactsAnswered && atomicFactCount > 0) {
+	completedTabs++;
+} else {
+	remainingTabs.push(i + 1);
+}
+}
+
+var progressPercent = totalFacts === 0 ? 0 : (answeredFacts / totalFacts) * 100;
+
+var progressBar = document.getElementById("progressBar");
+if (progressBar) progressBar.style.width = progressPercent + "%";
+
+var progressPercentage = document.getElementById("progressPercentage");
+if (progressPercentage) progressPercentage.innerText = Math.round(progressPercent) + "%";
+
+var submitButton = document.getElementById("submitButton");
+var allAnswered = (answeredFacts === totalFacts) && (totalFacts > 0);
+if (submitButton) {
+submitButton.disabled = !allAnswered;
+if (allAnswered) { submitButton.classList.add("enabled"); submitButton.style.cursor = "pointer"; }
+else { submitButton.classList.remove("enabled"); submitButton.style.cursor = "not-allowed"; }
+}
+
+updateAllTabStatuses();
+var incompleteContent = document.getElementById("incompleteContent");
+if (incompleteContent) {
+if (!allAnswered && totalTabs > 0) {
+	var remaining = totalTabs - completedTabs;
+	var tabsLabel = remaining === 1 ? 'tab' : 'tabs';
+	var numbers = remainingTabs.join(', ');
+	incompleteContent.innerHTML = '<strong style="color: #dc2626;">' + remaining + ' ' + tabsLabel + ' remaining (Tab ' + numbers + ') - answer all atomic facts per tab</strong>';
+} else if (allAnswered) {
+	incompleteContent.innerHTML = '<strong style="color: #10b981;">All tabs completed! You can now submit.</strong>';
+} else {
+	incompleteContent.innerHTML = '<strong>&nbsp;</strong>';
+}
+}
+}
+
+ 
+ function forceLayout() {
+ document.querySelectorAll('.chunk-atomic-container').forEach(function(container) {
+ container.style.display = 'flex';
+ container.style.flexDirection = 'row';
+ container.style.flexWrap = 'nowrap';
+ var chunkSection = container.querySelector('.chunk-section');
+ var atomicSection = container.querySelector('.atomic-section');
+ if (chunkSection) { chunkSection.style.flex = '0 0 48%'; chunkSection.style.maxWidth = '50%'; chunkSection.style.width = '48%'; chunkSection.style.minWidth = '0'; }
+ if (atomicSection) { atomicSection.style.flex = '0 0 48%'; atomicSection.style.maxWidth = '50%'; atomicSection.style.width = '48%'; atomicSection.style.minWidth = '0'; }
+ });
+ }
+ 
+ function enableDragScroll(container) {
+ var isDown = false, startX = 0, scrollLeft = 0;
+ container.addEventListener('mousedown', function(e){ isDown = true; container.classList.add('dragging'); startX = e.pageX - container.offsetLeft; scrollLeft = container.scrollLeft; });
+ document.addEventListener('mouseleave', function(){ isDown = false; container.classList.remove('dragging'); });
+ document.addEventListener('mouseup', function(){ isDown = false; container.classList.remove('dragging'); });
+ container.addEventListener('mousemove', function(e){
+ if(!isDown) return;
+ e.preventDefault();
+ var x = e.pageX - container.offsetLeft;
+ var walk = (x - startX) * 1.25;
+ container.scrollLeft = scrollLeft - walk;
+ });
+ container.addEventListener('wheel', function(e){
+ if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+ container.scrollLeft += e.deltaY;
+ e.preventDefault();
+ }
+ }, { passive: false });
+ }
+ 
+ function setChipState(tabIndex, factIndex, value) {
+ var chip = document.getElementById('fact-chip-' + tabIndex + '-' + factIndex);
+ if (!chip) return;
+ chip.classList.remove('chip-grounded', 'chip-not_grounded');
+ if (value === 'grounded') chip.classList.add('chip-grounded');
+ else if (value === 'not_grounded') chip.classList.add('chip-not_grounded');
+ }
+ 
+ document.addEventListener("change", function(event) {
+ if (event.target && event.target.type === 'radio') {
+ atomicFactSelections[event.target.name] = event.target.value;
+ setTimeout(function() { 
+            updateProgress();
+            initializeFactStatuses(); 
+            updateAllTabStatuses(); 
+        }, 10);
+ }
+ });
+ 
+ document.addEventListener("DOMContentLoaded", function() {
+ var toggleButton = document.querySelector('crowd-toggle-button[name="toggleParagraph"]');
+ var instructionContent = document.querySelector('.instruction-content');
+ if (toggleButton && instructionContent) {
+ var isHidden = false;
+ toggleButton.addEventListener('click', function() {
+ if (isHidden) { instructionContent.style.display = 'block'; toggleButton.textContent = 'Click here to hide instructions'; isHidden = false; }
+ else { instructionContent.style.display = 'none'; toggleButton.textContent = 'Click here to show instructions'; isHidden = true; }
+ });
+ }
+ setTimeout(function(){ updateProgress(); initializeFactStatuses(); updateAllTabStatuses(); forceLayout(); }, 1);
+ var tabsContainer = document.getElementById("summary-tabs");
+ if (tabsContainer) {
+ tabsContainer.addEventListener('click', function(){ setTimeout(forceLayout, 1); setTimeout(forceLayout, 3); setTimeout(forceLayout, 5); });
+ var observer = new MutationObserver(function(){ forceLayout(); });
+ observer.observe(tabsContainer, { childList: true, subtree: true, attributes: true, attributeOldValue: true, characterData: true });
+ }
+ window.addEventListener('resize', forceLayout);
+ });
+ 
+ window.addEventListener("load", function() {
+ setTimeout(function(){ updateProgress(); initializeFactStatuses(); updateAllTabStatuses(); forceLayout(); }, 5);
+ var targetNode = document.getElementById('summary-tabs');
+ if (targetNode) {
+ var observer = new MutationObserver(function(){
+ updateProgress();
+ setTimeout(function(){ initializeFactStatuses(); updateAllTabStatuses(); forceLayout(); }, 1);
+ });
+ observer.observe(targetNode, { childList: true, subtree: true, attributes: true });
+ }
+ });
+ 
+ if (typeof customElements !== 'undefined') {
+ customElements.whenDefined('crowd-tabs').then(function() {
+ setTimeout(function(){ updateProgress(); initializeFactStatuses(); updateAllTabStatuses(); forceLayout(); }, 1);
+ });
+ }
+ </script></div>
+</section>
+</crowd-form>
+
+<p>
+<style type="text/css">body {
+ margin: 0;
+ padding: 0;
+ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+ line-height: 1.8;
+ color: #333;
+ background-color: #f5f7fa;
+ }
+ .entire-UI {
+ max-width: 1200px;
+ margin: 20px auto;
+ padding: 20px;
+ background-color: #fff;
+ box-shadow: 0 0 20px rgba(0,0,0,0.1);
+ border-radius: 12px;
+ }
+ .panel {
+ border: 1px solid #e1e8ed;
+ border-radius: 8px;
+ margin-bottom: 20px;
+ background-color: #fff;
+ box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+ }
+ .panel-primary {
+ border-color: #3b82f6;
+ }
+ .panel-heading {
+ background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+ color: #fff;
+ padding: 20px;
+ font-size: 24px;
+ font-weight: bold;
+ border-bottom: 1px solid #3b82f6;
+ border-top-left-radius: 8px;
+ border-top-right-radius: 8px;
+ text-align: center;
+ text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+ }
+ .evaluation-header {
+ background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+ text-align: center;
+ }
+ .evaluation-header strong {
+ font-size: 20px;
+ color: #ffffff;
+ text-transform: uppercase;
+ letter-spacing: 0.5px;
+ display: block;
+ }
+ .panel-body {
+ padding: 20px;
+ }
+ .instruction-content {
+ transition: all 0.3s ease;
+ }
+ .example-content {
+ margin-top: 10px;
+ margin-bottom: 10px;
+ }
+ .mlr-2 {
+ margin-left: 2px;
+ margin-right: 2px;
+ }
+ .p-3 {
+ padding: 3px;
+ }
+ .text-blue {
+ color: #3b82f6;
+ font-weight: 600;
+ }
+ .text-red {
+ color: #ef4444;
+ font-weight: 600;
+ }
+ .highlight-yellow {
+ background-color: #fef3c7;
+ padding: 8px;
+ border-radius: 6px;
+ border-left: 4px solid #f59e0b;
+ }
+ .notice-heading {
+ font-size: 20px;
+ color: #dc2626;
+ }
+ .task-description {
+ margin-top: 20px;
+ }
+ #progressBarContainer {
+ width: 100%;
+ background-color: #e5e7eb;
+ margin: 10px 0;
+ border-radius: 12px;
+ overflow: hidden;
+ box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+ }
+ #progressBar {
+ width: 0%;
+ height: 20px;
+ background: linear-gradient(90deg, #10b981, #059669);
+ position: relative;
+ transition: width 0.4s ease;
+ border-radius: 12px;
+ }
+ #progressPercentage {
+ position: absolute;
+ right: 10px;
+ top: 50%;
+ transform: translateY(-50%);
+ color: white;
+ line-height: 1;
+ font-size: 12px;
+ font-weight: bold;
+ text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+ }
+ .highlight-remaining {
+ background: white;
+ }
+ #incompleteContent {
+ font-weight: bold;
+ color: #dc2626;
+ font-size: 16px;
+ }
+ #summary-container {
+ max-width: 1100px;
+ margin: 20px auto;
+ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+ color: #374151;
+ }
+ crowd-tabs#summary-tabs {
+ border: none;
+ border-radius: 12px;
+ box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+ }
+ .tab-status {
+ margin-left: 8px;
+ }
+ .tab-indicator {
+ font-size: 12px;
+ font-weight: bold;
+ width: 18px;
+ height: 18px;
+ border-radius: 50%;
+ display: inline-flex;
+ align-items: center;
+ justify-content: center;
+ margin-left: 4px;
+ }
+ .tab-indicator.pending {
+ background: #fbbf24;
+ color: white;
+ }
+ .tab-indicator.partial {
+ background: #f59e0b;
+ color: white;
+ font-size: 10px;
+ }
+ .tab-indicator.completed {
+ background: #10b981;
+ color: white;
+ }
+ #submitButton {
+ background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+ color: #6b7280;
+ padding: 16px 48px;
+ border: none;
+ border-radius: 12px;
+ font-size: 18px;
+ font-weight: bold;
+ cursor: not-allowed;
+ transition: all 0.3s ease;
+ box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+ }
+ #submitButton:disabled {
+ background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+ color: #6b7280;
+ cursor: not-allowed;
+ }
+ #submitButton.enabled {
+ background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+ color: #fff;
+ cursor: pointer;
+ box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+ }
+ #submitButton.enabled:hover {
+ background: linear-gradient(135deg, #2563eb, #1e40af);
+ transform: translateY(-1px);
+ box-shadow: 0 6px 12px rgba(59, 130, 246, 0.4);
+ }
+ .tab-content {
+ padding: 0;
+ }
+ .section-title {
+ color: #1e40af;
+ font-size: 20px;
+ font-weight: 700;
+ margin: 0 0 12px 0;
+ padding-bottom: 8px;
+ border-bottom: 2px solid #3b82f6;
+ }
+ .evaluation-section {
+ background: white;
+ padding: 24px;
+ overflow-x: auto;
+ }
+ .chunk-atomic-container {
+ display: flex !important;
+ flex-direction: row !important;
+ gap: 30px;
+ min-height: 600px;
+ width: 100%;
+ align-items: flex-start;
+ flex-wrap: nowrap !important;
+ }
+ .chunk-section {
+ flex: 0 0 48% !important;
+ min-width: 0 !important;
+ max-width: 50% !important;
+ width: 48% !important;
+ }
+ .atomic-section {
+ flex: 0 0 48% !important;
+ min-width: 0 !important;
+ max-width: 50% !important;
+ width: 48% !important;
+ display: flex;
+ flex-direction: column;
+ }
+ .chunk-card {
+ background: white;
+ border: 2px solid #e5e7eb;
+ border-radius: 16px;
+ overflow: hidden;
+ box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+ height: fit-content;
+ }
+ .chunk-header {
+ background: linear-gradient(135deg, #3b82f6, #2563eb);
+ color: white;
+ padding: 16px 24px;
+ text-align: center;
+ }
+ .chunk-header h4 {
+ margin: 0;
+ font-size: 18px;
+ font-weight: 600;
+ letter-spacing: 0.5px;
+ }
+ .chunk-content {
+ padding: 24px;
+ }
+ .chunk-text {
+ background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+ border: 1px solid #e5e7eb;
+ border-left: 4px solid #0ea5e9;
+ border-radius: 12px;
+ padding: 16px;
+ font-size: 15px;
+ line-height: 1.6;
+ color: #1f2937;
+ word-wrap: break-word;
+ overflow-wrap: break-word;
+ max-width: 100%;
+ }
+ .atomic-navigation {
+ margin-bottom: 30px;
+ }
+ .atomic-navigation h4 {
+ color: #374151;
+ font-size: 16px;
+ margin-bottom: 15px;
+ font-weight: 600;
+ }
+ .atomic-buttons {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 10px;
+ }
+ .atomic-buttons-container::-webkit-scrollbar {
+ width: 6px;
+ }
+ .atomic-buttons-container::-webkit-scrollbar-track {
+ background: #f1f1f1;
+ border-radius: 3px;
+ }
+ .atomic-buttons-container::-webkit-scrollbar-thumb {
+ background: #888;
+ border-radius: 3px;
+ }
+ .atomic-buttons-container::-webkit-scrollbar-thumb:hover {
+ background: #555;
+ }
+ .atomic-fact-button {
+ background: #f3f4f6;
+ border: 2px solid #d1d5db;
+ border-radius: 8px;
+ padding: 10px 16px;
+ color: #374151;
+ font-weight: 500;
+ cursor: pointer;
+ transition: all 0.3s ease;
+ position: relative;
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ width: 100%;
+ justify-content: space-between;
+ }
+ .atomic-fact-button:hover {
+ background: #e5e7eb;
+ border-color: #9ca3af;
+ transform: translateX(2px);
+ }
+ .atomic-fact-button.active {
+ background: #3b82f6;
+ border-color: #3b82f6;
+ color: white;
+ transform: translateX(4px);
+ }
+ .status-indicator {
+ font-size: 12px;
+ font-weight: bold;
+ width: 16px;
+ height: 16px;
+ border-radius: 50%;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ margin-left: auto;
+ }
+ .status-indicator.pending {
+ background: #fbbf24;
+ color: white;
+ }
+ .status-indicator.completed {
+ background: #10b981;
+ color: white;
+ }
+ .atomic-fact-display {
+ flex: 1;
+ background: #f9fafb;
+ border: 2px solid #e5e7eb;
+ border-radius: 12px;
+ padding: 24px;
+ min-height: 400px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ text-align: center;
+ color: #6b7280;
+ }
+ .current-atomic-fact {
+ width: 100%;
+ max-width: 500px;
+ }
+ .atomic-fact-header {
+ background: linear-gradient(135deg, #10b981, #059669);
+ color: white;
+ padding: 16px;
+ border-radius: 12px 12px 0 0;
+ text-align: center;
+ margin-bottom: 0;
+ }
+ .atomic-fact-header h4 {
+ margin: 0;
+ font-size: 16px;
+ font-weight: 600;
+ }
+ .atomic-fact-content {
+ background: white;
+ border: 2px solid #10b981;
+ border-top: none;
+ border-radius: 0 0 12px 12px;
+ padding: 24px;
+ }
+ .atomic-fact-text {
+ font-size: 15px;
+ line-height: 1.6;
+ color: #1f2937;
+ margin-bottom: 24px;
+ text-align: left;
+ word-wrap: break-word;
+ overflow-wrap: break-word;
+ }
+ .relevance-selection .question {
+ font-weight: 600;
+ color: #374151;
+ margin-bottom: 16px;
+ text-align: center;
+ }
+ .radio-options {
+ display: flex;
+ gap: 20px;
+ justify-content: center;
+ }
+ .radio-option {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ cursor: pointer;
+ padding: 12px 20px;
+ border: 2px solid #e5e7eb;
+ border-radius: 8px;
+ background: #f9fafb;
+ transition: all 0.3s ease;
+ }
+ .radio-option:hover {
+ border-color: #d1d5db;
+ background: #f3f4f6;
+ }
+ .radio-option input[type="radio"] {
+ display: none;
+ }
+ .radio-custom {
+ width: 18px;
+ height: 18px;
+ border: 2px solid #d1d5db;
+ border-radius: 50%;
+ background: white;
+ position: relative;
+ transition: all 0.3s ease;
+ }
+ .radio-option input[type="radio"]:checked + .radio-custom {
+ background: #3b82f6;
+ border-color: #3b82f6;
+ }
+ .radio-option input[type="radio"]:checked + .radio-custom::after {
+ content: '';
+ position: absolute;
+ top: 50%;
+ left: 50%;
+ transform: translate(-50%, -50%);
+ width: 6px;
+ height: 6px;
+ background: white;
+ border-radius: 50%;
+ }
+ .radio-option:has(input:checked) {
+ border-color: #3b82f6;
+ background: linear-gradient(135deg, #eff6ff, #dbeafe);
+ }
+ .radio-text {
+ font-weight: 500;
+ color: #374151;
+ }
+ .navigation-instruction {
+ text-align: center;
+ margin: 20px 0;
+ }
+ .instruction-box {
+ background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+ padding: 12px 24px;
+ border-radius: 8px;
+ display: inline-block;
+ border: 1px solid #e2e8f0;
+ }
+ .instruction-text {
+ color: #64748b;
+ font-size: 14px;
+ font-weight: 500;
+ }
+ @media (min-width: 1201px) and (max-width: 1400px) {
+ .chunk-section,
+ .atomic-section {
+ min-width: 0 !important;
+ }
+ }
+ @media (min-width: 901px) {
+ .chunk-atomic-container {
+ display: flex !important;
+ flex-direction: row !important;
+ flex-wrap: nowrap !important;
+ }
+ .chunk-section,
+ .atomic-section {
+ display: block !important;
+ min-width: 0 !important;
+ }
+ }
+ @media (max-width: 900px) {
+ .chunk-atomic-container {
+ flex-direction: column !important;
+ gap: 20px;
+ }
+ .chunk-section {
+ flex: none !important;
+ min-width: auto !important;
+ max-width: 100% !important;
+ width: 100% !important;
+ }
+ .atomic-section {
+ min-width: auto !important;
+ max-width: 100% !important;
+ width: 100% !important;
+ }
+ }
+ @media (max-width: 768px) {
+ .entire-UI {
+ margin: 10px;
+ padding: 15px;
+ }
+ .evaluation-section {
+ padding: 16px;
+ }
+ .chunk-content {
+ padding: 16px;
+ }
+ .atomic-fact-content {
+ padding: 16px;
+ }
+ .radio-options {
+ flex-direction: column;
+ gap: 12px;
+ }
+ }
+ 
+ .chips-row {
+ display: flex;
+ flex-wrap: nowrap;
+ gap: 10px;
+ overflow-x: auto;
+ overflow-y: hidden;
+ padding: 12px 8px;
+ scroll-snap-type: x mandatory;
+ white-space: nowrap;
+ cursor: grab;
+ border: 1px solid #e5e7eb;
+ border-radius: 10px;
+ background: #fafafa;
+ }
+ .chips-row.dragging { cursor: grabbing; }
+ .chips-row::-webkit-scrollbar { height: 8px; }
+ .chips-row::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+ 
+ .atomic-chip {
+ flex: 0 0 auto;
+ scroll-snap-align: start;
+ background: #f3f4f6;
+ border: 2px solid #d1d5db;
+ border-radius: 20px;
+ padding: 8px 14px;
+ font-size: 14px;
+ color: #374151;
+ font-weight: 500;
+ cursor: pointer;
+ transition: all .2s ease;
+ }
+ .atomic-chip:hover { background: #e5e7eb; border-color: #9ca3af; transform: translateY(-1px); }
+ .atomic-chip.active { background: #3b82f6; border-color: #3b82f6; color: #fff; transform: translateY(-2px); }
+ 
+ .atomic-content {
+ display: grid !important;
+ grid-template-rows: auto 1fr;
+ gap: 16px;
+ padding: 24px;
+ }
+ 
+ .nav-row {
+ display: flex;
+ justify-content: center;
+ gap: 12px;
+ margin-top: 8px;
+ }
+ .nav-btn {
+ background: #f3f4f6;
+ border: 2px solid #d1d5db;
+ border-radius: 10px;
+ padding: 8px 16px;
+ font-weight: 600;
+ cursor: pointer;
+ transition: all .2s ease;
+ }
+ .nav-btn:hover { background: #e5e7eb; border-color: #9ca3af; }
+ 
+ .radio-option.selected {
+ border-color: #3b82f6 !important;
+ background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
+ }
+ .radio-option .radio-custom.selected {
+ background: #3b82f6 !important;
+ border-color: #3b82f6 !important;
+ }
+ 
+ .atomic-chip.chip-grounded {
+ background: #10b981 !important; /* emerald-500 */
+ border-color: #10b981 !important;
+ color: #ffffff !important;
+ }
+ .atomic-chip.chip-grounded:hover { filter: brightness(0.95); }
+ 
+ .atomic-chip.chip-not_grounded {
+ background: #ef4444 !important; /* red-500 */
+ border-color: #ef4444 !important;
+ color: #ffffff !important;
+ }
+ .atomic-chip.chip-not_grounded:hover { filter: brightness(0.95); }
+</style>
+</p>
+

@@ -1,0 +1,21 @@
+{
+  "templates": [
+    {
+      "id": "tpl-my-task",
+      "name": "My Task",
+      "source": "templates/my_task.html",
+      "out": "my-task.html",
+      "updatedAt": "2025-01-01T00:00:00Z"
+    }
+  ],
+  "batches": [
+    {
+      "id": "batch-1000001",
+      "name": "my first batch",
+      "csv": "results/Batch_0000000_batch_results.csv",
+      "templateId": "tpl-my-task",
+      "attentionExpected": "not_grounded",
+      "blankColumns": []
+    }
+  ]
+}

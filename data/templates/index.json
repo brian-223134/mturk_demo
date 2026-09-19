@@ -1,0 +1,14 @@
+[
+  {
+    "id": "tpl-chunk-fact-relevance",
+    "name": "Chunk-Fact Relevance",
+    "file": "chunk-fact-relevance.html",
+    "updatedAt": "2025-06-02T09:00:00Z"
+  },
+  {
+    "id": "tpl-query-fact-coverage",
+    "name": "Query-Fact Coverage",
+    "file": "query-fact-coverage.html",
+    "updatedAt": "2025-06-02T09:30:00Z"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "pool-trusted",
+    "name": "Trusted",
+    "description": "Workers with a consistent record. Use as a required pool.",
+    "workerIds": []
+  },
+  {
+    "id": "pool-excluded",
+    "name": "Excluded",
+    "description": "Workers to keep out of future batches. Preferred over blocking.",
+    "workerIds": []
+  }
+]

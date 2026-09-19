@@ -1,0 +1,43 @@
+{
+  "id": "batch-1000003",
+  "name": "close-ended query-fact coverage (model A)",
+  "env": "mock",
+  "templateId": "tpl-query-fact-coverage",
+  "inputColumns": [
+    "idx",
+    "qid",
+    "query",
+    "decomposed_query",
+    "atomic_facts",
+    "retrieved_chunk",
+    "key_counts",
+    "query_fact_relevance_check",
+    "chunk_fact_relevance_check",
+    "query_fact_coverage_check",
+    "query_chunk_coverage_check",
+    "query_fact_relevance_check_reasoning",
+    "chunk_fact_relevance_check_reasoning",
+    "query_fact_coverage_check_reasoning",
+    "query_chunk_coverage_check_reasoning",
+    "attention_check"
+  ],
+  "settings": {
+    "Title": "Sentence and passage relevance quiz",
+    "Description": "Read a sentence and a passage, then assess their relevance.",
+    "Keywords": "English, Reading, Sentence, Passage, Quiz",
+    "Reward": "0.10",
+    "MaxAssignments": 3,
+    "AssignmentDurationInSeconds": 1800,
+    "LifetimeInSeconds": 2592000,
+    "AutoApprovalDelayInSeconds": 2592000,
+    "QualificationRequirements": []
+  },
+  "attentionRule": {
+    "namePrefix": "attention_",
+    "expectedValue": "Not Covered",
+    "minCorrectRatio": 1.0
+  },
+  "requiredPoolIds": [],
+  "excludedPoolIds": [],
+  "createdAt": "2025-04-28T02:21:31Z"
+}
