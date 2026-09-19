@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sentence-passage relevance</title>
+<!--
+  MTurk Console sample template (window.TASK_DATA style). Pair it with sample-data.csv.
+
+  Data in : the console injects one CSV row as window.TASK_DATA, a { column: "cell text" } object,
+            in a script placed at the very top of <head>. Cell text never touches this file's source,
+            so quotes and special characters in the data cannot break the script below.
+  Data out: on submit, the hidden field "input_answers" holds a JSON string
+            [{"name": "...", "value": "..."}]. Names starting with "attention_" are attention checks.
+
+  Do not write a dollar sign followed by {identifier} anywhere in this file (JS template literals
+  included). The console treats that pattern as a CSV placeholder and would try to substitute it.
+-->
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; color: #1f1f1f; max-width: 860px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  .instructions { background: #f5f7fa; border: 1px solid #d9dee5; border-radius: 6px; padding: 12px 16px; }
+  .passage { border-left: 4px solid #1677ff; background: #f0f6ff; padding: 12px 16px; margin: 16px 0; white-space: pre-wrap; }
+  fieldset { border: 1px solid #d9dee5; border-radius: 6px; margin: 12px 0; padding: 12px 16px; }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { margin-right: 24px; cursor: pointer; }
+  button { font-size: 15px; padding: 8px 20px; margin-top: 8px; cursor: pointer; }
+  #message { color: #cf1322; margin-left: 12px; }
+  #submitted { background: #f6f6f6; padding: 12px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>Is each sentence grounded in the passage?</h1>
+<div class="instructions">
+  Read the passage, then judge every sentence using <b>only the passage</b>, not your own knowledge.
+  Choose <b>Grounded</b> if the passage states or clearly implies the sentence, otherwise <b>Not grounded</b>.
+</div>
+
+<form id="task-form" method="post">
+  <input type="hidden" name="assignmentId" id="assignment-id">
+  <input type="hidden" name="input_answers" id="input-answers">
+  <div class="passage" id="passage"></div>
+  <div id="questions"></div>
+  <button type="submit">Submit</button><span id="message"></span>
+</form>
+<pre id="submitted" hidden></pre>
+
+<script>
+(function () {
+  var data = window.TASK_DATA;
+  if (!data) {
+    document.getElementById('passage').textContent = 'window.TASK_DATA is missing. Open this template through the console preview.';
+    return;
+  }
+
+  // The attention check sits between the real sentences. Its expected answer is "not_grounded".
+  var questions = [
+    { name: 'general_1', text: data.sentence_1 },
+    { name: 'attention_1', text: data.attention_sentence },
+    { name: 'general_2', text: data.sentence_2 }
+  ];
+  var choices = [
+    { value: 'grounded', label: 'Grounded' },
+    { value: 'not_grounded', label: 'Not grounded' }
+  ];
+
+  // textContent only: the data is shown as text and is never parsed as HTML
+  document.getElementById('passage').textContent = data.passage;
+  var container = document.getElementById('questions');
+  questions.forEach(function (question, index) {
+    var fieldset = document.createElement('fieldset');
+    var legend = document.createElement('legend');
+    legend.textContent = 'Sentence ' + (index + 1);
+    var text = document.createElement('p');
+    text.textContent = question.text;
+    fieldset.appendChild(legend);
+    fieldset.appendChild(text);
+    choices.forEach(function (choice) {
+      var label = document.createElement('label');
+      var radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = question.name;
+      radio.value = choice.value;
+      label.appendChild(radio);
+      label.appendChild(document.createTextNode(' ' + choice.label));
+      fieldset.appendChild(label);
+    });
+    container.appendChild(fieldset);
+  });
+
+  // On MTurk (ExternalQuestion) the page URL carries assignmentId and turkSubmitTo.
+  var params = new URLSearchParams(window.location.search);
+  var form = document.getElementById('task-form');
+  document.getElementById('assignment-id').value = params.get('assignmentId') || '';
+  if (params.get('turkSubmitTo')) form.action = params.get('turkSubmitTo') + '/mturk/externalSubmit';
+
+  form.addEventListener('submit', function (event) {
+    var answers = [];
+    questions.forEach(function (question) {
+      var checked = form.querySelector('input[name="' + question.name + '"]:checked');
+      if (checked) answers.push({ name: question.name, value: checked.value });
+    });
+    if (answers.length < questions.length) {
+      event.preventDefault();
+      document.getElementById('message').textContent = 'Please answer every sentence.';
+      return;
+    }
+    document.getElementById('input-answers').value = JSON.stringify(answers);
+    if (!params.get('turkSubmitTo')) {
+      // Not running on MTurk (opened directly or previewed): show what would be submitted.
+      event.preventDefault();
+      document.getElementById('message').textContent = '';
+      var output = document.getElementById('submitted');
+      output.hidden = false;
+      output.textContent = 'input_answers = ' + JSON.stringify(answers, null, 2);
+    }
+  });
+})();
+</script>
+</body>
+</html>
