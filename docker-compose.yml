@@ -1,0 +1,101 @@
+# MTurk Console (mock)
+#
+#   docker compose up --build              web + api   → http://localhost:8080   (시연용. 데이터는 SQLite에 남는다)
+#   docker compose --profile dev up dev    dev + api   → http://localhost:5173   (Vite HMR)
+#   docker compose --profile mock up web-mock          → http://localhost:8081   (서버 없이 브라우저만으로. 비상용)
+#   docker compose run --rm test                         Vitest 단위 테스트
+#   docker compose exec api npm run sql -- "SELECT status, COUNT(*) FROM assignments GROUP BY 1"
+#
+#   브라우저 ──▶ web (nginx: 정적 파일, /api 프록시) ──▶ api (Node: REST + 메모리 상태) ──▶ SQLite (volume "db")
+#                                                          ▲ 처음 한 번, 그리고 Reset to fixtures 때
+#                                                        ./data (JSON + HTML)
+#
+# 처음 상태로 완전히 돌리려면: 화면의 Mock tools → Reset to fixtures, 또는 `docker compose down -v` (DB volume 삭제).
+
+name: mturk-console
+
+services:
+  api:
+    build:
+      context: .
+      target: api
+    image: mturk-console:api
+    environment:
+      # 응답을 일부러 늦춰 로딩 상태가 보이게 한다 (명세 7.2). "0-0"이면 지연이 없다.
+      MOCK_DELAY_MS: ${MOCK_DELAY_MS:-100-300}
+    volumes:
+      # 시작 데이터. JSON이나 템플릿 HTML을 고친 뒤 Reset to fixtures를 누르면 다시 읽는다 (이미지를 다시 빌드할 필요가 없다).
+      - ./data:/app/data:ro
+      # SQLite 파일. bind mount가 아니라 volume에 둔다: WAL 모드의 공유 메모리 파일이 Docker Desktop의 파일 공유 위에서는 안전하지 않다.
+      - db:/app/var
+    ports:
+      # REST를 curl로 직접 불러 볼 수 있게 연다. 기본은 이 PC에서만 접속된다.
+      - "${BIND_ADDR:-127.0.0.1}:${API_PORT:-8787}:8787"
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        VITE_API_MODE: http
+    image: mturk-console:web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # 같은 네트워크의 다른 PC에서 보려면 BIND_ADDR=0.0.0.0 으로 띄운다.
+      - "${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80"
+
+  # 서버와 DB 없이 브라우저 안에서 전부 동작하는 빌드 (data/가 번들에 들어가고, 변경은 그 브라우저의 IndexedDB에 남는다).
+  # api에 문제가 생겼을 때의 대비용이다.
+  web-mock:
+    profiles: [mock]
+    build:
+      context: .
+      target: web
+      args:
+        VITE_API_MODE: mock
+    image: mturk-console:web-mock
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${WEB_MOCK_PORT:-8081}:80"
+
+  dev:
+    profiles: [dev]
+    build:
+      context: .
+      target: dev
+    image: mturk-console:dev
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      VITE_API_MODE: http
+      API_PROXY_TARGET: http://api:8787
+      # 소스를 고쳐도 화면이 안 바뀌면(파일 이벤트가 컨테이너로 안 넘어오는 환경) true로 띄운다
+      VITE_WATCH_POLLING: ${VITE_WATCH_POLLING:-false}
+    ports:
+      # HMR 웹소켓이 같은 포트로 붙으므로 호스트 포트도 5173으로 고정한다
+      - "${BIND_ADDR:-127.0.0.1}:5173:5173"
+    volumes:
+      # 소스만 mount한다. 프로젝트 전체를 mount하면 macOS에서 설치한 node_modules가 컨테이너의
+      # Linux용 node_modules를 덮어써서 rolldown 같은 네이티브 바이너리가 깨진다.
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts:ro
+
+  test:
+    profiles: [test]
+    build:
+      context: .
+      target: test
+    image: mturk-console:test
+    volumes:
+      # 이미지를 다시 빌드하지 않아도 지금 작업 중인 코드와 데이터로 테스트한다
+      - ./src:/app/src:ro
+      - ./server:/app/server:ro
+      - ./data:/app/data:ro
+      - ./public:/app/public:ro
+
+volumes:
+  db:
