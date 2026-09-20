@@ -60,7 +60,7 @@ npm test && npm run typecheck
 | 단계 | 화면에 있는 것 |
 |---|---|
 | 1 `Template` | 저장된 템플릿 목록에서 고르거나(`Edit`로 수정), `.html` 파일을 올리거나(`From a file`), 붙여넣어(`Template HTML`) 새로 만든다. `Template name`은 필수. 저장하면 `${...}` placeholder가 태그로 나오고, TASK_DATA 방식이면 `none (uses window.TASK_DATA)`라고 나온다. `Load sample template`은 예시 템플릿을 채워 준다 |
-| 2 `Data` | CSV를 끌어다 놓거나 `Load sample CSV`. 파일 이름, 행·열 수, 인코딩(BOM은 떼고, UTF-8이 아니면 거절)이 나온다. **Placeholder check**: `ERROR` 템플릿의 placeholder가 CSV에 없음 → `Next`가 막힌다 / `WARN` 템플릿이 안 쓰는 컬럼, 빈 셀이 있는 행, 64KB를 넘는 행 / `INFO` 행 입력 크기의 중앙값과 최댓값. 아래에 첫 5행 미리보기(셀은 잘라서 표시) |
+| 2 `Data` | CSV를 끌어다 놓거나 `Load sample CSV`(올릴 파일은 아래 "업로드 시나리오"). 파일 이름, 행·열 수, 인코딩(BOM은 떼고, UTF-8이 아니면 거절)이 나온다. **Placeholder check**: `ERROR` 템플릿의 placeholder가 CSV에 없음 → `Next`가 막힌다 / `WARN` 템플릿이 안 쓰는 컬럼, 빈 셀이 있는 행, 64KB를 넘는 행 / `INFO` 행 입력 크기의 중앙값과 최댓값. 아래에 첫 5행 미리보기(셀은 잘라서 표시) |
 | 3 `Settings` | `What workers see in the HIT list`(Title, Description, Keywords) · `Payment and timing`(Reward per assignment, MaxAssignments, Time allotted, HIT lifetime, Auto-approval delay. MaxAssignments가 10 이상이면 수수료 40% 안내) · `Qualification requirements`(승인율 ≥ N%, 승인된 HIT 수 ≥ N, 국가) · `Worker pools`(`Only workers in` / `Exclude workers in`. 같은 pool을 양쪽에 넣을 수 없다) · `Attention check`(prefix, 정답 값, 통과 비율) |
 | 4 `Preview & Cost` | `Cost estimate` 표(reward 합계, 수수료와 수수료율, 총액, 게시 후 잔액. 총액이 잔액을 넘으면 막힌다) · `Answer fields found in this row`(미리보기에서 읽어 낸 문항 이름과 선택지) · `Task preview`: 고른 행으로 템플릿을 렌더한 worker 화면 그대로. `Prev row` / `Next row` / 행 번호로 이동. Submit을 누르면 제출을 가로채 `input_answers` JSON을 보여주고 아무것도 보내지 않는다 |
 | 5 `Publish` | `Batch name`(템플릿 이름 + 날짜로 제안)과 전체 요약. `Publish`를 누르면 그 batch의 Overview로 이동한다. production 환경에서는 batch 이름을 한 번 더 입력해야 버튼이 켜진다 |
@@ -91,6 +91,77 @@ npm test && npm run typecheck
 | Worker 상세 (`/workers/<WorkerId>`) | 머리줄: WorkerId, 소속 pool, `Blocked`와 사유, pool 추가/제거와 차단/해제. 지표 10개: `Submitted` · `Approved` · `Rejected` · `Pending review` · `Reject rate` · `Attention fail rate` · `Median work time` · `Majority agreement` · `Batches` · `Last active`. `By batch` 표(batch 이름을 누르면 그 batch의 Review가 이 worker로 걸러져 열린다) · assignment 이력 표(`Submitted`, `Batch`, `Row`, `Status`, `Work time`, `Attention`, `Feedback`) · `Note`(메모. 이 콘솔에서만 보인다) |
 
 pool은 Create의 `Settings`에서 포함/제외로 지정한다. 연동 후에는 pool 하나가 custom Qualification 하나가 되고, 포함은 `Exists`, 제외는 `DoesNotExist` 조건으로 바뀐다.
+
+## 업로드 시나리오: Create에 무엇을 올리나
+
+Create wizard는 **템플릿(`.html`) 하나와 데이터(`.csv`) 하나**를 받는다. CSV의 1행이 HIT 1개가 된다.
+올려 볼 파일은 전부 [example/](example/) 폴더에 있다. 아래의 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구다.
+
+```
+example/
+├─ 1-task-data/          template.html + data.csv                 window.TASK_DATA 방식 (새 템플릿에 권장)
+├─ 2-placeholder/        template.html + data.csv                 ${컬럼명} 방식 (MTurk Requester 웹사이트와 같다)
+│                        data-missing-column.csv                  오류: 템플릿이 쓰는 컬럼이 없는 CSV
+├─ 3-data-checks/        empty-cells / excel-utf8-bom / excel-cp949 / large-rows .csv     Data 단계의 검사를 하나씩 보는 CSV
+└─ 4-saved-templates/    chunk-fact-relevance-input.csv, query-fact-coverage-input.csv    콘솔에 저장돼 있는 기존 템플릿용 입력
+```
+
+### 시나리오 1. 처음부터 끝까지 (TASK_DATA 방식)
+
+가장 빠른 길은 `Load sample template`과 `Load sample CSV` 버튼이다. 두 버튼은 아래의 파일을 그대로 채운다. 직접 올려도 결과가 같다.
+
+| 단계 | 할 일 | 나오는 것 |
+|---|---|---|
+| 1 `Template` | `Upload or paste HTML`을 고르고 `Upload .html`로 `1-task-data/template.html`을 올린 뒤 `Save template` | `none (uses window.TASK_DATA)`. 이 방식은 템플릿에 `${...}`가 없다 |
+| 2 `Data` | `1-task-data/data.csv`를 끌어다 놓는다 | `10 rows, 5 columns, UTF-8` · `OK` placeholder가 없어 맞춰 볼 것이 없음 · `INFO` 5개 컬럼을 `window.TASK_DATA`로 쓸 수 있음 · `INFO` Row input size: median 338 B, max 389 B |
+| 3 `Settings` | `Attention check`의 `Expected value`에 `not_grounded`. 나머지는 기본값 | MaxAssignments 3, 보상 $0.10 |
+| 4 `Preview & Cost` | 라디오를 고르고 Submit을 눌러 본다 | 비용 $3.00 + 수수료 $0.60 = **$3.60**. 읽어 낸 문항 `general_1`, `attention_1`, `general_2`. `Submit intercepted: 3 answer(s)` |
+| 5 `Publish` | `Publish` | 새 batch의 Overview로 이동. 잔액 $500.00 → $496.40 |
+
+게시한 뒤 **Mock tools → Generate fake submissions…**로 응답을 만들면 Manage › Review에서 검수를 이어 갈 수 있다.
+
+### 시나리오 2. `${컬럼명}` 방식과 컬럼 누락 오류
+
+기존에 MTurk Requester 웹사이트에서 쓰던 템플릿이 이 방식이다. 템플릿의 `${passage}` 자리에 CSV의 `passage` 셀이 **그대로** 들어간다.
+
+| 올리는 것 | 나오는 것 |
+|---|---|
+| 템플릿 `2-placeholder/template.html` | 이름 칸이 파일 이름으로 채워지고, 저장하면 placeholder 5개가 태그로 나온다: `${item_id}` `${passage}` `${sentence_1}` `${attention_sentence}` `${sentence_2}` |
+| CSV `2-placeholder/data-missing-column.csv` | **`ERROR` 1 placeholder(s) have no matching CSV column: `${sentence_2}`** 그리고 `Next`가 꺼진다. 치환되지 않은 `${x}`는 화면에 글자 그대로 남아 템플릿을 깨뜨리기 때문이다. `INFO` 4/5 matched |
+| CSV `2-placeholder/data.csv` | `8 rows, 6 columns` · `OK` 5/5 matched · `WARN` 1 column(s) not used by the template: `note` (안 쓰는 컬럼도 HIT에는 저장된다). `Next`가 켜진다 |
+
+Settings의 `Expected value`는 `not_grounded`. Preview에서 `Item p01`과 문단이 치환되어 보인다.
+
+### 시나리오 3. Data 단계의 검사
+
+시나리오 1의 템플릿을 고른 상태에서 CSV만 바꿔 올린다(`Drop another CSV here`).
+
+| CSV | 상황 | 나오는 것 |
+|---|---|---|
+| `3-data-checks/empty-cells.csv` | 빈 셀이 있다 | `WARN` 2 row(s) have empty cells: row 3, 5. 막지는 않는다 |
+| `3-data-checks/excel-utf8-bom.csv` | Excel에서 "CSV UTF-8"로 저장한 파일 (맨 앞에 BOM, 줄 끝 CRLF) | `10 rows, 5 columns, UTF-8 (BOM removed)`. 정상 처리된다. BOM을 떼지 않으면 첫 컬럼 이름이 달라져 `${...}`와 맞지 않는다 |
+| `3-data-checks/excel-cp949.csv` | 한국어 Excel에서 그냥 "CSV"로 저장한 파일 (CP949) | **거절**: `The file is not valid UTF-8. Save it again as "CSV UTF-8" and upload it again.` 그대로 읽으면 글자가 깨진 채 게시되기 때문이다. 앞서 올린 CSV는 그대로 남는다 |
+| `3-data-checks/large-rows.csv` | 한 행의 입력이 64KB를 넘는다 | `WARN` max 70.2 KB. 1 row(s) exceed MTurk's 64 KB Question limit → 연동 단계에서는 ExternalQuestion으로 게시해야 한다. mock에서는 그대로 진행된다 |
+
+### 시나리오 4. 콘솔에 저장돼 있는 기존 템플릿
+
+`Template` 단계에서 저장된 템플릿을 고르고, 그 템플릿이 기대하는 16개 컬럼의 CSV를 올린다. 셀 하나가 길이 11인 Python 리스트 문자열이고(탭 10개 + attention 1개), 본문은 익명화한 합성 텍스트다.
+
+| 템플릿 | CSV | 나오는 것 | Settings의 `Expected value` |
+|---|---|---|---|
+| `Chunk-Fact Relevance` | `4-saved-templates/chunk-fact-relevance-input.csv` | `10 rows, 16 columns` · `OK` 12/12 matched · `WARN` 안 쓰는 컬럼 4개(`*_reasoning`) · Row input size: median 18.7 KB, max 38.0 KB | `not_grounded` |
+| `Query-Fact Coverage` | `4-saved-templates/query-fact-coverage-input.csv` | `8 rows, 16 columns` · `OK` 12/12 matched · `WARN` 안 쓰는 컬럼 4개 · median 6.3 KB, max 8.1 KB | `Not Covered` |
+
+Preview에는 탭 11개짜리 worker 화면이 그대로 나온다. 이 두 템플릿은 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷이 필요하다.
+반대로 이 템플릿에 시나리오 1의 CSV를 올리면 `ERROR` 12 placeholder(s) have no matching CSV column이 나온다.
+
+### 자기 CSV를 만들 때
+
+- 첫 줄은 컬럼 이름, 그다음부터 1행이 HIT 1개다. 인코딩은 **UTF-8**(Excel이면 "CSV UTF-8").
+- `${컬럼명}` 방식 템플릿이면 템플릿의 모든 placeholder가 컬럼으로 있어야 한다. 남는 컬럼은 있어도 된다.
+- TASK_DATA 방식 템플릿은 콘솔이 필요한 컬럼을 알 수 없으므로 검사 없이 통과한다. 템플릿이 읽는 키와 컬럼 이름을 직접 맞춘다.
+- attention 문항을 쓰려면 템플릿에서 그 문항의 `name`을 `attention_`으로 시작하게 하고, Settings에 정답 값을 적는다.
+- 검사용 CSV와 시나리오 4의 CSV는 `python3 scripts/build_examples.py`로 다시 만든다.
 
 ## 두 가지 구현 (3.1)
 
@@ -130,7 +201,7 @@ REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에
    확정하면 "재모집하시겠습니까?"를 묻는다 (MTurk는 반려해도 자리를 다시 열어 주지 않는다). 나머지는 Approve.
 4. **F1 › HITs** — Incomplete only. 한 HIT에 큰 수를 더해 보면 "9개를 넘을 수 없다"는 사유와 함께 건너뛴다 (8.3).
 5. **F1 › Results** — Fleiss κ 0.731. statsmodels의 `fleiss_kappa`와 소수 여섯째 자리까지 같다 (테스트에 고정). Export의 CSV는 MTurk Requester 웹사이트의 결과 CSV와 같은 컬럼이라 기존 분석 스크립트가 그대로 읽는다.
-6. **Create** — "Load sample template", "Load sample CSV"로 5단계를 끝까지. 저장된 기존 템플릿(Chunk-Fact Relevance)에 예시 CSV를 넣으면 placeholder 오류로 막힌다.
+6. **Create** — "Load sample template", "Load sample CSV"로 5단계를 끝까지 (업로드 시나리오 1). 저장된 기존 템플릿(Chunk-Fact Relevance)에 같은 CSV를 넣으면 placeholder 오류로 막히고, `example/4-saved-templates/`의 CSV를 넣으면 통과한다 (시나리오 4).
    Preview에서 Submit을 누르면 응답 JSON을 가로채 보여준다. 게시하면 잔액이 줄고 Manage에 새 batch가 생긴다.
 7. **Mock tools → Generate fake submissions** — 방금 게시한 batch에 응답을 만들어 Review 흐름을 이어 간다.
 8. **Worker Pool** — Rej% 내림차순으로 정렬해 상위 worker를 고르고 Block… → 기본 동선은 "Excluded pool에 추가"다 (차단은 worker 계정에 불이익을 준다).
@@ -147,8 +218,9 @@ REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에
 
 ```
 data/                           시작 데이터 (JSON + 템플릿 HTML)
+example/                        Create에 올려 볼 예시 템플릿과 CSV (위의 "업로드 시나리오")
 server/                         mock API 서버: index.ts, app.ts(HTTP 처리), sqliteSnapshot.ts
-scripts/                        build_fixtures.py, unpack-state.ts, sql.ts
+scripts/                        build_fixtures.py, build_examples.py, unpack-state.ts, sql.ts
 src/api/types.ts                데이터 모델 (4장)
 src/api/client.ts               API 인터페이스 (6장) + 구현체 선택
 src/api/mock/                   store(메모리 + 스냅샷), handlers(Api 구현), simulate(가짜 제출), tools, seedFiles
