@@ -1,245 +1,273 @@
 # MTurk Annotation Console (mock)
 
-MTurk annotation을 게시하고, 검수하고, worker를 관리하는 사내 웹 콘솔의 1단계 mock이다. 실제 MTurk에는 연결하지 않는다.
-이 README와 코드 주석에 나오는 장 번호(5.2, 8.3 등)는 설계 명세서의 장이다. 명세서는 이 저장소에 포함하지 않았다.
+Amazon Mechanical Turk(MTurk)로 진행하는 annotation 작업을 **게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
-## 실행
+지금은 **mock 단계**입니다. 실제 MTurk에는 연결하지 않으며, 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다.
+화면 구성을 검토하고 실제 백엔드를 설계하기 위한 프로토타입입니다.
 
-Docker만 있으면 된다.
+| 탭 | 하는 일 |
+|---|---|
+| **Create** | 템플릿(HTML)과 데이터(CSV)를 올려 batch를 게시합니다. worker에게 보일 화면을 미리 보고 비용을 확인합니다. |
+| **Manage** | batch의 진행률과 비용을 확인하고, 제출된 응답을 승인하거나 반려합니다. 부족한 응답은 다시 모집하고, 결과(majority, Fleiss' κ)를 확인해 내보냅니다. |
+| **Worker Pool** | worker별 품질 지표를 살펴보고, 믿을 만한 worker와 제외할 worker를 pool로 관리합니다. |
+
+## 빠른 시작
+
+Docker만 설치되어 있으면 됩니다.
 
 ```bash
-docker compose up --build          # http://localhost:8080
+docker compose up --build
 ```
 
-| 서비스 | 내용 |
+브라우저에서 http://localhost:8080 을 열면 됩니다. 컨테이너 두 개가 실행됩니다.
+
+- `web`: 화면을 제공하고 `/api` 요청을 `api`로 전달합니다 (nginx).
+- `api`: mock API 서버입니다 (Node + SQLite). 처음 실행될 때 [data/](data/) 폴더의 내용을 DB에 채웁니다.
+
+승인과 반려, batch 게시, pool 편집 같은 변경 사항은 SQLite에 저장됩니다. 그래서 브라우저나 PC를 바꿔도 같은 상태를 볼 수 있습니다.
+처음 상태로 되돌리려면 화면 오른쪽 위의 **Mock tools → Reset to fixtures**를 누르거나, `docker compose down -v`로 DB를 지웁니다.
+
+### 자주 쓰는 명령
+
+| 명령 | 설명 |
 |---|---|
-| `web` | 빌드한 화면을 nginx로 서빙하고 `/api`를 api로 넘긴다 |
-| `api` | mock API 서버 (Node + SQLite). 처음 뜰 때 [data/](data/) 폴더를 DB에 올리고 6장의 REST 경로로 답한다. http://localhost:8787/api/health |
+| `docker compose --profile dev up dev` | 개발용 서버입니다. `src/`를 고치면 화면에 바로 반영됩니다. http://localhost:5173 |
+| `docker compose --profile mock up web-mock` | API 서버 없이 브라우저만으로 동작하는 버전입니다. http://localhost:8081 |
+| `docker compose run --rm test` | 단위 테스트를 실행합니다. |
+| `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"` | DB의 내용을 SQL로 조회합니다. |
 
-검수, 게시, pool 같은 변경은 SQLite(volume `db`)에 남으므로 브라우저나 PC를 바꿔도 같은 상태를 본다.
-처음 상태로 돌리려면 화면 오른쪽 위 **Mock tools → Reset to fixtures**, 또는 `docker compose down -v`.
+### 알아 두면 좋은 점
 
-| 명령 | 내용 |
-|---|---|
-| `docker compose --profile dev up dev` | Vite dev 서버 + api. `src/`를 고치면 HMR로 반영된다. http://localhost:5173 |
-| `docker compose --profile mock up web-mock` | **서버 없이** 브라우저만으로 도는 빌드. http://localhost:8081 (아래 "두 가지 구현") |
-| `docker compose run --rm test` | 단위 테스트 (Vitest) |
-| `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"` | DB를 SQL로 조회 |
+- 기본 설정으로는 이 PC에서만 접속할 수 있습니다(`127.0.0.1`). 다른 PC에서 접속하려면 `BIND_ADDR=0.0.0.0 docker compose up`으로 실행합니다. 포트는 `WEB_PORT`와 `API_PORT`로 바꿉니다.
+- 코드를 고친 뒤에는 `--build`를 붙여 `web`을 다시 빌드해야 합니다. `data/` 폴더는 `api`에 연결되어 있으므로, 고친 뒤 **Reset to fixtures**만 누르면 반영됩니다.
+- 개발용 서버에서 코드를 고쳐도 화면이 바뀌지 않는다면 `VITE_WATCH_POLLING=true`를 붙여 실행해 보세요. 파일 변경 알림이 컨테이너까지 전달되지 않는 환경에서 필요합니다.
 
-- 기본은 이 PC에서만 접속된다(`127.0.0.1`). 다른 PC에서 보려면 `BIND_ADDR=0.0.0.0 docker compose up`. 포트는 `WEB_PORT`, `API_PORT`로 바꾼다.
-- `web`은 코드를 고친 뒤 `--build`로 다시 빌드해야 한다. `data/`는 api에 mount되어 있어 고친 뒤 Reset만 누르면 된다.
-- dev에서 소스를 고쳐도 화면이 안 바뀌면 `VITE_WATCH_POLLING=true`로 띄운다 (파일 이벤트가 컨테이너로 넘어오지 않는 환경).
+### Docker 없이 실행하기
 
-Docker 없이 실행하려면 Node 24가 필요하다 (내장 `node:sqlite`를 쓴다).
+Node 24 이상이 필요합니다 (Node에 내장된 SQLite를 사용합니다).
 
 ```bash
 npm install
-npm run dev                         # 브라우저만으로 (mock 구현). http://localhost:5173
-npm run server & npm run dev:http   # mock API 서버 + http 구현. DB는 var/mturk-console.sqlite
+npm run dev                         # 브라우저만으로 동작 (http://localhost:5173)
+npm run server & npm run dev:http   # mock API 서버와 함께 실행. DB는 var/mturk-console.sqlite
 npm test && npm run typecheck
 ```
 
-## 화면 안내 (5장)
+## 화면 둘러보기
 
-화면의 글자는 MTurk 용어와 맞추려고 영어로 쓴다. 아래에서 `이렇게 쓴 것`은 화면에 보이는 라벨 그대로다.
+화면의 글자는 MTurk의 용어와 맞추기 위해 영어로 표시합니다. 이 문서에서 `이렇게 표시한 글자`는 화면에 보이는 그대로입니다.
 
-### 공통: 머리줄과 탭
+### 상단 바
 
-| 요소 | 내용 |
+- **`MOCK` 배지**: 현재 환경을 나타냅니다. 실제 MTurk와 연동하면 `SANDBOX`(파랑) 또는 `PRODUCTION`(빨강)으로 표시됩니다.
+- **`Balance`**: 잔액입니다. batch를 게시하거나 응답을 추가로 모집하면 비용이 미리 차감되고, 응답을 반려하면 그만큼 돌아옵니다. 잔액이 부족하면 게시와 재모집을 할 수 없습니다.
+- **`Mock tools`**: mock 환경에서만 보이는 도구 모음입니다.
+  - `Generate fake submissions…`: 아직 비어 있는 응답 자리에 검수 대기 상태의 가짜 응답을 채웁니다. 실제 worker 없이도 검수 과정을 따라가 볼 수 있습니다.
+  - `Export data (JSON)` / `Import data (JSON)…`: 현재 상태 전체를 파일 하나로 내려받거나 불러옵니다.
+  - `Reset to fixtures`: 모든 변경 사항을 버리고 `data/` 폴더의 처음 상태로 되돌립니다.
+  - 메뉴 맨 아래에는 현재 동작 방식과 저장 위치가 표시됩니다 (예: `API: http · Store: SQLite (server)`).
+
+### Create: batch 게시
+
+템플릿과 CSV로 batch를 게시하는 5단계 마법사입니다. 입력한 내용은 브라우저에 임시로 저장되므로, 새로고침하거나 다른 탭에 다녀와도 이어서 진행할 수 있습니다. 처음부터 다시 하려면 `Start over`를 누릅니다.
+
+| 단계 | 내용 |
 |---|---|
-| `MOCK` 배지 | 지금 환경. 연동 후에는 `SANDBOX`(파랑), `PRODUCTION`(빨강)이 된다 |
-| `Balance` | 잔액. 게시와 재모집은 비용을 미리 빼고, 반려하면 돌려준다. 잔액이 모자라면 게시와 재모집이 막힌다 |
-| `Mock tools` | mock 환경에서만 보인다. `Generate fake submissions…`(열린 자리에 검수 대기 응답을 만든다), `Export data (JSON)`, `Import data (JSON)…`, `Reset to fixtures`. 맨 아래 줄에 지금의 구현체와 저장 위치가 나온다 (예: `API: http · Store: SQLite (server)`) |
-| 탭 | `Create` · `Manage` · `Worker Pool` |
+| 1. `Template` | 저장된 템플릿을 고르거나, `.html` 파일을 올리거나, HTML을 직접 붙여 넣어 새로 만듭니다. 저장하면 템플릿에 쓰인 `${컬럼명}` 목록이 표시됩니다. |
+| 2. `Data` | CSV를 올리면 템플릿과 맞는지 검사합니다. 템플릿이 쓰는 컬럼이 CSV에 없으면 다음 단계로 넘어갈 수 없습니다. 빈 셀, 쓰이지 않는 컬럼, 64KB를 넘는 행은 경고로 알려 줍니다. |
+| 3. `Settings` | 제목과 설명, 보상, HIT당 응답 수(MaxAssignments), 제한 시간과 게시 기간을 정합니다. 자격 조건(승인율, 승인된 HIT 수, 국가), 참여시키거나 제외할 worker pool, attention check 규칙도 여기서 정합니다. |
+| 4. `Preview & Cost` | 고른 행의 데이터로 worker가 보게 될 화면을 그대로 미리 봅니다. Submit을 눌러도 실제로 제출되지는 않고, 제출되었을 응답(JSON)을 보여 줍니다. 예상 비용(보상 + 수수료)과 게시 후 잔액도 함께 표시됩니다. |
+| 5. `Publish` | batch 이름과 전체 요약을 확인하고 게시합니다. 게시가 끝나면 그 batch의 Overview로 이동합니다. production 환경에서는 실수를 막기 위해 batch 이름을 한 번 더 입력해야 합니다. |
 
-### Create — batch 게시 (`/create`, 5.2)
+어떤 파일을 올리면 되는지는 아래의 [예시 파일로 직접 해 보기](#예시-파일로-직접-해-보기)에서 설명합니다.
 
-템플릿과 CSV로 batch를 게시하는 5단계 wizard다. 입력은 브라우저에 임시 저장되어 새로고침하거나 다른 탭에 다녀와도 남는다(`Start over`로 비운다).
-앞 단계로는 위의 단계 표시를 눌러 돌아가고, 다음 단계로는 검증을 통과한 `Next`로만 간다.
+### Manage: 진행 확인과 검수
 
-| 단계 | 화면에 있는 것 |
-|---|---|
-| 1 `Template` | 저장된 템플릿 목록에서 고르거나(`Edit`로 수정), `.html` 파일을 올리거나(`From a file`), 붙여넣어(`Template HTML`) 새로 만든다. `Template name`은 필수. 저장하면 `${...}` placeholder가 태그로 나오고, TASK_DATA 방식이면 `none (uses window.TASK_DATA)`라고 나온다. `Load sample template`은 예시 템플릿을 채워 준다 |
-| 2 `Data` | CSV를 끌어다 놓거나 `Load sample CSV`(올릴 파일은 아래 "업로드 시나리오"). 파일 이름, 행·열 수, 인코딩(BOM은 떼고, UTF-8이 아니면 거절)이 나온다. **Placeholder check**: `ERROR` 템플릿의 placeholder가 CSV에 없음 → `Next`가 막힌다 / `WARN` 템플릿이 안 쓰는 컬럼, 빈 셀이 있는 행, 64KB를 넘는 행 / `INFO` 행 입력 크기의 중앙값과 최댓값. 아래에 첫 5행 미리보기(셀은 잘라서 표시) |
-| 3 `Settings` | `What workers see in the HIT list`(Title, Description, Keywords) · `Payment and timing`(Reward per assignment, MaxAssignments, Time allotted, HIT lifetime, Auto-approval delay. MaxAssignments가 10 이상이면 수수료 40% 안내) · `Qualification requirements`(승인율 ≥ N%, 승인된 HIT 수 ≥ N, 국가) · `Worker pools`(`Only workers in` / `Exclude workers in`. 같은 pool을 양쪽에 넣을 수 없다) · `Attention check`(prefix, 정답 값, 통과 비율) |
-| 4 `Preview & Cost` | `Cost estimate` 표(reward 합계, 수수료와 수수료율, 총액, 게시 후 잔액. 총액이 잔액을 넘으면 막힌다) · `Answer fields found in this row`(미리보기에서 읽어 낸 문항 이름과 선택지) · `Task preview`: 고른 행으로 템플릿을 렌더한 worker 화면 그대로. `Prev row` / `Next row` / 행 번호로 이동. Submit을 누르면 제출을 가로채 `input_answers` JSON을 보여주고 아무것도 보내지 않는다 |
-| 5 `Publish` | `Batch name`(템플릿 이름 + 날짜로 제안)과 전체 요약. `Publish`를 누르면 그 batch의 Overview로 이동한다. production 환경에서는 batch 이름을 한 번 더 입력해야 버튼이 켜진다 |
+**Batch 목록**에서는 batch마다 진행률(완료된 HIT / 전체), 응답 수(Submitted / Approved / Rejected), 반려율, 비용(지출 / 예상), 상태를 한눈에 볼 수 있습니다.
+검수할 응답이 남아 있는 batch에는 `Needs review` 표시가 붙습니다.
 
-### Manage — 진행 확인과 검수 (5.3)
+batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으로 나뉘어 있습니다.
 
-**Batch 목록 (`/manage`).** `Name`(검수할 건이 있으면 `Needs review`) · `Env` · `Created` · `HITs`(완료/전체) · `Assignments (S / A / R)`(Submitted / Approved / Rejected) · `Reject rate` · `Cost`(지출/예상, 수수료 포함) · `Status`(`In progress`, `Completed`, `Expired`). 이름을 누르면 상세로 간다.
+- **`Overview`**: 진행률, 응답 현황, 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
+- **`Review`**: 응답을 검수하는 화면입니다.
+  - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 여러 건을 한 번에 승인하거나 반려할 수 있습니다. `Select attention-failed`는 attention check를 틀린 검수 대기 응답을 한 번에 선택합니다.
+  - 행을 누르면 응답 상세가 열립니다. 문항마다 이 worker의 답, 같은 HIT를 수행한 다른 worker들의 답, majority를 나란히 보여 줍니다. `Open task`를 누르면 worker가 실제로 본 화면을 그대로 띄웁니다.
+  - 반려할 때는 사유를 반드시 입력해야 하며, 자주 쓰는 문구 세 가지를 바로 고를 수 있습니다. attention check를 통과한 응답을 반려하려고 하면 경고가 표시됩니다.
+  - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
+  - 반려한 응답은 30일 안에 승인으로 되돌릴 수 있습니다 (`Revert to approved…`).
+- **`HITs`**: HIT별로 승인, 반려, 검수 대기, 남은 자리 수와 완료 여부를 보여 줍니다. 미완료 HIT만 골라 볼 수 있고, 선택한 HIT의 응답을 추가로 모집할 수 있습니다. 처음에 응답 수를 10개 미만으로 만든 HIT는 합계를 9개보다 늘릴 수 없다는 MTurk의 제약도 반영되어 있어, 이를 넘는 요청은 이유와 함께 건너뜁니다.
+- **`Results`**: 문항별 투표와 majority, 만장일치 비율, Fleiss' κ, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
 
-**Batch 상세 (`/manage/<batchId>/…`).** 하위 탭 네 개. `Review (6)`의 숫자는 검수 대기 건수다.
+결과 집계에는 승인된(Approved) 응답의 실제 문항만 들어가며, attention 문항은 제외합니다. κ와 만장일치 비율은 표 수가 목표(HIT당 응답 수)와 같은 문항만으로 계산합니다.
 
-| 탭 | 화면에 있는 것 |
-|---|---|
-| `Overview` | 버튼: `Top up incomplete HITs`(미완료 HIT를 목표까지 재모집하고, 만료된 HIT는 게시 기간을 연장), `Expire now`, `Export`(MTurk 결과 CSV / 라벨 JSON). 카드: `HITs completed`(완료 HIT / 전체) · `Assignments`(`Waiting for review`, `Reject rate`, Approved·Submitted·Rejected·Open의 구성 막대) · `Cost`(`Spent on approved work`, `Estimated total`). 아래에 `Settings` 표(보상, 목표 라벨 수, 기간, attention rule, qualification, pool 조건, 템플릿) |
-| `Review` | 필터: `Status`, `Attention`(통과/실패/문항 없음), `WorkerId`, `Work time under N s`. 버튼: `Select attention-failed`(attention을 틀린 검수 대기 건을 한 번에 선택), `Approve selected`, `Reject selected…`, `Revert to approved…`(반려 번복, 30일 이내). 표: `Row` · `Worker` · `Status` · `Time` · `Attention`(예: `2/2 PASS`) · `Agree`(같은 HIT 다른 worker들의 majority와 일치한 비율) · `Submitted` · `Feedback`. **행을 누르면 응답 상세**가 열린다: 문항별로 `This worker` / `Other workers on this HIT` / `Expected / majority`를 나란히 보여주고(`Only differences`로 다른 것만), `Open task`는 그 HIT의 입력으로 템플릿을 렌더해 worker가 본 화면을 띄운다. 반려 창에는 사유 프리셋 세 개와 `Other reason`이 있고, attention을 통과한 건이 섞여 있으면 경고한다. 반려를 확정하면 재모집할지 묻는다 |
-| `HITs` | `Incomplete only` 스위치, `Show input column`(표에 보일 입력 컬럼. `qid`가 있으면 기본). 표: `Row` · 입력 컬럼 · `Max` · `Approved` · `Rejected` · `Submitted` · `Open` · `State`(`Completed` / `Incomplete`, `needs +N`, `Expired`) · `Expires` · `Open task`. 여러 HIT를 골라 `Top up selected…`: 목표까지 채우기 또는 고정 개수. 9개 상한에 걸린 HIT는 사유와 함께 건너뛴다 |
-| `Results` | 카드: `Fleiss' κ`(해석 구간, 계산에 들어간 문항 수 × 평가자 수) · `Unanimous items` · `Items with votes`(목표 표 수에 못 미친 문항, 동률 문항 수) · `Label distribution`(승인된 표의 구성 막대). 표: `Row` · `Item` · `Votes (approved)`(표에 마우스를 올리면 worker) · `n` · `Majority`(동률은 `tie`). 필터: 전체 / 만장일치 아님 / 동률 / 표 부족. `Export` |
+### Worker Pool: worker 품질 관리
 
-집계에는 Approved assignment의 실제 문항만 들어간다(attention 문항 제외). κ와 만장일치 비율은 표가 정확히 목표 수인 문항만으로 계산한다.
+오른쪽 위의 버튼으로 `Workers`와 `Pools` 화면을 오갑니다.
 
-### Worker Pool — worker 품질 관리 (5.4)
+- **Worker 목록**: 모든 batch를 합산한 worker별 지표를 보여 줍니다. 제출, 승인, 반려 수와 반려율, attention 실패율, 작업 시간 중앙값, majority 일치율, 참여한 batch 수, 마지막 활동일을 볼 수 있습니다. 정렬, 검색, 필터를 지원하고, 여러 명을 선택해 pool에 넣거나 뺄 수 있습니다.
+- **차단(`Block…`)**: worker를 차단하면 그 worker의 MTurk 계정에 불이익이 갈 수 있습니다. 그래서 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다.
+- **Pools**: pool을 만들고 구성원을 확인하거나 뺄 수 있습니다. `Fill by criteria…`는 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율 등)을 입력하면 **해당하는 worker가 몇 명인지 먼저 보여 주고**, 확인한 뒤에 추가합니다.
+- **Worker 상세**: 지표 요약, batch별 참여 이력, 메모를 볼 수 있습니다. batch 이름을 누르면 그 worker의 응답만 걸러진 Review 화면으로 이동합니다.
 
-오른쪽 위에서 `Workers`와 `Pools`를 오간다.
+pool은 Create의 `Settings` 단계에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. 실제 MTurk와 연동하면 pool 하나가 custom Qualification 하나에 대응합니다.
 
-| 화면 | 화면에 있는 것 |
-|---|---|
-| Worker 목록 (`/workers`) | 모든 batch를 합산한 지표: `Worker` · `Subm` · `Appr` · `Rej` · `Rej%` · `Attn fail` · `Med time` · `Agree` · `Batches` · `Pools` · `Last active`. 정렬, 검색(`Search WorkerId`), `Pool` 필터, `Blocked only`, 페이지 이동은 전부 서버가 처리한다. 여러 명을 골라(페이지를 넘겨도 유지) `Add to pool`, `Remove from pool`, `Block…`. **`Block…` 창**은 차단이 worker의 MTurk 계정에 불이익을 준다고 알리고, 기본 버튼이 `Add to Excluded pool instead`다. `Block anyway…`는 사유를 적어야 한다. 고른 worker가 전부 차단 상태면 `Unblock`으로 바뀐다 |
-| Pools (`/workers/pools`) | `New pool`(같은 이름은 거절). 표: 이름, 설명, 인원, `QualificationTypeId`(연동 후 채워짐). `View members`로 펼치면 소속 worker와 지표가 나오고 한 명씩 또는 여러 명을 뺄 수 있다. **`Fill by criteria…`**: `Minimum approved assignments`, `Maximum attention-fail rate`, `Minimum majority agreement`, `Maximum reject rate (optional)`을 넣으면 **먼저 몇 명이 해당하는지와 미리보기 목록**을 보여주고, 확인해야 추가한다. 차단된 worker와 이미 들어 있는 worker는 제외한다 |
-| Worker 상세 (`/workers/<WorkerId>`) | 머리줄: WorkerId, 소속 pool, `Blocked`와 사유, pool 추가/제거와 차단/해제. 지표 10개: `Submitted` · `Approved` · `Rejected` · `Pending review` · `Reject rate` · `Attention fail rate` · `Median work time` · `Majority agreement` · `Batches` · `Last active`. `By batch` 표(batch 이름을 누르면 그 batch의 Review가 이 worker로 걸러져 열린다) · assignment 이력 표(`Submitted`, `Batch`, `Row`, `Status`, `Work time`, `Attention`, `Feedback`) · `Note`(메모. 이 콘솔에서만 보인다) |
+## 예시 파일로 직접 해 보기
 
-pool은 Create의 `Settings`에서 포함/제외로 지정한다. 연동 후에는 pool 하나가 custom Qualification 하나가 되고, 포함은 `Exists`, 제외는 `DoesNotExist` 조건으로 바뀐다.
-
-## 업로드 시나리오: Create에 무엇을 올리나
-
-Create wizard는 **템플릿(`.html`) 하나와 데이터(`.csv`) 하나**를 받는다. CSV의 1행이 HIT 1개가 된다.
-올려 볼 파일은 전부 [example/](example/) 폴더에 있다. 아래의 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구다.
+Create 마법사는 **템플릿(`.html`) 하나와 데이터(`.csv`) 하나**를 받습니다. CSV의 한 행이 HIT 하나가 됩니다.
+올려 볼 수 있는 파일은 모두 [example/](example/) 폴더에 준비되어 있습니다. 아래에 적은 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구입니다.
 
 ```
 example/
-├─ 1-task-data/          template.html + data.csv                 window.TASK_DATA 방식 (새 템플릿에 권장)
-├─ 2-placeholder/        template.html + data.csv                 ${컬럼명} 방식 (MTurk Requester 웹사이트와 같다)
-│                        data-missing-column.csv                  오류: 템플릿이 쓰는 컬럼이 없는 CSV
-├─ 3-data-checks/        empty-cells / excel-utf8-bom / excel-cp949 / large-rows .csv     Data 단계의 검사를 하나씩 보는 CSV
-└─ 4-saved-templates/    chunk-fact-relevance-input.csv, query-fact-coverage-input.csv    콘솔에 저장돼 있는 기존 템플릿용 입력
+├─ 1-task-data/         template.html, data.csv              window.TASK_DATA 방식 (새 템플릿에 권장)
+├─ 2-placeholder/       template.html, data.csv              ${컬럼명} 방식 (MTurk Requester 웹사이트와 동일)
+│                       data-missing-column.csv              필요한 컬럼이 빠진 CSV
+├─ 3-data-checks/       empty-cells.csv, excel-utf8-bom.csv, Data 단계의 검사를 하나씩 확인하는 CSV
+│                       excel-cp949.csv, large-rows.csv
+└─ 4-saved-templates/   chunk-fact-relevance-input.csv,      콘솔에 미리 저장된 템플릿에 넣을 입력
+                        query-fact-coverage-input.csv
 ```
 
-### 시나리오 1. 처음부터 끝까지 (TASK_DATA 방식)
+### 시나리오 1. 처음부터 끝까지 게시해 보기
 
-가장 빠른 길은 `Load sample template`과 `Load sample CSV` 버튼이다. 두 버튼은 아래의 파일을 그대로 채운다. 직접 올려도 결과가 같다.
+가장 빠른 방법은 화면의 `Load sample template`과 `Load sample CSV` 버튼입니다. 두 버튼은 `1-task-data/`의 파일을 그대로 불러옵니다. 파일을 직접 올려도 결과는 같습니다.
 
-| 단계 | 할 일 | 나오는 것 |
+| 단계 | 진행 방법 | 화면에 표시되는 내용 |
 |---|---|---|
-| 1 `Template` | `Upload or paste HTML`을 고르고 `Upload .html`로 `1-task-data/template.html`을 올린 뒤 `Save template` | `none (uses window.TASK_DATA)`. 이 방식은 템플릿에 `${...}`가 없다 |
-| 2 `Data` | `1-task-data/data.csv`를 끌어다 놓는다 | `10 rows, 5 columns, UTF-8` · `OK` placeholder가 없어 맞춰 볼 것이 없음 · `INFO` 5개 컬럼을 `window.TASK_DATA`로 쓸 수 있음 · `INFO` Row input size: median 338 B, max 389 B |
-| 3 `Settings` | `Attention check`의 `Expected value`에 `not_grounded`. 나머지는 기본값 | MaxAssignments 3, 보상 $0.10 |
-| 4 `Preview & Cost` | 라디오를 고르고 Submit을 눌러 본다 | 비용 $3.00 + 수수료 $0.60 = **$3.60**. 읽어 낸 문항 `general_1`, `attention_1`, `general_2`. `Submit intercepted: 3 answer(s)` |
-| 5 `Publish` | `Publish` | 새 batch의 Overview로 이동. 잔액 $500.00 → $496.40 |
+| 1. `Template` | `Upload or paste HTML`을 고른 뒤 `Upload .html`로 `1-task-data/template.html`을 올리고 `Save template`을 누릅니다. | `none (uses window.TASK_DATA)`. 이 방식의 템플릿에는 `${...}`가 없습니다. |
+| 2. `Data` | `1-task-data/data.csv`를 끌어다 놓습니다. | `10 rows, 5 columns, UTF-8`. 맞춰 볼 placeholder가 없다는 `OK`와, 5개 컬럼을 `window.TASK_DATA`로 쓸 수 있다는 `INFO`가 표시됩니다. |
+| 3. `Settings` | `Attention check`의 `Expected value`에 `not_grounded`를 입력합니다. 나머지는 기본값을 그대로 둡니다. | HIT당 응답 수 3, 보상 $0.10 |
+| 4. `Preview & Cost` | 보기를 고르고 Submit을 눌러 봅니다. | 비용은 보상 $3.00 + 수수료 $0.60 = **$3.60**입니다. 문항 `general_1`, `attention_1`, `general_2`가 인식되고, `Submit intercepted: 3 answer(s)`가 표시됩니다. |
+| 5. `Publish` | `Publish`를 누릅니다. | 새 batch의 Overview로 이동합니다. 잔액이 $500.00에서 $496.40으로 줄어듭니다. |
 
-게시한 뒤 **Mock tools → Generate fake submissions…**로 응답을 만들면 Manage › Review에서 검수를 이어 갈 수 있다.
+게시한 뒤 **Mock tools → Generate fake submissions…**로 가짜 응답을 만들면, Manage의 Review에서 검수까지 이어서 해 볼 수 있습니다.
 
 ### 시나리오 2. `${컬럼명}` 방식과 컬럼 누락 오류
 
-기존에 MTurk Requester 웹사이트에서 쓰던 템플릿이 이 방식이다. 템플릿의 `${passage}` 자리에 CSV의 `passage` 셀이 **그대로** 들어간다.
+MTurk Requester 웹사이트에서 쓰던 템플릿이 이 방식입니다. 템플릿의 `${passage}` 자리에 CSV의 `passage` 셀 내용이 **그대로** 들어갑니다.
 
-| 올리는 것 | 나오는 것 |
+| 올리는 파일 | 화면에 표시되는 내용 |
 |---|---|
-| 템플릿 `2-placeholder/template.html` | 이름 칸이 파일 이름으로 채워지고, 저장하면 placeholder 5개가 태그로 나온다: `${item_id}` `${passage}` `${sentence_1}` `${attention_sentence}` `${sentence_2}` |
-| CSV `2-placeholder/data-missing-column.csv` | **`ERROR` 1 placeholder(s) have no matching CSV column: `${sentence_2}`** 그리고 `Next`가 꺼진다. 치환되지 않은 `${x}`는 화면에 글자 그대로 남아 템플릿을 깨뜨리기 때문이다. `INFO` 4/5 matched |
-| CSV `2-placeholder/data.csv` | `8 rows, 6 columns` · `OK` 5/5 matched · `WARN` 1 column(s) not used by the template: `note` (안 쓰는 컬럼도 HIT에는 저장된다). `Next`가 켜진다 |
+| 템플릿 `2-placeholder/template.html` | 이름 칸이 파일 이름으로 채워집니다. 저장하면 placeholder 5개가 표시됩니다: `${item_id}` `${passage}` `${sentence_1}` `${attention_sentence}` `${sentence_2}` |
+| CSV `2-placeholder/data-missing-column.csv` | `ERROR` 1 placeholder(s) have no matching CSV column: `${sentence_2}`. **`Next` 버튼이 비활성화됩니다.** 치환되지 않은 `${...}`는 화면에 글자 그대로 남아 템플릿을 망가뜨리기 때문입니다. |
+| CSV `2-placeholder/data.csv` | `8 rows, 6 columns`, `OK` 5/5 matched. 템플릿이 쓰지 않는 컬럼 `note`가 있다는 `WARN`이 표시되지만 진행할 수 있습니다. 쓰이지 않는 컬럼도 HIT에는 함께 저장됩니다. |
 
-Settings의 `Expected value`는 `not_grounded`. Preview에서 `Item p01`과 문단이 치환되어 보인다.
+Settings의 `Expected value`에는 `not_grounded`를 입력합니다. Preview에서 `Item p01`과 문단이 치환되어 보이는 것을 확인할 수 있습니다.
 
-### 시나리오 3. Data 단계의 검사
+### 시나리오 3. Data 단계의 검사 확인하기
 
-시나리오 1의 템플릿을 고른 상태에서 CSV만 바꿔 올린다(`Drop another CSV here`).
+시나리오 1의 템플릿을 고른 상태에서 CSV만 바꿔 가며 올려 봅니다 (`Drop another CSV here`).
 
-| CSV | 상황 | 나오는 것 |
+| CSV | 상황 | 화면에 표시되는 내용 |
 |---|---|---|
-| `3-data-checks/empty-cells.csv` | 빈 셀이 있다 | `WARN` 2 row(s) have empty cells: row 3, 5. 막지는 않는다 |
-| `3-data-checks/excel-utf8-bom.csv` | Excel에서 "CSV UTF-8"로 저장한 파일 (맨 앞에 BOM, 줄 끝 CRLF) | `10 rows, 5 columns, UTF-8 (BOM removed)`. 정상 처리된다. BOM을 떼지 않으면 첫 컬럼 이름이 달라져 `${...}`와 맞지 않는다 |
-| `3-data-checks/excel-cp949.csv` | 한국어 Excel에서 그냥 "CSV"로 저장한 파일 (CP949) | **거절**: `The file is not valid UTF-8. Save it again as "CSV UTF-8" and upload it again.` 그대로 읽으면 글자가 깨진 채 게시되기 때문이다. 앞서 올린 CSV는 그대로 남는다 |
-| `3-data-checks/large-rows.csv` | 한 행의 입력이 64KB를 넘는다 | `WARN` max 70.2 KB. 1 row(s) exceed MTurk's 64 KB Question limit → 연동 단계에서는 ExternalQuestion으로 게시해야 한다. mock에서는 그대로 진행된다 |
+| `3-data-checks/empty-cells.csv` | 빈 셀이 있는 CSV | `WARN` 2 row(s) have empty cells: row 3, 5. 경고만 하고 진행은 막지 않습니다. |
+| `3-data-checks/excel-utf8-bom.csv` | Excel에서 "CSV UTF-8"로 저장한 파일 (맨 앞에 BOM, 줄 끝은 CRLF) | `10 rows, 5 columns, UTF-8 (BOM removed)`. 정상적으로 처리됩니다. BOM을 그대로 두면 첫 컬럼 이름이 달라져 `${...}`와 맞지 않게 됩니다. |
+| `3-data-checks/excel-cp949.csv` | 한국어 Excel에서 일반 "CSV"로 저장한 파일 (CP949) | **업로드가 거절됩니다.** `The file is not valid UTF-8. Save it again as "CSV UTF-8" and upload it again.` 그대로 읽으면 글자가 깨진 채 게시되기 때문입니다. 앞서 올린 CSV는 그대로 유지됩니다. |
+| `3-data-checks/large-rows.csv` | 한 행의 입력이 64KB를 넘는 CSV | `WARN` max 70.2 KB. 1 row(s) exceed MTurk's 64 KB Question limit. 실제 연동에서는 ExternalQuestion 방식으로 게시해야 한다는 뜻입니다. mock에서는 그대로 진행됩니다. |
 
-### 시나리오 4. 콘솔에 저장돼 있는 기존 템플릿
+### 시나리오 4. 미리 저장된 템플릿 사용하기
 
-`Template` 단계에서 저장된 템플릿을 고르고, 그 템플릿이 기대하는 16개 컬럼의 CSV를 올린다. 셀 하나가 길이 11인 Python 리스트 문자열이고(탭 10개 + attention 1개), 본문은 익명화한 합성 텍스트다.
+콘솔에는 실제 annotation 작업에 쓰던 템플릿 두 개가 저장되어 있습니다. `Template` 단계에서 하나를 고르고, 그 템플릿이 요구하는 16개 컬럼의 CSV를 올립니다.
+이 CSV는 셀 하나가 길이 11인 Python 리스트 문자열이고(탭 10개 + attention 1개), 본문은 익명화한 합성 텍스트입니다.
 
-| 템플릿 | CSV | 나오는 것 | Settings의 `Expected value` |
+| 템플릿 | CSV | 화면에 표시되는 내용 | `Expected value` |
 |---|---|---|---|
-| `Chunk-Fact Relevance` | `4-saved-templates/chunk-fact-relevance-input.csv` | `10 rows, 16 columns` · `OK` 12/12 matched · `WARN` 안 쓰는 컬럼 4개(`*_reasoning`) · Row input size: median 18.7 KB, max 38.0 KB | `not_grounded` |
-| `Query-Fact Coverage` | `4-saved-templates/query-fact-coverage-input.csv` | `8 rows, 16 columns` · `OK` 12/12 matched · `WARN` 안 쓰는 컬럼 4개 · median 6.3 KB, max 8.1 KB | `Not Covered` |
+| `Chunk-Fact Relevance` | `4-saved-templates/chunk-fact-relevance-input.csv` | `10 rows, 16 columns`, `OK` 12/12 matched, 쓰이지 않는 컬럼 4개(`*_reasoning`)에 대한 `WARN`. 행 크기는 중앙값 18.7 KB, 최대 38.0 KB | `not_grounded` |
+| `Query-Fact Coverage` | `4-saved-templates/query-fact-coverage-input.csv` | `8 rows, 16 columns`, `OK` 12/12 matched, 쓰이지 않는 컬럼 4개에 대한 `WARN`. 행 크기는 중앙값 6.3 KB, 최대 8.1 KB | `Not Covered` |
 
-Preview에는 탭 11개짜리 worker 화면이 그대로 나온다. 이 두 템플릿은 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷이 필요하다.
-반대로 이 템플릿에 시나리오 1의 CSV를 올리면 `ERROR` 12 placeholder(s) have no matching CSV column이 나온다.
+Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다. 이 두 템플릿은 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
+반대로 이 템플릿에 시나리오 1의 CSV를 올리면 `ERROR` 12 placeholder(s) have no matching CSV column이 표시됩니다.
 
-### 자기 CSV를 만들 때
+### 내 CSV를 만들 때
 
-- 첫 줄은 컬럼 이름, 그다음부터 1행이 HIT 1개다. 인코딩은 **UTF-8**(Excel이면 "CSV UTF-8").
-- `${컬럼명}` 방식 템플릿이면 템플릿의 모든 placeholder가 컬럼으로 있어야 한다. 남는 컬럼은 있어도 된다.
-- TASK_DATA 방식 템플릿은 콘솔이 필요한 컬럼을 알 수 없으므로 검사 없이 통과한다. 템플릿이 읽는 키와 컬럼 이름을 직접 맞춘다.
-- attention 문항을 쓰려면 템플릿에서 그 문항의 `name`을 `attention_`으로 시작하게 하고, Settings에 정답 값을 적는다.
-- 검사용 CSV와 시나리오 4의 CSV는 `python3 scripts/build_examples.py`로 다시 만든다.
+- 첫 줄에는 컬럼 이름을 쓰고, 둘째 줄부터 한 행이 HIT 하나가 됩니다. 인코딩은 **UTF-8**이어야 합니다 (Excel에서는 "CSV UTF-8"로 저장).
+- `${컬럼명}` 방식의 템플릿이라면, 템플릿에 쓰인 모든 placeholder가 CSV의 컬럼으로 있어야 합니다. 그 밖의 컬럼이 더 있는 것은 괜찮습니다.
+- TASK_DATA 방식의 템플릿은 콘솔이 어떤 컬럼이 필요한지 알 수 없으므로 검사 없이 통과합니다. 템플릿이 읽는 키와 CSV의 컬럼 이름을 직접 맞춰 주세요.
+- attention 문항을 쓰려면 템플릿에서 해당 문항의 `name`이 `attention_`으로 시작하도록 하고, Settings에 정답 값을 입력합니다.
+- `3-data-checks/`와 `4-saved-templates/`의 CSV는 `python3 scripts/build_examples.py`로 다시 만들 수 있습니다.
 
-## 두 가지 구현 (3.1)
+## 시작 데이터 (`data/`)
 
-화면은 `src/api/client.ts`의 `api`만 부른다. 그 뒤의 구현은 빌드할 때 `VITE_API_MODE`로 고르고, 화면 코드는 두 경우에 똑같다.
-지금 어느 쪽인지는 Mock tools 메뉴 맨 아래에 나온다.
+콘솔이 처음 실행될 때 읽는 데이터는 [data/](data/) 폴더에 있습니다. 데이터는 JSON으로, 템플릿은 HTML 파일로 관리합니다. 폴더 구조와 수정 방법은 [data/README.md](data/README.md)에 정리되어 있습니다.
 
-| | `http` (Docker의 기본) | `mock` |
+- 파일을 고친 뒤 **Reset to fixtures**를 누르면 반영됩니다. 파일끼리 맞지 않는 부분이 있으면 어느 파일의 무엇이 잘못되었는지 알려 줍니다.
+- 콘솔에서 만든 상태는 **Mock tools → Export data (JSON)**으로 내려받을 수 있습니다. 이 파일을 다른 사람에게 전달해 **Import data**로 불러오게 하거나, `npm run data:unpack -- <파일>`로 `data/` 구조로 풀어 새로운 시작 상태로 삼을 수 있습니다.
+- 들어 있는 batch 세 개는 실제 annotation 결과를 **익명화한 것**입니다. ID는 모두 새로 만들었고, 본문은 같은 길이의 합성 텍스트로 바꿨습니다. 응답 값, 검수 상태, 작업 시간은 그대로 두었기 때문에 진행률, worker 지표, Fleiss' κ는 원본과 같습니다.
+- 익명화에 쓰는 salt(`scripts/.fixture_salt`)와 원본 파일 목록(`scripts/fixture_sources.json`)은 저장소와 Docker 이미지에 포함하지 않습니다.
+
+## 동작 방식
+
+화면 코드는 `src/api/client.ts`의 `api` 객체만 호출합니다. 그 뒤에서 실제로 무엇이 동작할지는 빌드할 때 `VITE_API_MODE`로 정하며, 어느 쪽이든 화면 코드는 동일합니다.
+현재 어떤 방식으로 동작 중인지는 Mock tools 메뉴 맨 아래에 표시됩니다.
+
+| | `http` (Docker 기본값) | `mock` |
 |---|---|---|
 | 동작하는 곳 | mock API 서버 (`server/`) | 브라우저 안 |
-| 저장 | SQLite | 그 브라우저의 IndexedDB |
-| 시작 데이터 | `data/` 폴더를 디스크에서 읽는다 | `data/` 폴더가 번들에 들어 있다 |
-| 핸들러와 계산 | `src/api/mock/handlers.ts` + `src/domain/` — **같은 소스** | |
+| 저장 위치 | SQLite | 해당 브라우저의 IndexedDB |
+| 시작 데이터 | `data/` 폴더를 디스크에서 읽음 | `data/` 폴더가 빌드 결과에 포함됨 |
+| 요청 처리와 계산 | 두 방식 모두 `src/api/mock/handlers.ts`와 `src/domain/`의 **같은 코드**를 사용 | |
 
-REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에 있고, 브라우저의 http 구현과 서버가 이 표를 함께 쓴다.
-연동 단계에서는 같은 경로를 구현한 실제 백엔드(FastAPI + boto3)로 주소만 바꾼다. `/mock/*` 경로는 mock 전용이라 실제 백엔드에는 만들지 않는다.
+REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
+실제 MTurk와 연동할 때는 같은 경로를 구현한 백엔드(예: FastAPI + boto3)로 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
 
-## 데이터와 템플릿 (data/)
+## 10분 둘러보기
 
-시작 데이터는 [data/](data/) 폴더에 JSON(데이터)과 HTML(템플릿)으로 있다. 구조와 고치는 방법은 [data/README.md](data/README.md).
+전체 흐름을 한 번 따라가 보는 순서입니다. 시작하기 전에 **Reset to fixtures**를 눌러 두세요.
+미리 저장된 템플릿의 미리보기는 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
 
-- 고치고 **Reset to fixtures**를 누르면 반영된다. 파일이 서로 맞지 않으면 어느 파일의 무엇이 틀렸는지 알려준다.
-- 콘솔에서 만든 상태는 **Mock tools → Export data (JSON)**으로 내려받아 다른 사람에게 주거나(**Import data**),
-  `npm run data:unpack -- <파일>`로 `data/` 구조로 풀어 다음 시작점으로 삼는다.
-- 들어 있는 세 batch는 실제 annotation 결과를 **익명화한 것**이다. ID는 전부 다시 만들었고 본문은 같은 길이의 합성 텍스트로 바꿨다.
-  응답 값, 검수 상태, 작업시간은 그대로라 진행률, worker 지표, Fleiss κ가 원본과 같다. 자기 데이터로 다시 만드는 방법은 [data/README.md](data/README.md)에 있다.
-  익명화에 쓰는 salt(`scripts/.fixture_salt`)와 원본 목록(`scripts/fixture_sources.json`)은 저장소와 Docker 이미지에 넣지 않는다.
+1. **Manage 목록**: 익명화한 batch 세 개가 보입니다. 진행률, 반려율, 비용이 자동으로 계산되어 있고, `pilot close-ended chunk-fact`에는 `Needs review`가 붙어 있습니다.
+2. **Review**: 그 batch의 `Review` 탭에서 Status를 Submitted로 거르면 6건이 나옵니다. 행을 눌러 다른 worker들의 답과 비교해 보고, `Open task`로 worker가 본 화면을 열어 봅니다.
+3. **반려와 재모집**: 두 건을 골라 반려합니다. attention check를 통과한 응답이라는 경고가 표시되고, 반려를 확정하면 다시 모집할지 물어봅니다. 나머지 응답은 승인합니다.
+4. **HITs**: `Incomplete only`를 켜고, HIT 하나에 큰 수를 추가해 봅니다. 9개를 넘을 수 없다는 이유와 함께 건너뛰는 것을 볼 수 있습니다.
+5. **Results**: Fleiss' κ가 0.731로 표시됩니다. 이 값은 statsmodels의 `fleiss_kappa` 결과와 소수 여섯째 자리까지 일치하며, 테스트로 고정되어 있습니다. Export로 받는 CSV는 MTurk Requester 웹사이트의 결과 CSV와 컬럼이 같아서 기존 분석 스크립트를 그대로 쓸 수 있습니다.
+6. **Create**: `Load sample template`과 `Load sample CSV`로 5단계를 끝까지 진행해 게시합니다 (시나리오 1). 잔액이 줄고 Manage 목록에 새 batch가 생깁니다.
+7. **가짜 응답 만들기**: **Mock tools → Generate fake submissions…**로 방금 게시한 batch에 응답을 채우고, 다시 Review에서 검수합니다.
+8. **Worker Pool**: `Rej%`를 내림차순으로 정렬해 상위 worker를 선택하고 `Block…`을 누른 뒤, 기본 선택지인 "Excluded pool에 추가"를 고릅니다. 이어서 Pools에서 `Fill by criteria…`로 Trusted pool을 채워 봅니다.
+   기본 조건(승인 20건 이상, attention 실패 0%, 일치율 90% 이상)으로는 해당하는 worker가 없습니다. 예시 데이터에서는 승인이 가장 많은 worker가 20건이고 attention 실패율이 5%이기 때문입니다. **승인 기준을 5로 낮추면 7명**이 나옵니다.
+   이렇게 만든 pool을 Create의 Settings에서 참여 또는 제외로 지정하면, 가짜 응답도 그 조건을 따릅니다.
+9. **저장과 API 확인**: Mock tools 메뉴 맨 아래에 `API: http · Store: SQLite (server)`가 표시됩니다. 터미널에서 아래 명령으로 방금 한 검수가 DB에 저장된 것과 REST 응답을 확인할 수 있습니다.
 
-## 시연 순서 (10~15분)
+   ```bash
+   docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"
+   curl localhost:8787/api/batches
+   ```
 
-시작 전에 **Reset to fixtures**를 눌러 둔다. 미리보기에서 기존 템플릿이 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷이 필요하다.
+   같은 화면은 API 서버 없이도 동작합니다: `docker compose --profile mock up web-mock` (http://localhost:8081)
 
-1. **Manage 목록** — 실제 annotation 결과를 익명화한 batch 세 개. 진행률, 반려율, 비용이 계산되어 나오고, F1에는 "Needs review"가 붙어 있다.
-   기존에는 결과 CSV를 내려받아 스크립트로 세던 값이다 (1.1).
-2. **F1 › Review** — Status를 Submitted로 거르면 6건. 행을 누르면 문항별로 이 worker, 같은 HIT의 다른 worker, majority가 나란히 나온다.
-   **Open task**는 그 HIT의 입력으로 기존 템플릿을 그대로 렌더한다 (sandbox iframe).
-3. **반려 → 재모집** — 두 건을 골라 Reject. 사유 프리셋 세 개는 실제 검수에서 쓰던 문구다. attention을 통과한 건을 반려하려 하면 경고한다.
-   확정하면 "재모집하시겠습니까?"를 묻는다 (MTurk는 반려해도 자리를 다시 열어 주지 않는다). 나머지는 Approve.
-4. **F1 › HITs** — Incomplete only. 한 HIT에 큰 수를 더해 보면 "9개를 넘을 수 없다"는 사유와 함께 건너뛴다 (8.3).
-5. **F1 › Results** — Fleiss κ 0.731. statsmodels의 `fleiss_kappa`와 소수 여섯째 자리까지 같다 (테스트에 고정). Export의 CSV는 MTurk Requester 웹사이트의 결과 CSV와 같은 컬럼이라 기존 분석 스크립트가 그대로 읽는다.
-6. **Create** — "Load sample template", "Load sample CSV"로 5단계를 끝까지 (업로드 시나리오 1). 저장된 기존 템플릿(Chunk-Fact Relevance)에 같은 CSV를 넣으면 placeholder 오류로 막히고, `example/4-saved-templates/`의 CSV를 넣으면 통과한다 (시나리오 4).
-   Preview에서 Submit을 누르면 응답 JSON을 가로채 보여준다. 게시하면 잔액이 줄고 Manage에 새 batch가 생긴다.
-7. **Mock tools → Generate fake submissions** — 방금 게시한 batch에 응답을 만들어 Review 흐름을 이어 간다.
-8. **Worker Pool** — Rej% 내림차순으로 정렬해 상위 worker를 고르고 Block… → 기본 동선은 "Excluded pool에 추가"다 (차단은 worker 계정에 불이익을 준다).
-   Pools에서 "Fill by criteria"로 Trusted pool을 채운다. 기본 조건(승인 ≥ 20건, attention 실패 0%, 일치율 ≥ 90%)으로는 0명이 나온다
-   (세 batch만으로는 승인이 가장 많은 worker가 20건이고 attention 실패가 5%다). **승인 기준을 5로 낮추면 7명**이 걸린다.
-   추가하기 전에 몇 명이 해당하는지 먼저 보여주는 것이 요점이다. Create의 Settings에서 이 pool들을 포함/제외로 지정하면 가짜 제출도 그 조건을 지킨다.
-9. **구현체 교체와 DB** — Mock tools 메뉴 맨 아래의 "API: http · Store: SQLite". 터미널에서
-   `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"`로 방금 한 검수가 DB에 있는 것을 보여주고,
-   `curl localhost:8787/api/batches`로 REST 계약을 보여준다. 같은 화면이 서버 없이도 돈다: http://localhost:8081 (`--profile mock`).
-
-백엔드 설계로 이어질 질문: MTurk API의 `Question`은 64KB 제한이 있어 입력이 큰 task는 ExternalQuestion이 필요하다는 점, MTurk API에는 batch 개념이 없다는 점, 목록 API는 100건씩 받아 와 동기화해야 한다는 점.
-
-## 구조 (3.3)
+## 폴더 구조
 
 ```
-data/                           시작 데이터 (JSON + 템플릿 HTML)
-example/                        Create에 올려 볼 예시 템플릿과 CSV (위의 "업로드 시나리오")
-server/                         mock API 서버: index.ts, app.ts(HTTP 처리), sqliteSnapshot.ts
-scripts/                        build_fixtures.py, build_examples.py, unpack-state.ts, sql.ts
-src/api/types.ts                데이터 모델 (4장)
-src/api/client.ts               API 인터페이스 (6장) + 구현체 선택
-src/api/mock/                   store(메모리 + 스냅샷), handlers(Api 구현), simulate(가짜 제출), tools, seedFiles
-src/api/http/                   routes.ts(REST 경로 표), client.ts
-src/domain/                     순수 함수: attention, progress, cost, agreement(κ), workerStats, template, dataCheck, exportFormats
-src/features/                   create(wizard) / manage(목록, 상세 네 탭) / workers(목록, 상세, pool)
-src/components/                 TaskPreviewFrame, StackedBar, MockToolsMenu ...
+data/               시작 데이터 (JSON + 템플릿 HTML)
+example/            Create에 올려 볼 예시 템플릿과 CSV
+server/             mock API 서버 (HTTP 처리, SQLite 저장)
+scripts/            데이터 변환과 예시 파일 생성, DB 조회 스크립트
+src/
+├─ api/
+│  ├─ types.ts      데이터 모델
+│  ├─ client.ts     화면이 호출하는 API 인터페이스와 동작 방식 선택
+│  ├─ mock/         메모리 저장소, 요청 처리, 가짜 응답 생성, data/ 읽기와 쓰기
+│  └─ http/         REST 경로 표와 HTTP 클라이언트
+├─ domain/          계산 로직: 비용, attention 판정, 진행률, majority와 κ, worker 지표, 템플릿 렌더링
+├─ features/        화면: create, manage, workers
+└─ components/      공용 컴포넌트: 미리보기 프레임, 구성 막대, Mock tools 메뉴 등
 Dockerfile, docker-compose.yml, docker/nginx.conf
 ```
 
-계산은 전부 `src/domain/`의 순수 함수이고 단위 테스트가 있다 (9장). `npm test`는 `data/`가 기대한 규모와 맞는지,
-κ가 statsmodels와 같은지, REST 왕복과 SQLite 저장이 되는지도 확인한다.
+- 계산 로직은 모두 `src/domain/`의 순수 함수로 작성했고 단위 테스트가 있습니다.
+- `npm test`는 계산 로직 외에도 `data/`가 기대한 규모인지, κ가 statsmodels의 값과 같은지, REST 요청과 SQLite 저장이 제대로 되는지, `example/`의 파일이 위 시나리오대로 동작하는지를 확인합니다.
+- 코드 주석에 나오는 `5.2`, `8.3` 같은 번호는 내부 설계 명세서의 장 번호입니다. 명세서는 이 저장소에 포함하지 않았습니다.
 
-## 진행 상황 (10장)
+## 현재 상태
 
-| 단계 | 상태 |
+| 항목 | 상태 |
 |---|---|
-| M0 뼈대 | 완료 |
-| M1 Create | 완료. wizard 5단계, placeholder 검증, 미리보기(제출 가로채기), 비용 견적, 게시 |
-| M2 Manage | 완료. 검수(승인/반려/번복), 재모집(9개 상한), 가짜 제출 생성, Results(κ), export |
-| M3 Worker Pool | 완료. pool 편집, 조건으로 채우기, 차단, worker 상세, Create 설정과 연결 |
-| M4 리뷰 반영 | 예정. 12장의 미결정 사항 확정 |
+| Create, Manage, Worker Pool의 모든 화면과 흐름 | 완료 |
+| mock API 서버(SQLite)와 브라우저 단독 모드 | 완료 |
+| 익명화한 예시 데이터와 업로드용 예시 파일 | 완료 |
+| 실제 MTurk 연동 (sandbox, production) | 예정 |
+| 로그인과 권한, bonus 지급, worker 알림 | 예정 |
+
+실제 연동을 설계할 때 미리 고려해야 할 MTurk의 제약은 다음과 같습니다.
+
+- API로 HIT를 만들 때 `Question`의 크기는 64KB로 제한됩니다. 입력이 큰 작업은 ExternalQuestion(직접 호스팅한 페이지를 worker에게 보여 주는 방식)으로 게시해야 합니다.
+- MTurk API에는 batch라는 개념이 없습니다. batch와 HIT의 관계는 콘솔의 DB에서 직접 관리해야 합니다.
+- 목록을 조회하는 API는 한 번에 최대 100건만 돌려주므로, 서버에서 주기적으로 동기화해 DB에 저장하는 구조가 필요합니다.
