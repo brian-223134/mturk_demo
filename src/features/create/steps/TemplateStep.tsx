@@ -28,7 +28,6 @@ import type { DraftUpdate } from '../useCreateDraft';
 import PlaceholderTags from './PlaceholderTags';
 import StepFooter from './StepFooter';
 
-const SAMPLE_TEMPLATE_URL = `${import.meta.env.BASE_URL}samples/sample-template.html`;
 const SAMPLE_TEMPLATE_NAME = 'Sentence-passage relevance (sample)';
 // 케이스 스터디의 템플릿 파일은 확장자만 .py이고 내용은 HTML이다 (7.1)
 const TEMPLATE_FILE_TYPES = '.html,.htm,.txt,.py';
@@ -84,9 +83,8 @@ export default function TemplateStep({ draft, update, templates, loading, error,
   const loadSample = async () => {
     setLoadingSample(true);
     try {
-      const response = await fetch(SAMPLE_TEMPLATE_URL);
-      if (!response.ok) throw new Error(`HTTP ${response.status} for ${SAMPLE_TEMPLATE_URL}`);
-      const html = await response.text();
+      // example/ 폴더의 파일을 그대로 쓴다. 사람이 직접 올려 보는 파일과 버튼이 채우는 내용이 같다.
+      const { default: html } = await import('../../../../example/1-task-data/template.html?raw');
       // 시연을 반복해도 같은 템플릿이 계속 쌓이지 않게, 이미 저장된 예시가 있으면 그것을 덮어쓴다
       const existing = templates?.find((t) => t.name === SAMPLE_TEMPLATE_NAME);
       update({

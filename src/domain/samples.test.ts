@@ -1,11 +1,11 @@
-// public/samples의 예시 템플릿과 CSV가 서로 맞는지 확인한다 (5.5).
+// example/1-task-data의 예시 템플릿과 CSV가 서로 맞는지 확인한다 (5.5). Create의 "Load sample" 버튼이 이 파일을 쓴다.
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { extractPlaceholders } from './template';
 
-const read = (name: string) => readFileSync(resolve(process.cwd(), 'public/samples', name), 'utf-8');
+const read = (name: string) => readFileSync(resolve(process.cwd(), 'example/1-task-data', name), 'utf-8');
 
 /** 테스트용 최소 CSV 파서 (RFC 4180: 따옴표 안의 쉼표, 줄바꿈, "" 처리). 앱은 M1에서 PapaParse를 쓴다. */
 function parseCsv(text: string): string[][] {
@@ -36,9 +36,9 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-describe('public/samples', () => {
-  const html = read('sample-template.html');
-  const [header, ...rows] = parseCsv(read('sample-data.csv'));
+describe('example/1-task-data', () => {
+  const html = read('template.html');
+  const [header, ...rows] = parseCsv(read('data.csv'));
 
   it('예시 CSV는 10행이고 모든 행의 컬럼 수가 헤더와 같으며 빈 셀이 없다', () => {
     expect(rows).toHaveLength(10);
@@ -54,7 +54,7 @@ describe('public/samples', () => {
   });
 
   it('템플릿이 읽는 TASK_DATA 키는 전부 CSV 컬럼이다', () => {
-    // 주석에 나오는 파일명 "sample-data.csv"는 제외한다
+    // `data.passage`처럼 코드가 읽는 키만 센다 ("task-data.csv" 같은 파일 이름은 제외)
     const keys = [...new Set([...html.matchAll(/(?<![\w-])data\.([a-z_0-9]+)/g)].map((m) => m[1]!))];
     expect(keys.sort()).toEqual(['attention_sentence', 'passage', 'sentence_1', 'sentence_2']);
     for (const key of keys) expect(header).toContain(key);

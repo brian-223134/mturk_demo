@@ -23,7 +23,8 @@ RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 npm ci
 # 필요한 경로만 복사한다. scripts/의 fixture 변환 스크립트와 salt, 문서는 이미지에 들어가지 않는다.
 FROM deps AS source
 COPY --chown=node:node index.html tsconfig.json vite.config.ts ./
-COPY --chown=node:node public ./public
+# example/의 예시 파일은 Create의 "Load sample" 버튼이 쓰므로 빌드에 필요하다
+COPY --chown=node:node example ./example
 COPY --chown=node:node src ./src
 COPY --chown=node:node server ./server
 COPY --chown=node:node data ./data

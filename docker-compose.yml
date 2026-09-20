@@ -80,7 +80,7 @@ services:
       # 소스만 mount한다. 프로젝트 전체를 mount하면 macOS에서 설치한 node_modules가 컨테이너의
       # Linux용 node_modules를 덮어써서 rolldown 같은 네이티브 바이너리가 깨진다.
       - ./src:/app/src
-      - ./public:/app/public
+      - ./example:/app/example
       - ./index.html:/app/index.html
       - ./vite.config.ts:/app/vite.config.ts:ro
 
@@ -95,7 +95,7 @@ services:
       - ./src:/app/src:ro
       - ./server:/app/server:ro
       - ./data:/app/data:ro
-      - ./public:/app/public:ro
+      - ./example:/app/example:ro
 
 volumes:
   db:

@@ -11,7 +11,6 @@ import type { DraftUpdate } from '../useCreateDraft';
 import PlaceholderTags from './PlaceholderTags';
 import StepFooter from './StepFooter';
 
-const SAMPLE_CSV_URL = `${import.meta.env.BASE_URL}samples/sample-data.csv`;
 const PREVIEW_ROWS = 5;
 const INDEX_COLUMN_WIDTH = 56;
 const DATA_COLUMN_WIDTH = 240;
@@ -97,9 +96,9 @@ export default function DataStep({ template, data, check, update, onBack, onNext
   const loadSample = async () => {
     setReading(true);
     try {
-      const response = await fetch(SAMPLE_CSV_URL);
-      if (!response.ok) throw new Error(`HTTP ${response.status} for ${SAMPLE_CSV_URL}`);
-      accept(parseCsv(await response.text(), 'sample-data.csv'));
+      // example/ 폴더의 파일을 그대로 쓴다. 사람이 직접 올려 보는 파일과 버튼이 채우는 내용이 같다.
+      const { default: text } = await import('../../../../example/1-task-data/data.csv?raw');
+      accept(parseCsv(text, 'data.csv'));
     } catch (error) {
       fail('the sample CSV', error);
     } finally {
