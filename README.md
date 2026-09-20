@@ -3,7 +3,7 @@
 Amazon Mechanical Turk(MTurk)로 진행하는 annotation 작업을 **게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
 지금은 **mock 단계**입니다. 실제 MTurk에는 연결하지 않으며, 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다.
-화면 구성을 검토하고 실제 백엔드를 설계하기 위한 프로토타입입니다.
+화면 구성을 검토하고 실제 백엔드를 설계하기 위한 프로토타입입니다. Production 용도의 설계를 진행할 때, mono-repo 구조로 진행할 예정이며, 기술 스택은 frontend: vanilla javascript, backend: fastapi(python)으로 생각하고 있습니다.
 
 | 탭 | 하는 일 |
 |---|---|
@@ -111,7 +111,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 
 pool은 Create의 `Settings` 단계에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. 실제 MTurk와 연동하면 pool 하나가 custom Qualification 하나에 대응합니다.
 
-## 예시 파일로 직접 해 보기
+## 예시 파일로 mock 테스팅 해보기
 
 Create 마법사는 **템플릿(`.html`) 하나와 데이터(`.csv`) 하나**를 받습니다. CSV의 한 행이 HIT 하나가 됩니다.
 올려 볼 수 있는 파일은 모두 [example/](example/) 폴더에 준비되어 있습니다. 아래에 적은 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구입니다.
@@ -177,7 +177,7 @@ Settings의 `Expected value`에는 `not_grounded`를 입력합니다. Preview에
 Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다. 이 두 템플릿은 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
 반대로 이 템플릿에 시나리오 1의 CSV를 올리면 `ERROR` 12 placeholder(s) have no matching CSV column이 표시됩니다.
 
-### 내 CSV를 만들 때
+### CSV를 만들 때
 
 - 첫 줄에는 컬럼 이름을 쓰고, 둘째 줄부터 한 행이 HIT 하나가 됩니다. 인코딩은 **UTF-8**이어야 합니다 (Excel에서는 "CSV UTF-8"로 저장).
 - `${컬럼명}` 방식의 템플릿이라면, 템플릿에 쓰인 모든 placeholder가 CSV의 컬럼으로 있어야 합니다. 그 밖의 컬럼이 더 있는 것은 괜찮습니다.
@@ -209,7 +209,7 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
 실제 MTurk와 연동할 때는 같은 경로를 구현한 백엔드(예: FastAPI + boto3)로 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
 
-## 10분 둘러보기
+## Preview
 
 전체 흐름을 한 번 따라가 보는 순서입니다. 시작하기 전에 **Reset to fixtures**를 눌러 두세요.
 미리 저장된 템플릿의 미리보기는 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
@@ -254,20 +254,3 @@ Dockerfile, docker-compose.yml, docker/nginx.conf
 
 - 계산 로직은 모두 `src/domain/`의 순수 함수로 작성했고 단위 테스트가 있습니다.
 - `npm test`는 계산 로직 외에도 `data/`가 기대한 규모인지, κ가 statsmodels의 값과 같은지, REST 요청과 SQLite 저장이 제대로 되는지, `example/`의 파일이 위 시나리오대로 동작하는지를 확인합니다.
-- 코드 주석에 나오는 `5.2`, `8.3` 같은 번호는 내부 설계 명세서의 장 번호입니다. 명세서는 이 저장소에 포함하지 않았습니다.
-
-## 현재 상태
-
-| 항목 | 상태 |
-|---|---|
-| Create, Manage, Worker Pool의 모든 화면과 흐름 | 완료 |
-| mock API 서버(SQLite)와 브라우저 단독 모드 | 완료 |
-| 익명화한 예시 데이터와 업로드용 예시 파일 | 완료 |
-| 실제 MTurk 연동 (sandbox, production) | 예정 |
-| 로그인과 권한, bonus 지급, worker 알림 | 예정 |
-
-실제 연동을 설계할 때 미리 고려해야 할 MTurk의 제약은 다음과 같습니다.
-
-- API로 HIT를 만들 때 `Question`의 크기는 64KB로 제한됩니다. 입력이 큰 작업은 ExternalQuestion(직접 호스팅한 페이지를 worker에게 보여 주는 방식)으로 게시해야 합니다.
-- MTurk API에는 batch라는 개념이 없습니다. batch와 HIT의 관계는 콘솔의 DB에서 직접 관리해야 합니다.
-- 목록을 조회하는 API는 한 번에 최대 100건만 돌려주므로, 서버에서 주기적으로 동기화해 DB에 저장하는 구조가 필요합니다.
