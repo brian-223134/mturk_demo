@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sentence-passage relevance (placeholder style)</title>
+<!--
+  MTurk Console example template, placeholder style. Pair it with the CSV file in the same folder.
+
+  Data in : every "dollar sign + {column name}" in this file is replaced with the CSV cell of that column,
+            exactly as the MTurk Requester website does. The cell text is pasted in as it is, with no escaping,
+            so a cell that contains HTML is rendered as HTML and a cell pasted into a script must be a valid
+            JavaScript literal. For new templates window.TASK_DATA (see ../1-task-data) is safer.
+  Data out: on submit, the hidden field "input_answers" holds a JSON string
+            [{"name": "...", "value": "..."}]. Names starting with "attention_" are attention checks.
+
+  Every placeholder must exist as a CSV column. The console refuses the CSV otherwise, because a
+  placeholder that is not replaced stays on the page as text and usually breaks the template.
+-->
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; color: #1f1f1f; max-width: 860px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  .meta { color: #6b7280; font-size: 13px; }
+  .instructions { background: #f5f7fa; border: 1px solid #d9dee5; border-radius: 6px; padding: 12px 16px; }
+  .passage { border-left: 4px solid #1677ff; background: #f0f6ff; padding: 12px 16px; margin: 16px 0; }
+  fieldset { border: 1px solid #d9dee5; border-radius: 6px; margin: 12px 0; padding: 12px 16px; }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { margin-right: 24px; cursor: pointer; }
+  button { font-size: 15px; padding: 8px 20px; margin-top: 8px; cursor: pointer; }
+  #message { color: #cf1322; margin-left: 12px; }
+  #submitted { background: #f6f6f6; padding: 12px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>Is each sentence grounded in the passage?</h1>
+<p class="meta">Item ${item_id}</p>
+<div class="instructions">
+  Read the passage, then judge every sentence using <b>only the passage</b>, not your own knowledge.
+  Choose <b>Grounded</b> if the passage states or clearly implies the sentence, otherwise <b>Not grounded</b>.
+</div>
+
+<form id="task-form" method="post">
+  <input type="hidden" name="assignmentId" id="assignment-id">
+  <input type="hidden" name="input_answers" id="input-answers">
+  <div class="passage">${passage}</div>
+
+  <fieldset>
+    <legend>Sentence 1</legend>
+    <p>${sentence_1}</p>
+    <label><input type="radio" name="general_1" value="grounded"> Grounded</label>
+    <label><input type="radio" name="general_1" value="not_grounded"> Not grounded</label>
+  </fieldset>
+  <fieldset>
+    <legend>Sentence 2</legend>
+    <p>${attention_sentence}</p>
+    <label><input type="radio" name="attention_1" value="grounded"> Grounded</label>
+    <label><input type="radio" name="attention_1" value="not_grounded"> Not grounded</label>
+  </fieldset>
+  <fieldset>
+    <legend>Sentence 3</legend>
+    <p>${sentence_2}</p>
+    <label><input type="radio" name="general_2" value="grounded"> Grounded</label>
+    <label><input type="radio" name="general_2" value="not_grounded"> Not grounded</label>
+  </fieldset>
+
+  <button type="submit">Submit</button><span id="message"></span>
+</form>
+<pre id="submitted" hidden></pre>
+
+<script>
+(function () {
+  var names = ['general_1', 'attention_1', 'general_2'];
+  // On MTurk (ExternalQuestion) the page URL carries assignmentId and turkSubmitTo.
+  var params = new URLSearchParams(window.location.search);
+  var form = document.getElementById('task-form');
+  document.getElementById('assignment-id').value = params.get('assignmentId') || '';
+  if (params.get('turkSubmitTo')) form.action = params.get('turkSubmitTo') + '/mturk/externalSubmit';
+
+  form.addEventListener('submit', function (event) {
+    var answers = [];
+    names.forEach(function (name) {
+      var checked = form.querySelector('input[name="' + name + '"]:checked');
+      if (checked) answers.push({ name: name, value: checked.value });
+    });
+    if (answers.length < names.length) {
+      event.preventDefault();
+      document.getElementById('message').textContent = 'Please answer every sentence.';
+      return;
+    }
+    document.getElementById('input-answers').value = JSON.stringify(answers);
+    if (!params.get('turkSubmitTo')) {
+      // Not running on MTurk (opened directly or previewed): show what would be submitted.
+      event.preventDefault();
+      document.getElementById('message').textContent = '';
+      var output = document.getElementById('submitted');
+      output.hidden = false;
+      output.textContent = 'input_answers = ' + JSON.stringify(answers, null, 2);
+    }
+  });
+})();
+</script>
+</body>
+</html>
