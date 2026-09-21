@@ -99,6 +99,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 - **`Results`**: 문항별 투표와 majority, 만장일치 비율, Fleiss' κ, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
 
 결과 집계에는 승인된(Approved) 응답의 실제 문항만 들어가며, attention 문항은 제외합니다. κ와 만장일치 비율은 표 수가 목표(HIT당 응답 수)와 같은 문항만으로 계산합니다.
+화면에 나오는 숫자를 읽는 방법은 [콘솔의 값 읽기](docs/reading-the-console.md)에 시작 데이터의 실제 값으로 정리되어 있습니다.
 
 ### Worker Pool: worker 품질 관리
 
@@ -237,6 +238,7 @@ REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에
 
 ```
 data/               시작 데이터 (JSON + 템플릿 HTML)
+docs/               화면에 나오는 값을 읽는 방법
 example/            Create에 올려 볼 예시 템플릿과 CSV
 server/             mock API 서버 (HTTP 처리, SQLite 저장)
 scripts/            데이터 변환과 예시 파일 생성, DB 조회 스크립트
