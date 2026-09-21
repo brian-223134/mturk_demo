@@ -80,6 +80,7 @@ npm test && npm run typecheck
 | 5. `Publish` | batch 이름과 전체 요약을 확인하고 게시합니다. 게시가 끝나면 그 batch의 Overview로 이동합니다. production 환경에서는 실수를 막기 위해 batch 이름을 한 번 더 입력해야 합니다. |
 
 어떤 파일을 올리면 되는지는 아래의 [예시 파일로 직접 해 보기](#예시-파일로-직접-해-보기)에서 설명합니다.
+단계마다 고를 수 있는 것과 기본값은 [Create로 batch 게시하기](docs/creating-a-batch.md)에 정리되어 있습니다.
 
 ### Manage: 진행 확인과 검수
 
@@ -238,7 +239,7 @@ REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에
 
 ```
 data/               시작 데이터 (JSON + 템플릿 HTML)
-docs/               화면에 나오는 값을 읽는 방법
+docs/               Create의 사용 방법, 화면에 나오는 값을 읽는 방법
 example/            Create에 올려 볼 예시 템플릿과 CSV
 server/             mock API 서버 (HTTP 처리, SQLite 저장)
 scripts/            데이터 변환과 예시 파일 생성, DB 조회 스크립트
