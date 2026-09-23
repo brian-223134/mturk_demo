@@ -32,7 +32,8 @@ The output must be a single JSON object. Comments and trailing commas are not al
     "attention":  { "per_hit", "position", "seed", "strategy", "expected_value", "max_targets", "mismatch", "instruction" }
   },
   "instructions": { "summary", "background", "criteria", "steps", "notes", "tip", "notices" },
-  "output":       { "reference_column", "reason_column" }
+  "output":       { "reference_column", "reason_column" },
+  "planner_notes": null
 }
 ```
 
@@ -150,6 +151,10 @@ The Instructions panel of the template. In every text, `**bold**` becomes bold; 
 | `reference_column` | `"llm_label"` | CSV column holding `{answer name: option value}` built from the hints. Chosen as the review reference in the console. |
 | `reason_column` | `null` | CSV column holding `{answer name: reason}` when `hint.reason_path` is set. |
 
+### `planner_notes`
+
+`null` (the default) or a string: a short note of at most five sentences, in English, in which the planner explains its choices: which paths became the context fields, the target and the hint and why, which anomalies it took into account, and any assumption it made about the data or the prompt. The pipeline stores the note in `task_spec.json` and ignores it otherwise, so a person reviewing the spec can see the reasoning behind it.
+
 ## 4. Path language
 
 ```
@@ -239,11 +244,12 @@ MTurk rejects rows larger than 64 KB, so keep `items_per_hit × text length` in 
 7. **Attention**: prefer a strategy whose expected answer is unambiguous. For support or relevance judgements use `mismatch` swapping every topical context field, with the negative option as `expected_value`; otherwise use `instruction`. Set `max_targets` (1–2) to keep the attention item short.
 8. **Instructions**: concrete and worker-facing, in English. Say what to read, define every option with its borderline case, give a short numbered procedure, and add notes such as "judge only from the passage". Never mention model names, retriever names or internal dataset names.
 9. **Anomalies**: if the profile reports a type mismatch or missing values on a path you need, avoid the path, filter the records, or accept that those items are skipped or get no hint. An iterate path that does not resolve in a record is an error, so iterate only over paths present in every record.
-10. **Output** only the JSON object: no comments, no trailing commas, no unknown keys.
+10. **Notes**: fill `planner_notes` with at most five sentences: which paths you chose as context, target and label and why, which anomalies you took into account, and any assumption about the data or the prompt.
+11. **Output** only the JSON object: no comments, no trailing commas, no unknown keys.
 
 ## 10. Complete example
 
-The synthetic example in `agent/examples/groundedness/` (`raw.json`, `prompt.txt`) is a set of records with a question, several retrieved passages per retriever, a map of short statements ("facts") per model, and per-passage, per-fact labels `["Yes" | "No", reason]`. The prompt asks for HITs that show one passage with all facts of the record and ask, for each fact, whether the passage supports it, with the existing labels as the reference. This is the spec:
+The synthetic example in `agent/examples/groundedness/` (`raw.json`, `prompt.md`) is a set of records with a question, several retrieved passages per retriever, a map of short statements ("facts") per model, and per-passage, per-fact labels `["Yes" | "No", reason]`. The prompt asks for HITs that show one passage with all facts of the record and ask, for each fact, whether the passage supports it, with the existing labels as the reference. This is the spec:
 
 ```json
 {
@@ -371,6 +377,7 @@ The synthetic example in `agent/examples/groundedness/` (`raw.json`, `prompt.txt
   "output": {
     "reference_column": "llm_label",
     "reason_column": "llm_reason"
-  }
+  },
+  "planner_notes": "Each record has one question, a passage list per retriever and a map of short statements per model; following the prompt, one item is one passage of passages.retriever_a shown with all statements of facts.model_a, so support is judged passage by passage. The labels under labels.retriever_a.model_a.passage_fact_support are keyed 'Passage {n}' and 'Fact {n}', which line up with passage_no and target_no, and their Yes/No values map to the two options. The subqueries field is a string in one record, but no path uses it."
 }
 ```

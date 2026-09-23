@@ -646,55 +646,217 @@ def profile_to_markdown(profile: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _path_depth(path: str) -> int:
-    try:
-        return len(paths.parse(path.replace(".{key}", ".__key__"))) - 1
-    except paths.PathError:
-        return path.count(".") + path.count("[")
+# ----------------------------------------------------------------------------------------------
+# 프롬프트용 축약
+# ----------------------------------------------------------------------------------------------
+
+PROMPT_MAX_CHARS_DEFAULT = 24000
+PROMPT_ANOMALIES_MAX = 10
+PROMPT_ANOMALY_IDS_MAX = 3
+PROMPT_KEY_EXAMPLE_CHARS = 40
+WIDE_DICT_KEYS = 8
+SCALAR_TYPES = ("str", "int", "float", "bool", "null")
+# 예시 정책의 단계. (우선순위 0의 (개수, 글자 수), 나머지의 (개수, 글자 수)); None은 예시를 모두 뺀다
+PROMPT_EXAMPLE_STAGES = (((2, 100), (1, 80)), ((2, 100), None), ((1, 80), None), (None, None))
+
+# 프로파일이 만든 경로 표기의 세그먼트 하나: .name, .{key}, .*, [*], [정수], ['따옴표 키']
+SEGMENT_RE = re.compile(r"\.\{key\}|\.\*|\.[A-Za-z_][A-Za-z0-9_-]*"
+                        r"|\[(?:\*|-?\d+|'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\")\]")
+PATH_TOKEN_RE = re.compile(r"\$(?:" + SEGMENT_RE.pattern + r")*")
 
 
-def profile_for_prompt(profile: dict, max_chars: int = 12000) -> dict:
-    """프롬프트에 넣을 크기로 줄인 profile. 예시를 줄이고, 그래도 크면 깊은 경로부터 잘라 낸다."""
+def _prefixes(path: str) -> list[str]:
+    """경로의 조상 경로들 ($부터 부모까지, 자기 자신 제외). 프로파일의 표기를 그대로 잘라 만들므로 paths의 항목과 문자열이 일치한다."""
+    if not path.startswith("$") or path == "$":
+        return []
+    out = ["$"]
+    current = "$"
+    pos = 1
+    while pos < len(path):
+        match = SEGMENT_RE.match(path, pos)
+        if match is None:
+            break
+        current += match.group()
+        pos = match.end()
+        if pos < len(path):
+            out.append(current)
+    return out
+
+
+def _hint_paths(hints: list[str], known: set[str]) -> list[str]:
+    """힌트 문장에 나오는 $… 경로 가운데 profile에 있는 것 (등장 순서, 중복 제거)."""
+    out: list[str] = []
+    for hint in hints:
+        for token in PATH_TOKEN_RE.findall(hint):
+            if token in known and token not in out:
+                out.append(token)
+    return out
+
+
+def _majority_type(entry: dict[str, Any]) -> str | None:
+    types = entry.get("types") or {}
+    if not types:
+        return None
+    return min(types.items(), key=lambda kv: (-kv[1], kv[0]))[0]
+
+
+def _compact_entry(entry: dict[str, Any], policy: tuple[int, int] | None, key_examples: int) -> dict[str, Any]:
+    """프롬프트용으로 줄인 항목의 복사본. 예시는 정책대로 줄이고(policy가 None이면 examples를 뺀다), 맵의 키 예시는
+    개수와 길이를 줄인다(키가 본문 그대로인 맵도 있고, pattern이 있으면 하나로 충분하다). types의 합과 같은
+    present와, 고정 dict에서 names의 수와 같은 keys.count는 중복이므로 뺀다."""
+    out = dict(entry)
+    out.pop("present", None)
+    if "examples" in out:
+        if policy is None:
+            del out["examples"]
+        else:
+            count, chars = policy
+            out["examples"] = [e[:chars] if isinstance(e, str) else e for e in out["examples"][:count]]
+    keys = out.get("keys")
+    if keys:
+        keys = dict(keys)
+        if keys.get("examples"):
+            shown = 1 if keys.get("pattern") else key_examples
+            keys["examples"] = [k[:PROMPT_KEY_EXAMPLE_CHARS] for k in keys["examples"][:shown]]
+        count = keys.get("count")
+        names = keys.get("names")
+        if keys.get("kind") == "fixed" and count and names is not None and count["min"] == count["max"] == len(names):
+            del keys["count"]
+        out["keys"] = keys
+    return out
+
+
+def _json_len(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False))
+
+
+def profile_for_prompt(profile: dict, max_chars: int = PROMPT_MAX_CHARS_DEFAULT) -> dict:
+    """프롬프트에 넣을 크기로 줄인 profile. 깊이가 아니라 우선순위로 고른다.
+
+    우선순위 0 (먼저 남긴다): 루트와 그 직계 자식(레코드의 최상위 필드), record_id 경로, values 분포가 있는 경로,
+    힌트 문장에 나오는 경로, 그리고 이들의 조상 경로 전부. 우선순위 1: 나머지 깊이 2 이하. 우선순위 2: 나머지
+    (얕은 것부터).
+    넓은 고정 dict(키가 WIDE_DICT_KEYS개보다 많고 자식이 모두 스칼라)의 자식은 부모의 keys.names에 이름이 있으므로
+    우선순위 0이 아니면 빼고, 부모에 children_omitted를 적는다.
+
+    hints는 전부, anomalies는 앞 PROMPT_ANOMALIES_MAX개(레코드 id는 3개까지), record_id는 그대로 남기고 source는 뺀다.
+    예시는 단계별로 줄이고(0순위 2개×100자·나머지 1개×80자 → 나머지 예시 제거 → 0순위 1개×80자 → 전부 제거),
+    그래도 크면 우선순위 순서로(0순위 안에서는 힌트 순서로) 들어가지 않는 항목이 처음 나올 때까지 채운다. hints와
+    anomalies는 자르지 않으므로 그것만으로 max_chars를 넘는 profile이면 결과도 넘는다. 무엇을 뺐는지는 truncated에
+    적는다 (뺀 것이 없으면 키도 없다)."""
     small = json.loads(json.dumps(profile, ensure_ascii=False))
     small.pop("source", None)
+    entries: list[dict[str, Any]] = list(small.get("paths") or [])
+    hints: list[str] = list(small.get("hints") or [])
+    anomalies = [dict(a, record_ids=list(a.get("record_ids") or [])[:PROMPT_ANOMALY_IDS_MAX])
+                 for a in list(small.get("anomalies") or [])[:PROMPT_ANOMALIES_MAX]]
+    record_id = small.get("record_id")
 
-    def shrink_examples(count: int, chars: int) -> None:
-        for entry in small["paths"]:
-            if "examples" in entry:
-                entry["examples"] = [e[:chars] if isinstance(e, str) else e for e in entry["examples"][:count]]
-                if not entry["examples"]:
-                    del entry["examples"]
-            if entry.get("keys", {}).get("examples"):
-                entry["keys"]["examples"] = entry["keys"]["examples"][:count]
-            if entry.get("keys", {}).get("names") and len(entry["keys"]["names"]) > 12:
-                entry["keys"]["names"] = entry["keys"]["names"][:12]
-        for anomaly in small["anomalies"]:
-            anomaly["record_ids"] = anomaly["record_ids"][:3]
+    known = {entry["path"] for entry in entries}
+    prefixes = {entry["path"]: _prefixes(entry["path"]) for entry in entries}
+    children: dict[str, list[dict[str, Any]]] = {}
+    for entry in entries:
+        if prefixes[entry["path"]]:
+            children.setdefault(prefixes[entry["path"]][-1], []).append(entry)
 
-    def size() -> int:
-        return len(json.dumps(small, ensure_ascii=False))
+    # 우선순위 0: 루트와 최상위 필드, record_id, values, 힌트에 나온 경로와 그 조상
+    must_keep: set[str] = {"$"}
+    must_keep.update(entry["path"] for entry in entries if len(prefixes[entry["path"]]) == 1)
+    if isinstance(record_id, dict) and record_id.get("path") in known:
+        must_keep.add(record_id["path"])
+    must_keep.update(entry["path"] for entry in entries if "values" in entry)
+    must_keep.update(_hint_paths(hints, known))
+    for path in list(must_keep):
+        must_keep.update(prefixes.get(path, ()))
 
-    shrink_examples(2, 80)
-    if size() <= max_chars:
-        return small
-    shrink_examples(1, 60)
-    depths = [_path_depth(entry["path"]) for entry in small["paths"]]
-    max_depth = max(depths) if depths else 0
-    dropped = 0
-    # 깊은 경로부터 잘라 내되, 값 분포가 있는 경로(라벨 후보)는 깊어도 남긴다
-    while size() > max_chars and max_depth > 1:
-        max_depth -= 1
-        pairs = [(entry, depth) for entry, depth in zip(small["paths"], depths)
-                 if depth <= max_depth or "values" in entry]
-        dropped += len(small["paths"]) - len(pairs)
-        small["paths"] = [entry for entry, _ in pairs]
-        depths = [depth for _, depth in pairs]
-        small["truncated"] = {"paths_dropped": dropped, "max_depth": max_depth,
-                              "note": "paths deeper than max_depth were dropped unless they carry a values histogram"}
-    if size() > max_chars:
-        shrink_examples(0, 0)
-        small["hints"] = small["hints"][:12]
-    return small
+    # 넓은 고정 dict의 스칼라 자식은 접는다 (우선순위 0은 남긴다). 접힌 자식의 후손도 함께 뺀다
+    collapsed: set[str] = set()
+    for entry in entries:
+        keys = entry.get("keys") or {}
+        kids = children.get(entry["path"], [])
+        if keys.get("kind") != "fixed" or len(keys.get("names") or ()) <= WIDE_DICT_KEYS or not kids:
+            continue
+        if not all(_majority_type(kid) in SCALAR_TYPES for kid in kids):
+            continue
+        omitted = [kid["path"] for kid in kids if kid["path"] not in must_keep]
+        if omitted:
+            entry["children_omitted"] = len(omitted)
+            collapsed.update(omitted)
+    for entry in entries:
+        if any(ancestor in collapsed for ancestor in prefixes[entry["path"]]):
+            collapsed.add(entry["path"])
+
+    priority: dict[str, int] = {}
+    for entry in entries:
+        path = entry["path"]
+        if path in collapsed:
+            continue
+        priority[path] = 0 if path in must_keep else (1 if len(prefixes[path]) <= 2 else 2)
+
+    # 채우는 순서. 0순위는 힌트 순서(문맥·대상·라벨 후보가 이상치보다 앞에 있다)로 조상과 함께, 1순위는 등장 순서,
+    # 2순위는 얕은 것부터. 결과의 paths는 이 순서가 아니라 profile의 등장 순서를 지킨다
+    order: list[str] = []
+
+    def take(path: str) -> None:
+        for ancestor in prefixes.get(path, ()):
+            if ancestor in priority and ancestor not in order:
+                order.append(ancestor)
+        if path in priority and path not in order:
+            order.append(path)
+
+    take("$")
+    if isinstance(record_id, dict) and record_id.get("path"):
+        take(record_id["path"])
+    for entry in entries:
+        if len(prefixes[entry["path"]]) == 1:
+            take(entry["path"])
+    for path in _hint_paths(hints, known):
+        take(path)
+    for entry in entries:
+        if entry["path"] in must_keep:
+            take(entry["path"])
+    order += [path for path in priority if priority[path] == 1]
+    order += sorted((path for path in priority if priority[path] == 2), key=lambda p: len(prefixes[p]))
+
+    def truncated_note(dropped_budget: int) -> dict[str, Any]:
+        notes = []
+        if collapsed:
+            notes.append(f"{len(collapsed)} scalar children of wide fixed dicts (their names are in the parent's "
+                         "keys.names; see children_omitted)")
+        if dropped_budget:
+            notes.append(f"{dropped_budget} paths over the {max_chars}-char budget (kept first: the record id, paths "
+                         "named in hints, paths with values, their ancestors; then depth <= 2; then deeper)")
+        return {"paths_dropped": len(collapsed) + dropped_budget, "note": "dropped " + "; ".join(notes) + "."}
+
+    def assemble(paths: list[dict[str, Any]], dropped_budget: int) -> dict[str, Any]:
+        out: dict[str, Any] = {"record_id": record_id, "paths": paths, "anomalies": anomalies, "hints": hints}
+        if collapsed or dropped_budget:
+            out["truncated"] = truncated_note(dropped_budget)
+        return out
+
+    by_path = {entry["path"]: entry for entry in entries}
+    trimmed: dict[str, dict[str, Any]] = {}
+    for stage_p0, stage_rest in PROMPT_EXAMPLE_STAGES:
+        trimmed = {path: _compact_entry(by_path[path], stage_p0 if priority[path] == 0 else stage_rest,
+                                        2 if priority[path] == 0 else 1) for path in priority}
+        everything = assemble([trimmed[path] for path in priority], 0)
+        if _json_len(everything) <= max_chars:
+            return everything
+
+    # 예시를 다 빼도 크다: 우선순위 순서로 채우다가 들어가지 않는 항목이 나오면 멈춘다 (뒤의 작은 항목이 앞의
+    # 큰 항목을 밀어내지 않도록). truncated의 자릿수는 가장 큰 값으로 미리 잡아 둔다
+    base_len = _json_len(assemble([], len(priority)))
+    lengths = {path: _json_len(trimmed[path]) for path in priority}
+    chosen: list[str] = []
+    used = base_len
+    for path in order:
+        extra = lengths[path] + (2 if chosen else 0)
+        if used + extra > max_chars:
+            break
+        chosen.append(path)
+        used += extra
+    kept = set(chosen)
+    return assemble([trimmed[path] for path in priority if path in kept], len(priority) - len(chosen))
 
 
 def run_profile(raw_path: Path, out_dir: Path, format: str | None = None) -> dict:

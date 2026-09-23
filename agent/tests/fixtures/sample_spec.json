@@ -74,5 +74,6 @@
   "output": {
     "reference_column": "llm_label",
     "reason_column": "llm_reason"
-  }
+  },
+  "planner_notes": "One item is one passage of the list $.retrieved_chunk.key_2 shown with all statements of the map $.atomic_facts.key_2.key_19; the labels under $.relevance_check_reasoning.key_2.key_19.chunk_fact_relevance are keyed 'Chunk {n}' and 'Atomic fact{n}' and take Yes/No, so they map onto the two options. The attention item swaps the question and the passage from another record, which makes Not grounded the expected answer."
 }

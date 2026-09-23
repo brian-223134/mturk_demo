@@ -81,23 +81,58 @@ class ExampleProfileTest(unittest.TestCase):
             self.assertIn(expected, text)
         self.assertTrue(text.endswith("\n"))
 
-    def test_profile_for_prompt(self):
-        full = len(json.dumps(self.profile, ensure_ascii=False))
+    def test_profile_for_prompt_keeps_everything_when_it_fits(self):
+        before = json.dumps(self.profile, ensure_ascii=False)
         small = profile.profile_for_prompt(self.profile, max_chars=40000)
-        self.assertLess(len(json.dumps(small, ensure_ascii=False)), full)
+        self.assertEqual(json.dumps(self.profile, ensure_ascii=False), before)
+        self.assertLess(len(json.dumps(small, ensure_ascii=False)), len(before))
+        self.assertEqual(list(small), ["record_id", "paths", "anomalies", "hints"])
+        self.assertEqual([e["path"] for e in small["paths"]], list(self.by_path))
+        self.assertEqual(small["hints"], self.profile["hints"])
+        self.assertEqual(small["anomalies"], self.profile["anomalies"])
+        self.assertEqual(small["record_id"], self.profile["record_id"])
+        by_path = entries(small)
+        for entry in small["paths"]:
+            self.assertNotIn("present", entry)
+            self.assertLessEqual(len(entry.get("examples", [])), 2)
+            self.assertTrue(all(len(e) <= 100 for e in entry.get("examples", []) if isinstance(e, str)))
+        self.assertEqual(len(by_path["$.passages.retriever_a[*]"]["examples"]), 2)
+        self.assertEqual(by_path["$"]["keys"], {"kind": "fixed", "names": ["id", "question", "answer", "passages", "subqueries", "facts", "labels"]})
+        self.assertEqual(by_path["$.facts.model_a"]["keys"]["examples"], ["Fact 1"])
+        self.assertEqual(by_path["$.facts.model_a"]["keys"]["count"], {"min": 1, "median": 2, "max": 3})
+        self.assertEqual(profile.profile_for_prompt(self.profile, max_chars=40000), small)
+
+    def test_profile_for_prompt_drops_examples_before_paths(self):
+        small = profile.profile_for_prompt(self.profile, max_chars=12000)
+        self.assertLessEqual(len(json.dumps(small, ensure_ascii=False)), 12000)
         self.assertNotIn("truncated", small)
-        self.assertNotIn("source", small)
-        self.assertEqual({e["path"] for e in small["paths"]}, set(self.by_path))
-        self.assertTrue(all(len(e.get("examples", [])) <= 2 for e in small["paths"]))
-        tiny = profile.profile_for_prompt(self.profile, max_chars=6000)
-        self.assertLessEqual(len(json.dumps(tiny, ensure_ascii=False)), 6000)
-        self.assertIn("truncated", tiny)
-        self.assertGreater(tiny["truncated"]["paths_dropped"], 0)
-        paths_kept = {e["path"] for e in tiny["paths"]}
-        self.assertIn("$.question", paths_kept)
-        self.assertIn(LABEL_PATH, paths_kept)
-        self.assertNotIn("$.labels.retriever_a.model_a.passage_fact_support.{key}.{key}[1]", paths_kept)
-        self.assertEqual(self.by_path["$.passages.retriever_a[*]"]["present"], 48)
+        self.assertEqual(len(small["paths"]), len(self.by_path))
+        by_path = entries(small)
+        self.assertIn("examples", by_path["$.passages.retriever_a[*]"])
+        self.assertNotIn("examples", by_path["$.labels.retriever_a.model_a.passage_fact_support.{key}.{key}[1]"])
+
+    def test_profile_for_prompt_priority_order(self):
+        small = profile.profile_for_prompt(self.profile, max_chars=9000)
+        self.assertLessEqual(len(json.dumps(small, ensure_ascii=False)), 9000)
+        self.assertEqual(small["hints"], self.profile["hints"])
+        self.assertEqual(small["anomalies"], self.profile["anomalies"])
+        kept = [e["path"] for e in small["paths"]]
+        self.assertEqual(small["truncated"]["paths_dropped"], len(self.by_path) - len(kept))
+        self.assertEqual(kept, [path for path in self.by_path if path in kept])
+        for path in ("$", "$.id", "$.question", "$.answer", "$.answer[*]", "$.passages.retriever_a[*]", "$.subqueries.{key}",
+                     "$.facts.model_a", "$.facts.model_a.{key}", LABEL_PATH,
+                     "$.labels.retriever_b.model_b.passage_fact_support.{key}.{key}[0]",
+                     "$.labels.retriever_a.model_a.passage_fact_support.{key}.{key}",
+                     "$.labels.retriever_a.model_a.passage_fact_support"):
+            self.assertIn(path, kept)
+        self.assertNotIn("$.labels.retriever_a.model_a.passage_fact_support.{key}.{key}[1]", kept)
+        self.assertNotIn("$.labels.retriever_a.model_a.subquery_fact_coverage.{key}[0]", kept)
+        self.assertTrue(all("examples" not in e for e in small["paths"]))
+        self.assertEqual(profile.profile_for_prompt(self.profile, max_chars=9000), small)
+        tiny = profile.profile_for_prompt(self.profile, max_chars=700)
+        self.assertEqual(tiny["paths"], [])
+        self.assertEqual(tiny["hints"], self.profile["hints"])
+        self.assertEqual(tiny["truncated"]["paths_dropped"], len(self.by_path))
 
     def test_run_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -117,6 +152,46 @@ class ExampleProfileTest(unittest.TestCase):
         prof = profile.profile_records(self.records, "$.missing")
         self.assertEqual(prof["record_id"], {"path": "$.missing", "unique": False})
         self.assertEqual(prof["anomalies"][0]["record_ids"], ["r5"])
+
+
+class PromptProfileTest(unittest.TestCase):
+    """profile_for_prompt: 넓은 스칼라 dict 접기, 힌트 문장의 경로 추출, 조상 경로."""
+
+    WORDS = ("alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet")
+
+    def test_wide_scalar_dict_is_collapsed(self):
+        records = []
+        for i in range(30):
+            preds = {word: f"answer {word} of record {i}" for word in self.WORDS}
+            preds["delta"] = "Yes" if i % 3 else "No"
+            meta = {word: i for word in self.WORDS[:9]}
+            meta["india"] = {"x": i}
+            records.append({"doc_id": f"d{i}", "preds": preds, "meta": meta, "eight": {word: "v" for word in self.WORDS[:8]}})
+        prof = profile.profile_records(records)
+        self.assertEqual(entries(prof)["$.preds"]["keys"]["kind"], "fixed")
+        small = profile.profile_for_prompt(prof, max_chars=40000)
+        by_path = entries(small)
+        self.assertEqual(by_path["$.preds"]["children_omitted"], 9)
+        self.assertEqual(len(by_path["$.preds"]["keys"]["names"]), 10)
+        self.assertIn("$.preds.delta", by_path)
+        self.assertNotIn("$.preds.alpha", by_path)
+        self.assertNotIn("children_omitted", by_path["$.meta"])
+        self.assertIn("$.meta.alpha", by_path)
+        self.assertNotIn("children_omitted", by_path["$.eight"])
+        self.assertIn("$.eight.alpha", by_path)
+        self.assertEqual(small["truncated"]["paths_dropped"], 9)
+        self.assertIn("children_omitted", small["truncated"]["note"])
+        self.assertEqual(profile.profile_for_prompt(prof, max_chars=40000), small)
+
+    def test_hint_paths_and_prefixes(self):
+        known = {"$", "$.a", "$.a['k 1']", "$.a['k 1'][*]", "$.b", "$.b.{key}", "$.c"}
+        hints = ["$.a['k 1'][*] holds long texts; iterate over $.a['k 1']: candidate context field.",
+                 "$.b.{key} takes 2 values (Yes 3, No 4): candidate LLM label for hints.",
+                 "$.zzz is not in the profile; $.c."]
+        self.assertEqual(profile._hint_paths(hints, known), ["$.a['k 1'][*]", "$.a['k 1']", "$.b.{key}", "$.c"])
+        self.assertEqual(profile._prefixes("$.a['k 1'][*].{key}[0]"), ["$", "$.a", "$.a['k 1']", "$.a['k 1'][*]", "$.a['k 1'][*].{key}"])
+        self.assertEqual(profile._prefixes("$.a"), ["$"])
+        self.assertEqual(profile._prefixes("$"), [])
 
 
 class ClassificationTest(unittest.TestCase):

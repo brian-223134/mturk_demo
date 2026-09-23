@@ -14,6 +14,8 @@ spec_reference.md에 영어로 설명해 두었다 (planner 프롬프트에 그�
                                          전처리(preprocess)도 같은 규칙을 쓰도록 공개한 도우미들
 
 오류 메시지는 "$.item.fields.facts.role: …"처럼 spec 안의 JSON 경로로 시작한다.
+
+최상위의 planner_notes(문자열 또는 null)는 planner가 자기 선택을 설명한 메모다. 파이프라인은 저장만 하고 쓰지 않는다.
 """
 
 from __future__ import annotations
@@ -207,6 +209,7 @@ class TaskSpec:
     instructions: InstructionsSpec
     output: OutputSpec
     spec_version: int = SPEC_VERSION
+    planner_notes: str | None = None
 
     @property
     def target_field(self) -> FieldSpec:
@@ -300,7 +303,7 @@ def parse_spec(data: dict) -> TaskSpec:
     if not isinstance(data, dict):
         raise SpecError(["$: spec must be a JSON object"])
     reader = _Reader()
-    reader.check_keys(data, "$", ("spec_version", "task", "source", "item", "hit", "instructions", "output"))
+    reader.check_keys(data, "$", ("spec_version", "task", "source", "item", "hit", "instructions", "output", "planner_notes"))
     version = reader.get(data, "spec_version", "$", int, SPEC_VERSION)
     if version != SPEC_VERSION:
         reader.error("$.spec_version", f"must be {SPEC_VERSION}")
@@ -311,9 +314,10 @@ def parse_spec(data: dict) -> TaskSpec:
     hit = _parse_hit(reader, reader.obj(data, "hit", "$", False) or {}, "$.hit")
     instructions = _parse_instructions(reader, reader.obj(data, "instructions", "$", False) or {}, "$.instructions", task)
     output = _parse_output(reader, reader.obj(data, "output", "$", False) or {}, "$.output")
+    planner_notes = reader.get(data, "planner_notes", "$", str, None, allow_none=True)
 
     spec = TaskSpec(task=task, source=source, item=item, hit=hit, instructions=instructions, output=output,
-                    spec_version=SPEC_VERSION)
+                    spec_version=SPEC_VERSION, planner_notes=planner_notes)
     errors = reader.errors + [message for message in check_spec(spec) if message not in reader.errors]
     if errors:
         raise SpecError(errors)
@@ -575,6 +579,7 @@ def spec_to_dict(spec: TaskSpec) -> dict:
             "notices": {"attention": ins.notices.attention, "research": ins.notices.research},
         },
         "output": {"reference_column": spec.output.reference_column, "reason_column": spec.output.reason_column},
+        "planner_notes": spec.planner_notes,
     }
 
 

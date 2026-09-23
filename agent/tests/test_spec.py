@@ -47,6 +47,7 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(parsed.instructions.notices.research)
         self.assertEqual(parsed.output.reference_column, "llm_label")
         self.assertIsNone(parsed.output.reason_column)
+        self.assertIsNone(parsed.planner_notes)
         self.assertEqual(parsed.target_field.name, "facts")
         self.assertEqual([f.name for f in parsed.context_fields], ["question"])
         self.assertEqual(parsed.option_values, ["yes", "no"])
@@ -152,6 +153,24 @@ class ParseTest(unittest.TestCase):
         with self.assertRaises(SpecError):
             spec.parse_spec([])
 
+    def test_planner_notes(self):
+        parsed = spec.parse_spec(copy.deepcopy(MINIMAL))
+        self.assertIsNone(parsed.planner_notes)
+        self.assertIsNone(spec.spec_to_dict(parsed)["planner_notes"])
+        data = copy.deepcopy(MINIMAL)
+        data["planner_notes"] = None
+        self.assertIsNone(spec.parse_spec(data).planner_notes)
+        note = "The facts list is the target; the question is the only context field."
+        data["planner_notes"] = note
+        parsed = spec.parse_spec(data)
+        self.assertEqual(parsed.planner_notes, note)
+        as_dict = spec.spec_to_dict(parsed)
+        self.assertEqual(as_dict["planner_notes"], note)
+        self.assertEqual(spec.parse_spec(as_dict), parsed)
+        data["planner_notes"] = ["not", "a string"]
+        with self.assertRaisesRegex(SpecError, r"\$\.planner_notes: must be a string"):
+            spec.parse_spec(data)
+
     def test_strategy_requires_block(self):
         data = copy.deepcopy(MINIMAL)
         data["hit"] = {"attention": {"strategy": "mismatch", "expected_value": "no"}}
@@ -166,6 +185,7 @@ class LoadRoundtripTest(unittest.TestCase):
     def test_example_roundtrip(self):
         path = EXAMPLE_DIR / "task_spec.json"
         loaded = spec.load_spec(path)
+        self.assertTrue(loaded.planner_notes)
         as_dict = spec.spec_to_dict(loaded)
         self.assertEqual(as_dict, json.loads(path.read_text(encoding="utf-8")))
         self.assertEqual(spec.parse_spec(as_dict), loaded)
