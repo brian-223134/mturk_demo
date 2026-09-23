@@ -1,4 +1,4 @@
-// 5.3 Review의 응답 상세: 문항별로 이 worker의 값, 같은 HIT 다른 worker의 값, majority를 나란히 보여준다.
+// 5.3 Review의 응답 상세: 문항별로 이 worker의 값, 대조 기준(reference), 같은 HIT 다른 worker의 값을 나란히 보여준다.
 
 import { useQuery } from '@tanstack/react-query';
 import { Button, Descriptions, Drawer, Flex, Space, Switch, Table, Tag, Typography, type TableColumnsType } from 'antd';
@@ -9,11 +9,12 @@ import type { AssignmentListItem, BatchDetail } from '../../api/types';
 import QueryErrorAlert from '../../components/QueryErrorAlert';
 import StatusTag from '../../components/StatusTag';
 import { formatDateTime, formatPercent, formatSeconds } from '../../components/format';
-import { majority } from '../../domain/agreement';
 import { DEFAULT_ATTENTION_PREFIX, isAttentionName } from '../../domain/attention';
+import { normalizeLabel } from '../../domain/reference';
 import AttentionTag from './AttentionTag';
 import TaskPreviewModal from './TaskPreviewModal';
 import type { ReviewAction } from './ReviewActionModal';
+import { describeReferenceSource } from './referenceSource';
 
 interface Props {
   detail: BatchDetail;
@@ -25,8 +26,8 @@ interface Props {
 interface AnswerRow {
   name: string;
   own: string;
+  reference: string | undefined; // 없으면 기준 없음 (column 모드에서 대응 안 됨, majority 모드에서 다른 worker 없음/동률)
   others: { workerId: string; value: string; rejected: boolean }[];
-  othersMajority: string | null;
   attention: boolean;
 }
 
@@ -36,6 +37,7 @@ export default function AssignmentDrawer({ detail, assignment, onClose, onAction
   const [previewOpen, setPreviewOpen] = useState(false);
   const hitId = assignment?.HITId;
 
+  // 같은 HIT의 다른 worker 답을 보여 주는 데만 쓴다 (reference는 목록 항목에 이미 들어 있다)
   const siblings = useQuery({
     queryKey: ['hit-assignments', batch.id, hitId],
     queryFn: () => api.listAssignments(batch.id, { page: 1, pageSize: 100, filters: { HITId: hitId } }),
@@ -46,25 +48,20 @@ export default function AssignmentDrawer({ detail, assignment, onClose, onAction
     if (!assignment) return [];
     const prefix = batch.attentionRule?.namePrefix ?? DEFAULT_ATTENTION_PREFIX;
     const others = (siblings.data?.items ?? []).filter((a) => a.AssignmentId !== assignment.AssignmentId);
-    return assignment.answers.map((answer) => {
-      const votes = others.flatMap((other) => {
+    return assignment.answers.map((answer) => ({
+      name: answer.name,
+      own: answer.value,
+      reference: assignment.reference[answer.name],
+      others: others.flatMap((other) => {
         const value = other.answers.find((x) => x.name === answer.name)?.value;
         return value === undefined ? [] : [{ workerId: other.WorkerId, value, rejected: other.AssignmentStatus === 'Rejected' }];
-      });
-      return {
-        name: answer.name,
-        own: answer.value,
-        others: votes,
-        // 반려된 응답은 비교 기준에 넣지 않는다 (표의 Agree 열과 같은 기준)
-        othersMajority: majority(votes.filter((v) => !v.rejected).map((v) => v.value)),
-        attention: isAttentionName(answer.name, prefix),
-      };
-    });
+      }),
+      attention: isAttentionName(answer.name, prefix),
+    }));
   }, [assignment, siblings.data, batch.attentionRule]);
 
-  const expected = batch.attentionRule?.expectedValue;
-  const disagrees = (row: AnswerRow) =>
-    row.attention ? expected !== undefined && row.own !== expected : row.othersMajority !== null && row.othersMajority !== row.own;
+  // 표의 Answers 열과 같은 기준: reference가 있는 문항만, normalizeLabel로 비교한다
+  const disagrees = (row: AnswerRow) => row.reference !== undefined && normalizeLabel(row.reference) !== normalizeLabel(row.own);
   const shown = onlyDisagreements ? rows.filter(disagrees) : rows;
 
   const columns: TableColumnsType<AnswerRow> = [
@@ -86,6 +83,17 @@ export default function AssignmentDrawer({ detail, assignment, onClose, onAction
       render: (own: string, row) => <Tag color={disagrees(row) ? 'red' : undefined}>{own}</Tag>,
     },
     {
+      title: 'Reference',
+      dataIndex: 'reference',
+      width: 150,
+      render: (reference: string | undefined, row) =>
+        reference === undefined ? (
+          <Typography.Text type="secondary">–</Typography.Text>
+        ) : (
+          <Tag color={row.attention ? 'purple' : undefined}>{reference}</Tag>
+        ),
+    },
+    {
       title: 'Other workers on this HIT',
       key: 'others',
       render: (_, row) =>
@@ -99,19 +107,6 @@ export default function AssignmentDrawer({ detail, assignment, onClose, onAction
               </Tag>
             ))}
           </Space>
-        ),
-    },
-    {
-      title: 'Expected / majority',
-      key: 'majority',
-      width: 170,
-      render: (_, row) =>
-        row.attention ? (
-          expected ? <Tag color="purple">{expected}</Tag> : <Typography.Text type="secondary">–</Typography.Text>
-        ) : row.othersMajority === null ? (
-          <Typography.Text type="secondary">{row.others.length === 0 ? '–' : 'tie'}</Typography.Text>
-        ) : (
-          <Tag>{row.othersMajority}</Tag>
         ),
     },
   ];
@@ -156,9 +151,12 @@ export default function AssignmentDrawer({ detail, assignment, onClose, onAction
           </Descriptions>
 
           <Flex justify="space-between" align="center">
-            <Typography.Text strong>
-              Answers ({rows.length}){rows.some(disagrees) && `, ${rows.filter(disagrees).length} differ`}
-            </Typography.Text>
+            <Space size={8}>
+              <Typography.Text strong>
+                Answers ({rows.length}){rows.some(disagrees) && `, ${rows.filter(disagrees).length} differ`}
+              </Typography.Text>
+              <Typography.Text type="secondary">Reference: {describeReferenceSource(batch.reference)}</Typography.Text>
+            </Space>
             <Space size={6}>
               <Switch size="small" checked={onlyDisagreements} onChange={setOnlyDisagreements} />
               <Typography.Text type="secondary">Only differences</Typography.Text>

@@ -1,23 +1,30 @@
-// 5.3 Review: assignment 표, 필터, 일괄 승인/반려, 반려 번복. 행을 누르면 응답 상세 Drawer가 열린다.
+// 5.3 Review: assignment 표, 필터, 일괄 승인/반려, 반려 번복. 답은 Answers 열에 두 줄(W: worker, R: 대조 기준)로
+// 항상 보이고, 행을 누르면 응답 상세 Drawer가 열린다. 체크는 체크박스로 따로 한다.
 
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Flex, Input, InputNumber, Select, Space, Table, Tooltip, Typography, type TableColumnsType, type TableProps } from 'antd';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../../api/client';
 import type { AssignmentListItem, BatchDetail, ListQuery } from '../../../api/types';
 import QueryErrorAlert from '../../../components/QueryErrorAlert';
 import StatusTag from '../../../components/StatusTag';
 import { formatDateTime, formatPercent, formatSeconds } from '../../../components/format';
+import { DEFAULT_ATTENTION_PREFIX } from '../../../domain/attention';
+import AnswersCell, { tokenWidthOf } from '../AnswersCell';
 import AssignmentDrawer from '../AssignmentDrawer';
 import AttentionTag from '../AttentionTag';
 import ReviewActionModal, { type ReviewAction } from '../ReviewActionModal';
+import { abbreviate, legendEntries } from '../answerTokens';
+import { describeReferenceSource } from '../referenceSource';
 import { describeTopUp, invalidateBatchData } from '../shared';
 
-const DEFAULT_SORT: NonNullable<ListQuery['sort']> = { field: 'SubmitTime', order: 'desc' };
+// Row 오름차순이면 같은 HIT의 응답이 위아래로 붙는다 (핸들러가 rowIndex, WorkerId, SubmitTime 순으로 미리 정렬한다)
+const DEFAULT_SORT: NonNullable<ListQuery['sort']> = { field: 'rowIndex', order: 'asc' };
 
 export default function ReviewTab({ detail }: { detail: BatchDetail }) {
   const batchId = detail.batch.id;
+  const attentionPrefix = detail.batch.attentionRule?.namePrefix ?? DEFAULT_ATTENTION_PREFIX;
   const queryClient = useQueryClient();
   const { modal, message, notification } = App.useApp();
   const [searchParams] = useSearchParams();
@@ -25,7 +32,7 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
   // Worker 상세 화면에서 ?worker=<id>로 넘어온다
   const [query, setQuery] = useState<ListQuery>(() => ({
     page: 1,
-    pageSize: 25,
+    pageSize: 30,
     sort: DEFAULT_SORT,
     filters: { workerSearch: searchParams.get('worker') ?? undefined },
   }));
@@ -40,6 +47,14 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
     queryFn: () => api.listAssignments(batchId, query),
     placeholderData: keepPreviousData,
   });
+  const items = assignments.data?.items;
+
+  // 약어는 페이지에 보이는 worker 답과 reference 값 전체로 만든다 (페이지가 바뀌면 다시)
+  const tokens = useMemo(
+    () => abbreviate((items ?? []).flatMap((a) => [...a.answers.map((x) => x.value), ...Object.values(a.reference)])),
+    [items],
+  );
+  const tokenWidth = tokenWidthOf(tokens);
 
   const setFilter = (name: string, value: unknown) =>
     setQuery((previous) => ({ ...previous, page: 1, filters: { ...previous.filters, [name]: value } }));
@@ -65,6 +80,17 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
       setSelectingFailed(false);
     }
   };
+
+  /** 현재 페이지의 행만 반전한다. 다른 페이지의 선택은 그대로 둔다 */
+  const invertPage = () =>
+    setSelected((previous) => {
+      const next = new Map(previous);
+      for (const a of items ?? []) {
+        if (next.has(a.AssignmentId)) next.delete(a.AssignmentId);
+        else next.set(a.AssignmentId, a);
+      }
+      return next;
+    });
 
   /** 5.3: 반려해도 MTurk는 자리를 다시 열어 주지 않으므로, 반려를 확정하면 재모집할지 묻는다. */
   const offerTopUp = (rejected: AssignmentListItem[]) => {
@@ -116,11 +142,14 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
         </Link>
       ),
     },
-    { title: 'Status', key: 'AssignmentStatus', width: 110, sorter: true, sortOrder: sortOrderOf('AssignmentStatus'), render: (_, a) => <StatusTag status={a.AssignmentStatus} /> },
-    { title: 'Time', key: 'workTimeInSeconds', width: 90, align: 'right', sorter: true, sortOrder: sortOrderOf('workTimeInSeconds'), render: (_, a) => formatSeconds(a.workTimeInSeconds) },
-    { title: 'Attention', key: 'attention.correct', width: 120, render: (_, a) => <AttentionTag attention={a.attention} /> },
     {
-      title: <Tooltip title="Share of this worker's answers that match the majority of the other workers on the same HIT">Agree</Tooltip>,
+      title: 'Answers',
+      key: 'answers',
+      render: (_, a) => <AnswersCell assignment={a} tokens={tokens} tokenWidth={tokenWidth} attentionPrefix={attentionPrefix} />,
+    },
+    { title: 'Attention', key: 'attention.correct', width: 110, render: (_, a) => <AttentionTag attention={a.attention} /> },
+    {
+      title: <Tooltip title="Share of this worker's answers (attention items excluded) that match the reference">Agree</Tooltip>,
       key: 'agreement',
       width: 90,
       align: 'right',
@@ -128,8 +157,19 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
       sortOrder: sortOrderOf('agreement'),
       render: (_, a) => formatPercent(a.agreement),
     },
+    { title: 'Time', key: 'workTimeInSeconds', width: 80, align: 'right', sorter: true, sortOrder: sortOrderOf('workTimeInSeconds'), render: (_, a) => formatSeconds(a.workTimeInSeconds) },
+    { title: 'Status', key: 'AssignmentStatus', width: 110, sorter: true, sortOrder: sortOrderOf('AssignmentStatus'), render: (_, a) => <StatusTag status={a.AssignmentStatus} /> },
     { title: 'Submitted', key: 'SubmitTime', width: 150, sorter: true, sortOrder: sortOrderOf('SubmitTime'), render: (_, a) => formatDateTime(a.SubmitTime) },
-    { title: 'Feedback', key: 'feedback', ellipsis: true, render: (_, a) => <Typography.Text type="secondary">{a.RequesterFeedback}</Typography.Text> },
+    {
+      title: 'Feedback',
+      key: 'feedback',
+      render: (_, a) => (
+        // 표는 내용 폭(max-content)으로 두므로 여기서 잘라야 Answers 열이 밀리지 않는다
+        <div title={a.RequesterFeedback} style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Typography.Text type="secondary">{a.RequesterFeedback}</Typography.Text>
+        </div>
+      ),
+    },
   ];
 
   const onTableChange: TableProps<AssignmentListItem>['onChange'] = (pagination, _filters, sorter) => {
@@ -186,6 +226,9 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
         <Button loading={selectingFailed} onClick={() => void selectAttentionFailed()}>
           Select attention-failed
         </Button>
+        <Button disabled={!items?.length} onClick={invertPage}>
+          Invert selection
+        </Button>
         <Button type="primary" disabled={!allSubmitted} onClick={() => setAction({ kind: 'approve', assignments: chosen })}>
           Approve selected
         </Button>
@@ -208,18 +251,28 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
         )}
       </Flex>
 
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
+        Answers — W: this worker, R: reference ({describeReferenceSource(detail.batch.reference)})
+        {legendEntries(tokens).map((entry) => ` · ${entry.token} = ${entry.values.join(' / ')}`).join('')}
+        {' · purple outline = attention item · "·" = no reference'}
+      </Typography.Paragraph>
+
       <QueryErrorAlert error={assignments.error} />
       <Table
         rowKey="AssignmentId"
-        size="middle"
+        size="small"
         columns={columns}
-        dataSource={assignments.data?.items}
+        dataSource={items}
         loading={assignments.isFetching}
         onChange={onTableChange}
+        // Answers 토큰은 줄을 바꾸지 않으므로 문항이 많으면 가로로 스크롤한다
+        scroll={{ x: 'max-content' }}
         onRow={(record) => ({ onClick: () => setOpened(record), style: { cursor: 'pointer' } })}
         rowSelection={{
           selectedRowKeys: [...selected.keys()],
           preserveSelectedRowKeys: true,
+          // 체크박스 자체는 antd가 click 전파를 막지만 셀의 여백은 tr까지 올라가 Drawer가 열린다. 셀 전체에서 막는다
+          onCell: () => ({ onClick: (event) => event.stopPropagation() }),
           onChange: (keys, rows) => {
             const known = new Map([...selected, ...rows.filter(Boolean).map((r) => [r.AssignmentId, r] as const)]);
             setSelected(new Map(keys.flatMap((key) => (known.has(String(key)) ? [[String(key), known.get(String(key))!] as const] : []))));
@@ -230,7 +283,7 @@ export default function ReviewTab({ detail }: { detail: BatchDetail }) {
           pageSize: query.pageSize,
           total: assignments.data?.total,
           showSizeChanger: true,
-          pageSizeOptions: [25, 50, 100],
+          pageSizeOptions: [30, 50, 100],
           showTotal: (total) => `${total} assignments`,
         }}
       />

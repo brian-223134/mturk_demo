@@ -166,6 +166,15 @@ export default function OverviewTab({ detail }: { detail: BatchDetail }) {
             'None'
           )}
         </Descriptions.Item>
+        <Descriptions.Item label="Review reference" span={2}>
+          {batch.reference?.source === 'column' ? (
+            <>
+              input column <Typography.Text code>{batch.reference.column}</Typography.Text>
+            </>
+          ) : (
+            'majority of the other workers on the same HIT (rejected answers excluded)'
+          )}
+        </Descriptions.Item>
         <Descriptions.Item label="Qualifications" span={2}>
           {s.QualificationRequirements.length === 0
             ? 'None recorded'
