@@ -1,0 +1,6 @@
+# agent가 쓰는 외부 패키지 목록이다. Dockerfile이 이 파일로 설치하므로 컨테이너 안에만 설치되고,
+# 호스트의 Python에는 아무것도 설치하지 않는다. 외부 패키지가 필요해지면 여기에만 적는다.
+# 파이프라인 자체(profile, --spec 실행, preprocess, render, validate)는 표준 라이브러리만 쓴다.
+
+# 모델 설정 yaml(environment/models/*.yaml)을 읽는 데 쓴다. --planner openrouter 일 때만 필요하다.
+pyyaml>=6,<7
