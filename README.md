@@ -212,6 +212,17 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
 실제 MTurk와 연동할 때는 같은 경로를 구현한 백엔드(예: FastAPI + boto3)로 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
 
+## 원본 데이터에서 HIT 만들기 (`agent/`)
+
+annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로부터, Create 탭에 올릴 `hits.csv`와 `template.html`을 자동으로 만드는 파이프라인입니다.
+원본을 분석해 구조와 이상치를 정리하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 CSV와 MTurk 템플릿을 만들어 검증합니다. 명세는 LLM(OpenRouter)이 채우거나 손으로 쓴 파일을 그대로 쓸 수 있으며, LLM 호출은 명시적으로 허용할 때만 일어납니다.
+
+```bash
+docker compose run --rm agent run <원본> --prompt @<prompt 파일> --spec <spec 파일> --out <출력 폴더>
+```
+
+실행 방법과 출력 파일, 콘솔에 올리는 순서는 [agent/README.md](agent/README.md)에 정리되어 있습니다.
+
 ## Preview
 
 전체 흐름을 한 번 따라가 보는 순서입니다. 시작하기 전에 **Reset to fixtures**를 눌러 두세요.
@@ -239,6 +250,7 @@ REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에
 ## 폴더 구조
 
 ```
+agent/              원본 데이터와 prompt로 HIT 단위 CSV와 템플릿을 만드는 파이프라인 (Python)
 data/               시작 데이터 (JSON + 템플릿 HTML)
 docs/               Create의 사용 방법, 화면에 나오는 값을 읽는 방법
 example/            Create에 올려 볼 예시 템플릿과 CSV
