@@ -73,7 +73,7 @@ CSV를 올립니다. 한 행이 HIT 하나가 됩니다.
 
 ## 3. `Settings`
 
-값은 다섯 구역으로 나뉩니다. 대문자로 시작하는 이름은 MTurk API의 HIT 속성과 같습니다.
+값은 여섯 구역으로 나뉩니다. 대문자로 시작하는 이름은 MTurk API의 HIT 속성과 같습니다.
 
 ### `What workers see in the HIT list`
 
@@ -124,6 +124,30 @@ CSV를 올립니다. 한 행이 HIT 하나가 됩니다.
 
 스위치를 비활성화한 채 게시하면 Review에 attention 결과가 표시되지 않고 `Select attention-failed`도 쓸 수 없습니다. 게시한 뒤에는 규칙을 바꿀 수 없습니다.
 
+### `Review reference`
+
+Review 표의 `Answers` 열에서 worker의 답 아래에 나란히 보여 줄 대조 기준입니다. MTurk Requester 웹사이트의 `Input.GroundTruth`와 같은 역할입니다.
+
+| 항목 | 기본값 | 설명 |
+|---|---|---|
+| `Compare answers with` | `Majority of the other workers on the same HIT` | 같은 HIT를 수행한 다른 worker들의 답 중 가장 많은 값을 기준으로 삼습니다. 그 아래에 올린 CSV의 컬럼이 `Input column: <컬럼 이름>`으로 나열되며, 정답이나 LLM 라벨이 든 컬럼이 있으면 그것을 고릅니다. |
+
+정답 컬럼이 없는 CSV가 흔하므로 기본값이 majority입니다. 그런 컬럼이 없으면 그대로 두면 됩니다.
+
+컬럼을 고르면 그 컬럼의 첫 행 셀을 읽어 어떤 형식으로 인식되는지 알려 줍니다. 셀은 세 가지 형식 중 하나로 읽습니다.
+
+| 셀의 형식 | 문항에 대응하는 방법 | 안내 문구의 예 |
+|---|---|---|
+| 문항 이름을 키로 하는 객체 (`{"general_0_1": "Covered", …}`) | 이름으로 대응합니다. 같은 이름의 키가 없으면 답 이름이 `키_`로 시작하는 키를 씁니다 (`general_0_1_coverage`는 `general_0_1`에 대응). | `Row 1 reads as an object with 12 entries (matched to answers by name).` |
+| 리스트 (`["grounded", "not_grounded", …]`) | 위치로 대응합니다. 길이가 답의 수와 같으면 모든 답에, attention을 뺀 답의 수와 같으면 attention을 뺀 답에 순서대로 대응합니다. 둘 다 아니면 대응하지 않습니다. | `Row 1 reads as a list of 11 values (matched to answers by position).` |
+| 그 밖의 평문 (`grounded`) | attention을 뺀 답이 정확히 하나인 과제에서 그 답에 대응합니다. | `Row 1 reads as a single value "grounded" (used when the task has exactly one answer besides attention items).` |
+
+- JSON뿐 아니라 Python이 출력한 형식(`{'general_0_1': 'Covered'}`, `True`, `None`)도 읽습니다. 시작 데이터의 `query_fact_coverage_check` 컬럼이 이 형식이며, 예시 CSV [example/4-saved-templates/query-fact-coverage-input.csv](../example/4-saved-templates/query-fact-coverage-input.csv)에서 이 컬럼을 고르면 위 표의 첫 문구(12 entries)가 그대로 표시됩니다.
+- 첫 행의 셀이 비어 있으면 `Row 1 is empty; answers in that row will show no reference.`라고 경고합니다. 게시는 할 수 있고, 그 행의 응답에는 기준이 표시되지 않습니다.
+- 값을 비교할 때 대소문자와 앞뒤 공백은 무시합니다. `Not covered`와 `Not Covered`는 같은 값입니다.
+- `Data` 단계로 돌아가 CSV를 바꿔서 고른 컬럼이 사라지면 `Next`를 누를 때 `Column "…" is not in the uploaded CSV. Choose another column or the majority.`가 표시됩니다.
+- 게시한 뒤에는 바꿀 수 없습니다. attention 문항의 기준은 이 선택과 관계없이 attention 규칙의 `Expected value`입니다.
+
 `Next`를 누르면 값을 검사합니다. 문제가 있으면 그 항목으로 화면이 이동하고 이유가 표시됩니다.
 
 ## 4. `Preview & Cost`
@@ -162,11 +186,11 @@ Available balance    $496.40 left after publishing                              
 ## 5. `Publish`
 
 - **`Batch name`**은 `<템플릿 이름> <오늘 날짜>`로 채워져 있고 고칠 수 있습니다. Manage 목록에 표시되는 이름이며 worker에게는 보이지 않습니다.
-- 요약 표에서 환경(`MOCK`), 템플릿, 데이터(행 수 = HIT 수), 설정, Qualification, pool 조건, attention 규칙, 합계 비용을 확인합니다.
+- 요약 표에서 환경(`MOCK`), 템플릿, 데이터(행 수 = HIT 수), 설정, Qualification, pool 조건, attention 규칙, 대조 기준(`Review reference`), 합계 비용을 확인합니다.
 - 게시 버튼의 이름은 `Publish 10 HITs`처럼 HIT 수가 들어갑니다. 이름이 비어 있거나 합계가 잔액을 넘으면 게시할 수 없습니다.
 - production 환경에서는 batch 이름을 한 번 더 입력해야 버튼이 활성화됩니다. mock에서는 이 입력란이 나타나지 않습니다.
 
-게시하면 서버가 값을 다시 검사합니다: 템플릿이 요구하는 컬럼, `Title`, `MaxAssignments`, 기간, 자동 승인 30일 상한, 최소 보상, pool이 실제로 있는지, 잔액입니다.
+게시하면 서버가 값을 다시 검사합니다: 템플릿이 요구하는 컬럼, `Title`, `MaxAssignments`, 기간, 자동 승인 30일 상한, 최소 보상, pool이 실제로 있는지, 대조 기준 컬럼이 CSV에 있는지, 잔액입니다.
 문제가 있으면 `Could not publish the batch` 알림에 이유가 표시되고 입력은 그대로 남습니다.
 
 게시가 끝나면 행마다 HIT가 하나씩 만들어지고, 합계 금액이 `Balance`에서 미리 차감되며, 새 batch의 Overview로 이동합니다.

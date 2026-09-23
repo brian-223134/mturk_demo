@@ -83,25 +83,50 @@ pilot batch는 처음에 120자리(40 HITs × 3)였고, 18건을 반려한 뒤 �
 상단 바의 `Balance`는 움직이는 시점이 다릅니다. batch를 게시하거나 응답을 다시 모집할 때 예상 금액 전체가 미리 차감되고, 반려하면 그만큼 돌아옵니다.
 그래서 새로 게시한 batch는 `Spent`가 $0.00이어도 `Balance`는 이미 줄어 있습니다.
 
+## Review 표의 Answers 열 읽기
+
+Review 표의 `Answers` 열에는 응답마다 답이 두 줄로 항상 보입니다. 윗줄 `W`는 이 worker의 답이고, 아랫줄 `R`은 대조 기준입니다. 행을 열거나 마우스를 올리지 않아도 한 페이지를 훑으며 어긋난 응답을 고를 수 있게 한 것입니다.
+
+- 칸 하나가 문항 하나이고, 순서는 worker가 제출한 순서(템플릿의 화면 순서)입니다.
+- 값은 약어로 표시합니다. 값을 단어로 나누어 첫 글자를 대문자로 이은 것입니다: `G`는 grounded, `NG`는 not_grounded, `C`는 Covered, `NC`는 Not Covered입니다. 약어가 겹치면 글자를 늘려 구분합니다.
+- worker의 답이 대조 기준과 다르면 빨간색으로 표시됩니다. attention 문항은 보라색 테두리가 있습니다. 대조 기준이 없는 문항의 아랫줄은 회색 `·`입니다.
+- 칸에 마우스를 올리면 문항 이름과 두 값의 원래 문자열이 표시됩니다.
+- 표 위의 범례 한 줄에 이 batch의 대조 기준 출처와 약어의 뜻이 적혀 있습니다.
+- 기본 정렬은 `Row`이므로 같은 HIT의 응답 3건이 위아래로 붙어 있고, 세 줄을 나란히 견주어 볼 수 있습니다.
+- `Invert selection`은 현재 페이지에서 선택을 반전합니다. 정상으로 보이는 몇 건만 체크한 뒤 반전해서 나머지를 한 번에 반려하는 식으로 씁니다.
+
+### 대조 기준의 출처
+
+대조 기준은 batch를 게시할 때 Create의 `Settings`에서 정하며, 두 가지가 있습니다. 시작 데이터에는 둘 다 들어 있습니다.
+
+| batch | 대조 기준 | 설명 |
+|---|---|---|
+| `pilot close-ended chunk-fact` | 같은 HIT를 수행한 다른 worker들의 majority | 정답 컬럼이 없는 batch입니다. 이 worker를 빼고 반려된 응답도 빼고 센 다수 값이며, 동률이거나 다른 worker가 없으면 기준이 없습니다. |
+| `open-ended query-fact coverage (model B)` | 입력 컬럼 `query_fact_coverage_check` | LLM이 매긴 라벨입니다. 문항 이름을 키로 하는 객체이며, 답 이름 `general_0_1_coverage`는 키 `general_0_1`에 접두어로 대응됩니다. |
+| `close-ended query-fact coverage (model A)` | 입력 컬럼 `query_fact_coverage_check` | 위와 같습니다. |
+
+값을 비교할 때 대소문자와 앞뒤 공백은 무시합니다. 라벨 컬럼의 `Not covered`와 worker 답 `Not Covered`는 같은 값으로 봅니다.
+attention 문항의 기준은 출처와 관계없이 batch의 attention 규칙에 정해 둔 기대값입니다.
+
 ## Review의 응답 상세 읽기
 
-Review에서 행을 누르면 열리는 화면입니다. `Answers` 표의 한 행이 문항 하나입니다.
+Review에서 행을 누르면 열리는 화면입니다. `Answers` 표의 한 행이 문항 하나입니다. 표 위에는 이 batch의 대조 기준 출처가 표시됩니다.
 
 - **`Item`**은 문항의 이름입니다. 기존 템플릿에서 `general_3_1`은 네 번째 탭(0부터 셉니다)의 첫 문항입니다. attention 문항에는 보라색 `attention` 태그가 붙습니다.
 - **`This worker`**는 이 worker의 답입니다. 비교 기준과 다르면 빨간색으로 표시됩니다.
-- **`Other workers on this HIT`**는 같은 HIT를 수행한 다른 worker들의 답입니다. 취소선이 그어진 값은 반려된 응답의 것이고, 비교 기준을 계산할 때 제외합니다.
-- **`Expected / majority`**는 비교 기준입니다. attention 문항이면 batch에 정해 둔 기대값이고, 일반 문항이면 다른 worker들의 답 중 가장 많은 값입니다. 동률이면 `tie`로 표시됩니다.
-  이 worker 자신의 답은 넣지 않습니다. 자기 답이 기준에 섞이면 다른 사람들과 얼마나 같은지를 볼 수 없기 때문입니다.
+- **`Other workers on this HIT`**는 같은 HIT를 수행한 다른 worker들의 답입니다. 취소선이 그어진 값은 반려된 응답의 것이고, majority를 계산할 때 제외합니다.
+- **`Reference`**는 대조 기준입니다. attention 문항이면 batch에 정해 둔 기대값이고, 일반 문항이면 위의 [대조 기준의 출처](#대조-기준의-출처)에 따라 다른 worker들의 majority 또는 입력 컬럼의 값입니다. 기준이 없는 문항(동률, 다른 worker 없음, 컬럼에 대응하는 값 없음)은 `–`로 표시됩니다.
+  majority에는 이 worker 자신의 답을 넣지 않습니다. 자기 답이 기준에 섞이면 다른 사람들과 얼마나 같은지를 볼 수 없기 때문입니다.
 
 표 위의 `Answers (11), 7 differ`는 전체 문항 수와 빨간색 문항 수입니다. `Only differences`를 활성화하면 어긋난 문항만 남습니다.
-`Agreement`는 일반 문항 중 majority와 같은 답의 비율입니다. attention 문항은 분모에 넣지 않습니다.
+`Agreement`는 attention을 뺀 문항 중 대조 기준과 같은 답의 비율입니다. 기준이 없는 문항은 분모에 넣지 않습니다. Review 표의 `Agree` 열도 같은 값입니다.
 
 ### 예시: attention은 통과했지만 일치율이 낮은 응답
 
 `pilot close-ended chunk-fact`의 Review에서 Status를 Rejected로 거르면 Row 32에 worker `Wb49e89b85e8e`의 응답이 있습니다.
 위쪽에 `Attention` `1/1 PASS`, `Agreement` 30%, `Answers (11), 7 differ`가 표시됩니다.
 
-| `Item` | `This worker` | `Other workers on this HIT` | `Expected / majority` |
+| `Item` | `This worker` | `Other workers on this HIT` | `Reference` |
 |---|---|---|---|
 | `general_0_1`, `general_1_1` | grounded | grounded, grounded, not_grounded | grounded |
 | `general_2_1` | grounded | grounded, grounded, grounded | grounded |
@@ -109,7 +134,7 @@ Review에서 행을 누르면 열리는 화면입니다. `Answers` 표의 한 �
 | `attention_7_1` | not_grounded | grounded, not_grounded, not_grounded | not_grounded (기대값) |
 | `general_8_1` ~ `general_10_1` | **not_grounded** | grounded, grounded, grounded | grounded |
 
-- 문항 11개는 일반 문항 10개와 attention 문항 1개입니다. 굵게 표시한 7개가 `7 differ`이고, 일반 문항 10개 중 3개가 majority와 같으므로 `Agreement`는 30%입니다.
+- 문항 11개는 일반 문항 10개와 attention 문항 1개입니다. 굵게 표시한 7개가 `7 differ`이고, 일반 문항 10개 중 3개가 대조 기준(이 batch에서는 다른 worker들의 majority)과 같으므로 `Agreement`는 30%입니다.
 - 이 worker는 네 번째 문항부터 끝까지 not_grounded로 답했습니다. 기대값도 not_grounded이므로 attention 문항은 맞은 것으로 판정됩니다. attention check만으로는 한 값으로 몰아서 답한 응답을 걸러 낼 수 없다는 것을 보여 줍니다.
 - 응답 한 건만으로 worker를 판단하기는 어렵습니다. `Worker`의 ID를 누르면 열리는 Worker 상세에서 이 worker는 제출 21건 중 20건이 승인되었고 전체 일치율은 96%입니다.
 - 시작 데이터의 검수 상태와 반려 사유는 원본을 그대로 옮긴 것이고, attention 판정은 콘솔이 batch의 규칙으로 새로 계산한 것입니다. 그래서 이 응답처럼 둘이 일치하지 않는 경우가 있습니다.
@@ -134,7 +159,7 @@ Results는 **승인된 응답의 실제 문항**만 집계합니다. attention �
 pilot batch는 만장일치가 85%인데 κ는 0.731이고, model A batch는 95%에 0.938입니다. pilot batch의 차이가 더 큰 것은 표의 76%가 not_grounded로 쏠려 있기 때문입니다.
 라벨이 한쪽으로 쏠리면 우연히 일치할 확률이 높아지고, κ는 그만큼을 빼고 계산합니다. κ를 읽을 때 `Label distribution`을 함께 보는 이유입니다.
 
-문항 표의 `Majority`는 승인된 응답 전체에서 가장 많은 값입니다. Review의 응답 상세에 나오는 majority는 그 worker를 빼고 검수 대기 응답을 포함해 계산하므로, 같은 문항이라도 두 화면의 값이 다를 수 있습니다.
+문항 표의 `Majority`는 승인된 응답 전체에서 가장 많은 값입니다. Review의 대조 기준이 majority인 batch에서는 그 worker를 빼고 검수 대기 응답을 포함해(반려된 응답은 제외) 계산하므로, 같은 문항이라도 두 화면의 값이 다를 수 있습니다.
 질의 단위로 다시 묶는 분석은 `Export`로 받은 CSV로 합니다. 이 CSV는 MTurk Requester 웹사이트의 결과 CSV와 컬럼이 같습니다.
 
 ## 입력 데이터의 구조

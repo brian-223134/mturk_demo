@@ -92,7 +92,8 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 - **`Overview`**: 진행률, 응답 현황, 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
 - **`Review`**: 응답을 검수하는 화면입니다.
   - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 여러 건을 한 번에 승인하거나 반려할 수 있습니다. `Select attention-failed`는 attention check를 틀린 검수 대기 응답을 한 번에 선택합니다.
-  - 행을 누르면 응답 상세가 열립니다. 문항마다 이 worker의 답, 같은 HIT를 수행한 다른 worker들의 답, majority를 나란히 보여 줍니다. `Open task`를 누르면 worker가 실제로 본 화면을 그대로 띄웁니다.
+  - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 Create의 `Settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
+  - 행을 누르면 응답 상세가 열립니다. 문항마다 이 worker의 답, 같은 HIT를 수행한 다른 worker들의 답, 대조 기준을 나란히 보여 줍니다. `Open task`를 누르면 worker가 실제로 본 화면을 그대로 띄웁니다.
   - 반려할 때는 사유를 반드시 입력해야 하며, 자주 쓰는 문구 세 가지를 바로 고를 수 있습니다. attention check를 통과한 응답을 반려하려고 하면 경고가 표시됩니다.
   - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
   - 반려한 응답은 30일 안에 승인으로 되돌릴 수 있습니다 (`Revert to approved…`).
@@ -217,7 +218,7 @@ REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에
 미리 저장된 템플릿의 미리보기는 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
 
 1. **Manage 목록**: 익명화한 batch 세 개가 보입니다. 진행률, 반려율, 비용이 자동으로 계산되어 있고, `pilot close-ended chunk-fact`에는 `Needs review`가 붙어 있습니다.
-2. **Review**: 그 batch의 `Review` 탭에서 Status를 Submitted로 거르면 6건이 나옵니다. 행을 눌러 다른 worker들의 답과 비교해 보고, `Open task`로 worker가 본 화면을 열어 봅니다.
+2. **Review**: 그 batch의 `Review` 탭에서 Status를 Submitted로 거르면 6건이 나옵니다. 표의 `Answers` 열에서 worker의 답과 다른 worker들의 majority를 바로 비교해 보고, 행을 눌러 응답 상세를 열고 `Open task`로 worker가 본 화면을 열어 봅니다.
 3. **반려와 재모집**: 두 건을 골라 반려합니다. attention check를 통과한 응답이라는 경고가 표시되고, 반려를 확정하면 다시 모집할지 물어봅니다. 나머지 응답은 승인합니다.
 4. **HITs**: `Incomplete only`를 켜고, HIT 하나에 큰 수를 추가해 봅니다. 9개를 넘을 수 없다는 이유와 함께 건너뛰는 것을 볼 수 있습니다.
 5. **Results**: Fleiss' κ가 0.731로 표시됩니다. 이 값은 statsmodels의 `fleiss_kappa` 결과와 소수 여섯째 자리까지 일치하며, 테스트로 고정되어 있습니다. Export로 받는 CSV는 MTurk Requester 웹사이트의 결과 CSV와 컬럼이 같아서 기존 분석 스크립트를 그대로 쓸 수 있습니다.
