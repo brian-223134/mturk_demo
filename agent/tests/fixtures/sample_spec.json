@@ -1,0 +1,78 @@
+{
+  "spec_version": 1,
+  "task": {
+    "id": "sample-passage-support",
+    "title": "Is each statement supported by the passage?",
+    "description": "Read one passage and decide, for each short statement, whether the passage supports it. 11 tabs per HIT.",
+    "keywords": ["reading", "fact checking", "english", "passage"]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {"var": "chunk", "path": "$.retrieved_chunk.key_2", "limit": 10}
+    ],
+    "fields": {
+      "query": {"path": "$.query", "label": "Question", "role": "context"},
+      "chunk": {"path": "{chunk}", "label": "Passage", "role": "context", "style": "passage"},
+      "facts": {"path": "$.atomic_facts.key_2.key_19[*]", "label": "Statement", "role": "target"}
+    },
+    "question": {
+      "text": "Is this statement supported by the passage above?",
+      "options": [
+        {"value": "grounded", "label": "Grounded"},
+        {"value": "not_grounded", "label": "Not grounded"}
+      ],
+      "answer_suffix": ""
+    },
+    "hint": {
+      "label_path": "$.relevance_check_reasoning.key_2.key_19.chunk_fact_relevance['Chunk {chunk_no}']['Atomic fact{target_no}'][0]",
+      "reason_path": "$.relevance_check_reasoning.key_2.key_19.chunk_fact_relevance['Chunk {chunk_no}']['Atomic fact{target_no}'][1]",
+      "map": {"Yes": "grounded", "No": "not_grounded"},
+      "missing": null
+    },
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 10,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected_value": "not_grounded",
+      "max_targets": 3,
+      "mismatch": {"swap_fields": ["query", "chunk"], "distance": 3}
+    }
+  },
+  "instructions": {
+    "summary": "Your task is to decide whether each statement is supported by the passage shown with it.",
+    "background": "A search system retrieved passages for a question, and short statements were written as an answer to that question. We want to know which statements each passage actually supports.",
+    "criteria": [
+      {"label": "Grounded", "text": "You can confirm the statement is true using only the information in the passage. Paraphrases and synonyms count; exact wording is not required."},
+      {"label": "Not grounded", "text": "The passage does not contain enough information to confirm the statement, or it contradicts the statement."}
+    ],
+    "steps": [
+      "Read the question and the passage in the tab.",
+      "For each statement below the passage, decide whether the passage supports it.",
+      "Judge each passage on its own. Do not use the other tabs or your own knowledge.",
+      "Answer every statement in every tab, then press Submit."
+    ],
+    "notes": [
+      "A statement may be supported by several different passages. Judge it again for each passage.",
+      "If the passage is about a different topic, every statement in that tab is Not grounded."
+    ],
+    "tip": "Focus on what the passage says, not on whether the statement is true in the real world.",
+    "notices": {"attention": true, "research": true}
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": "llm_reason"
+  }
+}
