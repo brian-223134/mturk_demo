@@ -1,16 +1,14 @@
-# agent의 기본 모델 설정이다. 키나 비밀은 여기에 적지 않는다 (키는 environment/.env 에만 둔다).
-# 다른 설정을 고르려면 .env 에 AGENT_MODEL=<이름> 을 적거나 명령에 --model-config <이름> 을 준다 (이 폴더의 <이름>.yaml).
-# 새 설정은 이 파일을 복사해 만든다. 파일 형식은 agent/config.py 가 검사한다.
+# Qwen3 235B 설정이다. 키나 비밀은 여기에 적지 않는다 (키는 environment/.env 에만 둔다).
+# 고르는 법: .env 에 AGENT_MODEL=qwen3-235b 를 적거나 명령에 --model-config qwen3-235b 를 준다.
 #
-# 모델: openai/gpt-oss-120b (2026-09 기준, OpenRouter 공개 모델 목록에서 확인한 값)
-#   - OpenAI가 2025-08에 공개한 open-weight 모델이다 (Apache-2.0). context 131k.
-#   - 값: 입력 $0.15 / 출력 $0.60 (백만 토큰당). planner 호출 한 번(입력 ~12k, 출력 ~3k 토큰)이 약 $0.004 다.
-#   - response_format(JSON 출력 강제), structured_outputs, reasoning(effort 조절)을 지원한다.
-#   - 고른 이유: 가중치가 공개돼 있고, 시험 호출에 부담이 없을 만큼 싸고, JSON 출력을 강제할 수 있고, 추론량을 조절할 수 있다.
-# 다른 설정: qwen3-235b.yaml (더 싸고 reasoning 파라미터가 없다), deepseek-v3.2.yaml (reasoning 지원).
+# 모델: qwen/qwen3-235b-a22b-2507 (2026-09 기준, OpenRouter 공개 모델 목록에서 확인한 값)
+#   - 2025-07에 공개된 open-weight 모델이다. context 262k.
+#   - 값: 입력 $0.0875 / 출력 $0.35 (백만 토큰당). planner 호출 한 번(입력 ~12k, 출력 ~3k 토큰)이 약 $0.002 로 셋 중 가장 싸다.
+#   - response_format(JSON 출력 강제)을 지원한다. reasoning 파라미터는 없다 (추론 단계 없이 바로 답하는 instruct 버전).
+#   - 쓰임새: 가장 싼 시험 호출. 추론량을 조절할 수 없으므로 어려운 데이터에는 default(gpt-oss-120b)나 deepseek-v3.2 를 쓴다.
 
 api: openrouter                 # 호출하는 API. 지금은 openrouter 만 지원한다
-model: openai/gpt-oss-120b      # OpenRouter 의 모델 id
+model: qwen/qwen3-235b-a22b-2507  # OpenRouter 의 모델 id
 # provider 는 OpenRouter 의 라우팅 설정이다 (선택). OpenRouter 에서 "provider" 는 OpenRouter 자신이 아니라 그 모델을 실제로
 # 서비스하는 업체(DeepInfra, GMICloud 같은)를 뜻한다. 위의 api 가 우리가 부르는 API 이고, provider 는 그 뒤에서 모델을 돌리는 곳이다.
 # 적지 않으면 OpenRouter 가 고른다 (기본). 업체마다 양자화와 값이 다르므로, 한 업체로 고정하려면 "업체 슬러그/양자화" 태그를 적는다.
@@ -20,14 +18,12 @@ model: openai/gpt-oss-120b      # OpenRouter 의 모델 id
 # provider: {order: [deepinfra, gmicloud], allow_fallbacks: true, quantizations: [fp8]}
 params:                         # chat completions 요청 본문에 그대로 들어가는 파라미터 (model, messages, provider 는 못 쓴다)
   temperature: 0
-  max_tokens: 8000              # 출력 상한. reasoning 토큰도 출력 토큰으로 세므로 spec 크기보다 넉넉히 잡는다
+  max_tokens: 8000              # 출력 상한. spec 크기보다 넉넉히 잡는다
   response_format:
     type: json_object           # 답을 JSON 객체 하나로 강제한다
   usage:
     include: true               # OpenRouter가 응답 usage에 실제 청구액 cost를 넣어 준다 (CLI 의 Usage: 줄에 cost $… 로 보인다)
-  reasoning:
-    effort: medium              # 추론량 (low / medium / high). 높일수록 느려지고 출력 토큰이 늘어난다
-timeout_seconds: 180            # 요청 하나를 기다리는 최대 시간(초). reasoning 모델은 답이 늦을 수 있어 넉넉히 잡는다
+timeout_seconds: 180            # 요청 하나를 기다리는 최대 시간(초)
 planner:
   spec_fix_retries: 1           # 검증 실패 시 오류를 붙여 다시 묻는 횟수
   profile_max_chars: 24000      # 프롬프트에 넣는 profile의 최대 글자 수

@@ -7,7 +7,12 @@
     validate    출력 묶음을 검사해 validation.json을 만든다
     run         profile → plan → preprocess → render → validate 를 한 번에
     sample      원본에서 레코드 몇 개를 뽑아 익명화한 표본을 만든다 (agent/sample.py, 테스트 fixture 용)
+    providers   OpenRouter 에서 그 모델을 서비스하는 업체 목록을 표로 보인다 (공개 API: 키·크레딧 없음)
     test        agent/tests 의 unittest 를 돌린다
+
+출력 폴더 --out 은 선택이다. 빼면 profile, preprocess, run 은 output/<원본 파일 이름(확장자 없이)>/ 에, plan 은
+--profile 파일의 폴더에, render 는 --spec 파일의 폴더에 쓴다 (default_out_dir, resolve_out_dir). 정해진 폴더는
+"Output folder: …" 한 줄로 출력한다. validate 는 폴더를 위치 인자로 받는다.
 
 preprocess·render·validate 모듈은 하위 명령 안에서 늦게 import 한다. 그래서 그 모듈이 없어도 profile, plan,
 test는 돈다. 오류는 SpecError, PlannerError, SourceError, PathError, ConfigError, 그 밖의 ValueError(sample의
@@ -16,6 +21,11 @@ test는 돈다. 오류는 SpecError, PlannerError, SourceError, PathError, Confi
 
 --planner openrouter 일 때만 모델 설정(environment/models/<이름>.yaml)을 읽는다. 이름은 --model-config, 없으면
 AGENT_MODEL(환경변수 → env 파일), 없으면 default 다. --spec 실행은 설정을 읽지 않으므로 PyYAML 없이도 돈다.
+OpenRouter 를 쓰면 요청과 응답을 언제나 출력 폴더에 남긴다 (plan_request.json, plan_response.json. 재시도는 _2, _3 …).
+--dry-run 은 plan_request.json 만 쓰고 API 를 부르지 않는다. 성공한 뒤에는 토큰 사용량(Usage: prompt N, completion N,
+응답 usage 에 cost 가 있으면 cost $X 까지)과, spec 에 planner_notes 가 있으면 그 내용(Planner notes: …)을 한 줄씩 출력한다.
+
+providers MODEL_ID 는 모델 설정의 provider 에 적을 태그(tag 열)를 고를 때 쓴다. 설정을 읽지 않으므로 PyYAML 없이도 돈다.
 """
 
 from __future__ import annotations
@@ -28,12 +38,13 @@ from pathlib import Path
 from typing import Any
 
 from agent import __version__, source
-from agent.config import (DEFAULT_MODELS_DIR, MODEL_VARIABLE, ConfigError, load_model_config,
+from agent.config import (DEFAULT_MODELS_DIR, MODEL_VARIABLE, ConfigError, ModelConfig, load_model_config,
                           selected_model_name)
 from agent.paths import PathError
-from agent.planner.base import Planner, PlannerError, run_plan
+from agent.planner.base import SPEC_FILE, Planner, PlannerError, run_plan
 from agent.planner.file_planner import FilePlanner
-from agent.planner.openrouter import (ALLOW_VARIABLE, KEY_VARIABLE, OpenRouterPlanner, api_allowed_by_env,
+from agent.planner.openrouter import (ALLOW_VARIABLE, ENDPOINTS_TIMEOUT, KEY_VARIABLE, REQUEST_FILE, RESPONSE_FILE,
+                                      OpenRouterPlanner, api_allowed_by_env, fetch_endpoints, format_endpoints,
                                       resolve_api_key)
 from agent.profile import run_profile
 from agent.sample import register_sample_command
@@ -43,13 +54,26 @@ from agent.spec import SpecError, TaskSpec, load_spec
 AGENT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = AGENT_DIR.parent
 DEFAULT_ENV_FILE = "environment/.env"
-PLAN_REQUEST_FILE = "plan_request.json"
-PROMPT_HELP = "annotation goal as text, or @FILE to read it from a file"
+DEFAULT_OUT_ROOT = Path("output")   # --out 을 빼면 이 아래에 <원본 파일 이름>/ 폴더를 만든다 (gitignore 됨)
+PROMPT_HELP = "annotation goal as text, or @FILE to read it from a file (a markdown file such as prompt.md)"
+OUT_HELP_RAW = f"output directory (default: {DEFAULT_OUT_ROOT.as_posix()}/<RAW file name without extension>)"
 
 
 # ----------------------------------------------------------------------------------------------
 # 공통 도우미
 # ----------------------------------------------------------------------------------------------
+
+
+def default_out_dir(raw: str | Path) -> Path:
+    """--out 을 빼면 쓰는 출력 폴더: output/<원본 파일 이름(확장자 없이)>. raw.json → output/raw."""
+    return DEFAULT_OUT_ROOT / (Path(raw).stem or "out")
+
+
+def resolve_out_dir(out: str | None, default: Path | str) -> Path:
+    """--out 값이 있으면 그 폴더, 없으면 default. 정해진 폴더를 한 줄 출력한다."""
+    out_dir = Path(out) if out else Path(default)
+    print(f"Output folder: {out_dir}")
+    return out_dir
 
 
 def read_prompt(value: str) -> str:
@@ -86,27 +110,79 @@ def read_profile(path: Path) -> dict:
     return data
 
 
+def describe_provider(config: ModelConfig) -> str:
+    """Model config: 줄에 붙이는 provider 설명. 태그가 있으면 태그, 없으면 auto(OpenRouter 가 고른다), 매핑이면 mapping."""
+    if config.provider_tag:
+        return config.provider_tag
+    return "auto" if config.provider is None else "mapping"
+
+
 def make_planner(args: argparse.Namespace, out_dir: Path) -> Planner:
     """--spec 이면 FilePlanner, --planner openrouter 면 OpenRouterPlanner. --dry-run 이면 API를 허용하지 않는다.
 
     모델 설정은 openrouter 일 때만 읽는다 (--model-config, 없으면 AGENT_MODEL, 없으면 default). 읽은 설정의 이름과
-    파일을 한 줄 출력한다.
+    파일, provider 를 한 줄 출력한다. OpenRouter 의 요청과 응답은 언제나 out_dir 에 남긴다 (plan_request.json,
+    plan_response.json).
     """
     if args.spec:
         return FilePlanner(args.spec)
     models_dir = Path(args.models_dir) if args.models_dir else DEFAULT_MODELS_DIR
     config = load_model_config(args.model_config or selected_model_name(args.env_file), models_dir)
-    print(f"Model config: {config.name} ({config.display_path()}) -> {config.provider} {config.model}")
+    print(f"Model config: {config.name} ({config.display_path()}) -> {config.api} {config.model} "
+          f"(provider: {describe_provider(config)})")
     allowed = (bool(args.allow_api) or api_allowed_by_env()) and not args.dry_run
-    dry_run_path = out_dir / PLAN_REQUEST_FILE if args.dry_run else None
-    return OpenRouterPlanner(config, api_key=resolve_api_key(None, args.env_file),
-                             allow_api=allowed, dry_run_path=dry_run_path)
+    return OpenRouterPlanner(config, api_key=resolve_api_key(None, args.env_file), allow_api=allowed, log_dir=out_dir)
 
 
 def dry_run(planner: Planner, profile: dict, prompt: str) -> int:
     path = planner.dry_run(profile, prompt)  # type: ignore[attr-defined]  # make_planner가 OpenRouterPlanner를 준다
     print(f"Dry run: wrote the request to {path} (the API was not called)")
     return 0
+
+
+def format_cost(cost: float) -> str:
+    """USD 값을 $0.0034 처럼 소수 4자리로. 4자리에서 0이 되는 작은 값은 6자리까지 보인다."""
+    text = f"{cost:.4f}"
+    if float(text) == 0 and cost:
+        text = f"{cost:.6f}"
+    return f"${text}"
+
+
+def describe_usage(planner: Planner) -> str | None:
+    """planner 의 total_usage(OpenRouterPlanner 가 채운다)를 한 줄로. 없으면 None (FilePlanner, usage 없는 응답).
+
+    usage 에 cost(OpenRouter 가 usage: {include: true} 일 때 주는 실제 청구액)가 있으면 ", cost $X" 를 붙인다.
+    """
+    usage = getattr(planner, "total_usage", None)
+    if not isinstance(usage, dict) or not any(key in usage for key in ("prompt_tokens", "completion_tokens")):
+        return None
+    line = f"Usage: prompt {usage.get('prompt_tokens', '?')}, completion {usage.get('completion_tokens', '?')}"
+    cost = usage.get("cost")
+    if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+        line += f", cost {format_cost(cost)}"
+    calls = usage.get("calls")
+    if isinstance(calls, int) and calls > 1:
+        line += f" ({calls} calls)"
+    return line
+
+
+def describe_notes(spec: Any) -> str:
+    """spec 의 planner_notes 를 한 줄 문자열로. 속성이 없거나 비어 있으면 빈 문자열 (getattr 라서 spec 형식과 무관하다)."""
+    notes = getattr(spec, "planner_notes", None)
+    if isinstance(notes, (list, tuple)):
+        notes = "; ".join(str(note).strip() for note in notes if str(note).strip())
+    return str(notes).strip() if notes else ""
+
+
+def report_plan(planner: Planner, spec: Any, out_dir: Path) -> None:
+    """plan 이 끝난 뒤의 출력: 저장 위치, 토큰 사용량(있으면), planner 메모(있으면)."""
+    print(f"Planned with {planner.name}: task {spec.task.id!r} -> {out_dir / SPEC_FILE}")
+    usage = describe_usage(planner)
+    if usage:
+        print(usage)
+    notes = describe_notes(spec)
+    if notes:
+        print(f"Planner notes: {notes}")
 
 
 def describe_summary(summary: dict) -> str:
@@ -159,7 +235,7 @@ def validate_step(out_dir: Path) -> dict:
 
 
 def cmd_profile(args: argparse.Namespace) -> int:
-    out_dir = Path(args.out)
+    out_dir = resolve_out_dir(args.out, default_out_dir(args.raw))
     profile = run_profile(Path(args.raw), out_dir, args.format)
     info = profile["source"]
     print(f"Profiled {info['records']} records ({info['format']}) -> {out_dir / 'profile.json'}, {out_dir / 'profile.md'}")
@@ -167,7 +243,7 @@ def cmd_profile(args: argparse.Namespace) -> int:
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
-    out_dir = Path(args.out)
+    out_dir = resolve_out_dir(args.out, Path(args.profile).parent)
     profile = read_profile(Path(args.profile))
     prompt = read_prompt(args.prompt)
     records = None
@@ -177,19 +253,21 @@ def cmd_plan(args: argparse.Namespace) -> int:
     if args.dry_run:
         return dry_run(planner, profile, prompt)
     spec = run_plan(profile, prompt, planner, out_dir, records)
-    print(f"Planned with {planner.name}: task {spec.task.id!r} -> {out_dir / 'task_spec.json'}")
+    report_plan(planner, spec, out_dir)
     return 0
 
 
 def cmd_preprocess(args: argparse.Namespace) -> int:
+    out_dir = resolve_out_dir(args.out, default_out_dir(args.raw))
     spec = load_spec(Path(args.spec))
-    preprocess_step(spec, Path(args.raw), Path(args.out))
+    preprocess_step(spec, Path(args.raw), out_dir)
     return 0
 
 
 def cmd_render(args: argparse.Namespace) -> int:
+    out_dir = resolve_out_dir(args.out, Path(args.spec).parent)
     spec = load_spec(Path(args.spec))
-    render_step(spec, Path(args.out))
+    render_step(spec, out_dir)
     return 0
 
 
@@ -205,7 +283,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     raw_path = Path(args.raw)
-    out_dir = Path(args.out)
+    out_dir = resolve_out_dir(args.out, default_out_dir(args.raw))
     prompt = read_prompt(args.prompt)
     planner = make_planner(args, out_dir)
 
@@ -217,11 +295,17 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     _, records = source.load_records(raw_path, info["format"])
     spec = run_plan(profile, prompt, planner, out_dir, records)
-    print(f"Planned with {planner.name}: task {spec.task.id!r} -> {out_dir / 'task_spec.json'}")
+    report_plan(planner, spec, out_dir)
     preprocess_step(spec, raw_path, out_dir)
     render_step(spec, out_dir)
     report = validate_step(out_dir)
     return 0 if report.get("ok") else 1
+
+
+def cmd_providers(args: argparse.Namespace) -> int:
+    """OpenRouter 의 공개 endpoint 목록을 표로 출력한다. 키를 보내지 않고 크레딧도 쓰지 않는다."""
+    print(format_endpoints(fetch_endpoints(args.model_id, timeout=args.timeout)))
+    return 0
 
 
 def cmd_test(args: argparse.Namespace) -> int:
@@ -236,19 +320,32 @@ def cmd_test(args: argparse.Namespace) -> int:
 # ----------------------------------------------------------------------------------------------
 
 
+def positive_int(text: str) -> int:
+    """argparse 용: 1 이상의 정수."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer (got {text!r})") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer (got {text!r})")
+    return value
+
+
 def add_planner_arguments(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("planner (choose one)")
     group.add_argument("--spec", metavar="FILE", help="use this task spec file as it is (no LLM call)")
     group.add_argument("--planner", choices=["openrouter"], help="ask an LLM through OpenRouter to write the task spec")
     group.add_argument("--model-config", metavar="NAME_OR_PATH",
-                       help=f"model config: a name in the models directory or a path to a .yaml file "
-                            f"(default: ${MODEL_VARIABLE} from the environment or the env file, else default)")
+                       help=f"model config: the name of a file in {DEFAULT_MODELS_DIR.as_posix()}/ without .yaml "
+                            f"(default, qwen3-235b, ...) or a path to a .yaml file (default: ${MODEL_VARIABLE} from "
+                            f"the environment or the env file, else default.yaml)")
     group.add_argument("--models-dir", metavar="DIR",
                        help=f"directory with the model config files (default: {DEFAULT_MODELS_DIR.as_posix()})")
     group.add_argument("--dry-run", action="store_true",
-                       help="write the request to OUT/plan_request.json and exit without calling the API")
+                       help=f"write the request to OUT/{REQUEST_FILE} and exit without calling the API")
     group.add_argument("--allow-api", action="store_true",
-                       help=f"actually call the OpenRouter API; this spends credits (${ALLOW_VARIABLE}=1 also allows it)")
+                       help=f"actually call the OpenRouter API; this spends credits (${ALLOW_VARIABLE}=1 also allows it). "
+                            f"The request and the reply are kept in OUT/{REQUEST_FILE} and OUT/{RESPONSE_FILE}")
     group.add_argument("--env-file", metavar="FILE", default=DEFAULT_ENV_FILE,
                        help=f"file with {KEY_VARIABLE}=... and {MODEL_VARIABLE}=... (default: %(default)s)")
 
@@ -269,14 +366,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     profile = commands.add_parser("profile", help="analyse the raw data and write profile.json and profile.md")
     profile.add_argument("raw", metavar="RAW", help="raw data file (.json, .jsonl or .csv)")
-    profile.add_argument("--out", required=True, metavar="DIR", help="output directory")
+    profile.add_argument("--out", metavar="DIR", help=OUT_HELP_RAW)
     profile.add_argument("--format", choices=source.FORMATS, help="source format (default: detect from the file)")
     profile.set_defaults(func=cmd_profile)
 
     plan = commands.add_parser("plan", help="write task_spec.json from a profile and a prompt")
     plan.add_argument("--profile", required=True, metavar="FILE", help="profile.json from the profile command")
     plan.add_argument("--prompt", required=True, metavar="TEXT", help=PROMPT_HELP)
-    plan.add_argument("--out", required=True, metavar="DIR", help="output directory")
+    plan.add_argument("--out", metavar="DIR", help="output directory (default: the directory of --profile)")
     plan.add_argument("--raw", metavar="RAW", help="raw data file; when given, the spec is checked against its records")
     add_planner_arguments(plan)
     plan.set_defaults(func=cmd_plan)
@@ -284,12 +381,12 @@ def build_parser() -> argparse.ArgumentParser:
     preprocess = commands.add_parser("preprocess", help="write items.jsonl, hits.csv, summary.json and settings.json")
     preprocess.add_argument("raw", metavar="RAW", help="raw data file")
     preprocess.add_argument("--spec", required=True, metavar="FILE", help="task_spec.json")
-    preprocess.add_argument("--out", required=True, metavar="DIR", help="output directory")
+    preprocess.add_argument("--out", metavar="DIR", help=OUT_HELP_RAW)
     preprocess.set_defaults(func=cmd_preprocess)
 
     render = commands.add_parser("render", help="write template.html from a task spec")
     render.add_argument("--spec", required=True, metavar="FILE", help="task_spec.json")
-    render.add_argument("--out", required=True, metavar="DIR", help="output directory")
+    render.add_argument("--out", metavar="DIR", help="output directory (default: the directory of --spec)")
     render.set_defaults(func=cmd_render)
 
     validate = commands.add_parser("validate", help="check an output directory and write validation.json")
@@ -299,11 +396,24 @@ def build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="profile, plan, preprocess, render and validate in one go")
     run.add_argument("raw", metavar="RAW", help="raw data file (.json, .jsonl or .csv)")
     run.add_argument("--prompt", required=True, metavar="TEXT", help=PROMPT_HELP)
-    run.add_argument("--out", required=True, metavar="DIR", help="output directory")
+    run.add_argument("--out", metavar="DIR", help=OUT_HELP_RAW)
     add_planner_arguments(run)
     run.set_defaults(func=cmd_run)
 
     register_sample_command(commands)
+
+    providers = commands.add_parser(
+        "providers",
+        help="list the providers (hosting companies) that serve a model on OpenRouter, with quantization and prices",
+        description="Query OpenRouter's public endpoint list for a model: no API key is sent and no credits are spent. "
+                    "One row per provider, cheapest first. The tag column is what goes into the provider: field of a "
+                    f"model config in {DEFAULT_MODELS_DIR.as_posix()}/ (for example provider: gmicloud/fp8); leave "
+                    "provider out to let OpenRouter choose.")
+    providers.add_argument("model_id", metavar="MODEL_ID",
+                           help="OpenRouter model id as author/slug (the model: line of the model config)")
+    providers.add_argument("--timeout", metavar="N", type=positive_int, default=ENDPOINTS_TIMEOUT,
+                           help="seconds to wait for the reply (default: %(default)s)")
+    providers.set_defaults(func=cmd_providers)
 
     test = commands.add_parser("test", help="run the unit tests in agent/tests")
     test.add_argument("-v", "--verbose", action="store_true", help="show every test name")
