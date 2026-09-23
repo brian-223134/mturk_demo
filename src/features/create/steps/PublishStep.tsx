@@ -11,7 +11,14 @@ import EnvBadge from '../../../components/EnvBadge';
 import MoneyText from '../../../components/MoneyText';
 import type { CostEstimate } from '../../../domain/cost';
 import type { CsvData } from '../csv';
-import { balanceCentsOf, describeQualifications, toAttentionRule, toHitSettings, type SettingsValues } from '../settings';
+import {
+  balanceCentsOf,
+  describeQualifications,
+  toAttentionRule,
+  toHitSettings,
+  toReviewReference,
+  type SettingsValues,
+} from '../settings';
 import type { DraftUpdate } from '../useCreateDraft';
 import StepFooter from './StepFooter';
 
@@ -63,6 +70,7 @@ export default function PublishStep({
   const name = batchName.trim();
   const hitSettings = toHitSettings(settings);
   const attentionRule = toAttentionRule(settings);
+  const reference = toReviewReference(settings);
   const isProduction = account?.env === 'production';
   const balanceCents = balanceCentsOf(account);
   const overBalance = estimate !== null && balanceCents !== null && estimate.totalCents > balanceCents;
@@ -90,6 +98,7 @@ export default function PublishStep({
       inputColumns: data.columns,
       settings: hitSettings,
       attentionRule,
+      reference,
       requiredPoolIds: settings.requiredPoolIds,
       excludedPoolIds: settings.excludedPoolIds,
       ...(answerSchema.length > 0 ? { answerSchema } : {}),
@@ -157,6 +166,19 @@ export default function PublishStep({
       ) : (
         <Typography.Text type="secondary">None</Typography.Text>
       ),
+    },
+    {
+      key: 'reference',
+      label: 'Review reference',
+      span: 2,
+      children:
+        reference.source === 'column' ? (
+          <>
+            Input column <Typography.Text code>{reference.column}</Typography.Text>
+          </>
+        ) : (
+          'Majority of the other workers on the same HIT'
+        ),
     },
     {
       key: 'cost',

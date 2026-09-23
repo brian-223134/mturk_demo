@@ -3,10 +3,12 @@ import {
   DEFAULT_SETTINGS,
   balanceCentsOf,
   buildQualificationRequirements,
+  describeReferenceCell,
   estimateFor,
   normalizeCountries,
   toAttentionRule,
   toHitSettings,
+  toReviewReference,
 } from './settings';
 
 describe('toHitSettings', () => {
@@ -64,6 +66,47 @@ describe('toAttentionRule', () => {
       namePrefix: 'attention_',
       expectedValue: 'not_grounded',
       minCorrectRatio: 1,
+    });
+  });
+});
+
+describe('toReviewReference', () => {
+  it('defaults to the majority of the other workers', () => {
+    expect(toReviewReference(DEFAULT_SETTINGS)).toEqual({ source: 'majority' });
+    expect(toReviewReference({ ...DEFAULT_SETTINGS, referenceColumn: '' })).toEqual({ source: 'majority' });
+    expect(toReviewReference({ ...DEFAULT_SETTINGS, referenceColumn: '  ' })).toEqual({ source: 'majority' });
+  });
+
+  it('points at the chosen CSV column', () => {
+    expect(toReviewReference({ ...DEFAULT_SETTINGS, referenceColumn: 'query_fact_coverage_check' })).toEqual({
+      source: 'column',
+      column: 'query_fact_coverage_check',
+    });
+  });
+});
+
+describe('describeReferenceCell', () => {
+  it('tells the shape of the first cell: object, list or single value', () => {
+    expect(describeReferenceCell("{'general_0_1': 'Covered', 'general_1_1': 'Not covered'}")).toEqual({
+      type: 'info',
+      message: 'Row 1 reads as an object with 2 entries (matched to answers by name).',
+    });
+    expect(describeReferenceCell('["grounded", "grounded", "not_grounded"]')).toEqual({
+      type: 'info',
+      message: 'Row 1 reads as a list of 3 values (matched to answers by position).',
+    });
+    expect(describeReferenceCell('grounded')).toEqual({
+      type: 'info',
+      message: 'Row 1 reads as a single value "grounded" (used when the task has exactly one answer besides attention items).',
+    });
+  });
+
+  it('shortens a long single value and warns on an empty cell', () => {
+    const long = 'x'.repeat(60);
+    expect(describeReferenceCell(long).message).toContain(`"${'x'.repeat(40)}…"`);
+    expect(describeReferenceCell('   ')).toEqual({
+      type: 'warning',
+      message: 'Row 1 is empty; answers in that row will show no reference.',
     });
   });
 });

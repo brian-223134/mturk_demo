@@ -1,4 +1,4 @@
-// 5.2 (3) Settings: HIT 설정, Qualification 세 가지, worker pool 포함/제외, attention rule
+// 5.2 (3) Settings: HIT 설정, Qualification 세 가지, worker pool 포함/제외, attention rule, Review의 대조 기준
 
 import {
   Alert,
@@ -18,10 +18,12 @@ import {
 import type { WorkerPool } from '../../../api/types';
 import QueryErrorAlert from '../../../components/QueryErrorAlert';
 import { HIGH_FEE_MIN_ASSIGNMENTS, FEE_PERCENT_10_OR_MORE } from '../../../domain/cost';
+import type { CsvData } from '../csv';
 import {
   COUNTRY_CODE,
   MAX_AUTO_APPROVAL_DAYS,
   MIN_REWARD,
+  describeReferenceCell,
   normalizeCountries,
   type SettingsValues,
 } from '../settings';
@@ -45,9 +47,14 @@ const NUMBER_WIDTH = { width: '100%' };
 const QUALIFICATION_LABEL = { width: 300, marginBottom: 12 };
 const QUALIFICATION_VALUE = { marginBottom: 12 };
 
+// Review reference의 첫 선택지. 폼에서는 ''로 다루고 draft에는 null로 둔다 (Select는 null을 값으로 보여 주지 못한다)
+const MAJORITY_OPTION = { value: '', label: 'Majority of the other workers on the same HIT' };
+
 interface Props {
   settings: SettingsValues;
   update: (change: DraftUpdate) => void;
+  /** 올린 CSV. Review reference의 컬럼 선택지와 첫 행 안내에 쓴다 */
+  data: CsvData | null;
   pools: WorkerPool[] | undefined;
   poolsLoading: boolean;
   poolsError: unknown;
@@ -63,7 +70,7 @@ function SectionTitle({ children }: { children: string }) {
   );
 }
 
-export default function SettingsStep({ settings, update, pools, poolsLoading, poolsError, onBack, onNext }: Props) {
+export default function SettingsStep({ settings, update, data, pools, poolsLoading, poolsError, onBack, onNext }: Props) {
   const [form] = Form.useForm<SettingsValues>();
   const maxAssignments = Form.useWatch('MaxAssignments', form) ?? settings.MaxAssignments;
   const approvalRateEnabled = Form.useWatch('approvalRateEnabled', form) ?? settings.approvalRateEnabled;
@@ -72,6 +79,13 @@ export default function SettingsStep({ settings, update, pools, poolsLoading, po
   const attentionEnabled = Form.useWatch('attentionEnabled', form) ?? settings.attentionEnabled;
   const requiredPoolIds = Form.useWatch('requiredPoolIds', form) ?? settings.requiredPoolIds;
   const excludedPoolIds = Form.useWatch('excludedPoolIds', form) ?? settings.excludedPoolIds;
+  const referenceColumn = Form.useWatch('referenceColumn', form) ?? settings.referenceColumn;
+
+  const columns = data?.columns ?? [];
+  const referenceOptions = [MAJORITY_OPTION, ...columns.map((column) => ({ value: column, label: `Input column: ${column}` }))];
+  // 고른 컬럼의 첫 행이 어떤 형식으로 읽히는지. CSV를 바꿔 컬럼이 사라졌으면 검증이 막는다
+  const referenceNote =
+    referenceColumn && data && columns.includes(referenceColumn) ? describeReferenceCell(data.rows[0]?.[referenceColumn] ?? '') : null;
 
   // 같은 pool을 포함과 제외에 동시에 넣을 수 없다. 반대쪽에서 고른 pool은 선택지에서 막는다.
   const poolOptions = (takenByOther: string[]) =>
@@ -349,6 +363,27 @@ export default function SettingsStep({ settings, update, pools, poolsLoading, po
             Without a rule, Review shows no attention result and nothing can be selected by “attention failed”.
           </Typography.Paragraph>
         )}
+
+        <SectionTitle>Review reference</SectionTitle>
+        <Form.Item
+          name="referenceColumn"
+          label="Compare answers with"
+          extra="Review shows this next to each worker's answers. Choose a CSV column that holds ground truth or LLM labels; keep the default when the CSV has no such column."
+          style={{ maxWidth: 560 }}
+          getValueProps={(value: string | null) => ({ value: value ?? '' })}
+          normalize={(value: string | null) => (value ? value : null)}
+          rules={[
+            {
+              validator: (_, column: string | null) =>
+                !column || columns.includes(column)
+                  ? Promise.resolve()
+                  : Promise.reject(new Error(`Column "${column}" is not in the uploaded CSV. Choose another column or the majority.`)),
+            },
+          ]}
+        >
+          <Select options={referenceOptions} optionFilterProp="label" showSearch />
+        </Form.Item>
+        {referenceNote && <Alert type={referenceNote.type} showIcon style={{ marginBottom: 16 }} message={referenceNote.message} />}
       </Form>
 
       <StepFooter onBack={onBack} onNext={() => void next()} />

@@ -104,6 +104,7 @@ export default function CreatePage() {
       <SettingsStep
         settings={draft.settings}
         update={update}
+        data={data}
         pools={pools.data}
         poolsLoading={pools.isLoading}
         poolsError={pools.error}

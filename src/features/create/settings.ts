@@ -1,8 +1,9 @@
 // 5.2 (3) Settings: 폼 값과 MTurk 구조 사이의 변환. 폼은 사람이 읽는 단위(분, 일, %)로 받고 게시할 때 초와 Qualification 구조로 바꾼다.
 
-import type { Account, AttentionRule, HitSettings, QualificationRequirement } from '../../api/types';
+import type { Account, AttentionRule, HitSettings, QualificationRequirement, ReviewReference } from '../../api/types';
 import { DEFAULT_ATTENTION_PREFIX } from '../../domain/attention';
 import { estimateCost, usesMasters, type CostEstimate } from '../../domain/cost';
+import { parseReferenceCell } from '../../domain/reference';
 
 export interface SettingsValues {
   Title: string;
@@ -28,6 +29,9 @@ export interface SettingsValues {
   attentionPrefix: string;
   attentionExpected: string;
   attentionMinRatio: number;
+
+  /** Review의 대조 기준으로 쓸 CSV 컬럼. null이면 같은 HIT의 다른 worker들 majority */
+  referenceColumn: string | null;
 }
 
 // 11장의 시스템 Qualification ID. Settings 폼의 세 조건이 이 ID로 변환된다.
@@ -63,6 +67,8 @@ export const DEFAULT_SETTINGS: SettingsValues = {
   attentionPrefix: DEFAULT_ATTENTION_PREFIX,
   attentionExpected: '',
   attentionMinRatio: 1,
+
+  referenceColumn: null,
 };
 
 const MINUTE = 60;
@@ -120,6 +126,39 @@ export function toAttentionRule(values: SettingsValues): AttentionRule | null {
     namePrefix: values.attentionPrefix,
     expectedValue: values.attentionExpected,
     minCorrectRatio: values.attentionMinRatio,
+  };
+}
+
+/** 컬럼을 고르지 않았으면(null 또는 빈 문자열) majority. GT나 LLM 라벨이 없는 CSV가 흔하므로 이것이 기본이다. */
+export function toReviewReference(values: SettingsValues): ReviewReference {
+  const column = values.referenceColumn?.trim() ?? '';
+  return column === '' ? { source: 'majority' } : { source: 'column', column };
+}
+
+export interface ReferenceCellNote {
+  type: 'info' | 'warning';
+  message: string;
+}
+
+const REFERENCE_VALUE_PREVIEW = 40;
+
+/** 고른 컬럼의 첫 행 셀이 어떤 형식으로 읽히는지 한 줄로. Settings 화면의 안내에 쓴다. */
+export function describeReferenceCell(cell: string): ReferenceCellNote {
+  const parsed = parseReferenceCell(cell);
+  if (parsed === undefined) return { type: 'warning', message: 'Row 1 is empty; answers in that row will show no reference.' };
+  if (parsed === null) return { type: 'warning', message: 'Row 1 reads as null; answers in that row will show no reference.' };
+  if (Array.isArray(parsed)) {
+    return { type: 'info', message: `Row 1 reads as a list of ${parsed.length} values (matched to answers by position).` };
+  }
+  if (typeof parsed === 'object') {
+    const count = Object.keys(parsed).length;
+    return { type: 'info', message: `Row 1 reads as an object with ${count} entries (matched to answers by name).` };
+  }
+  const text = String(parsed);
+  const shown = text.length > REFERENCE_VALUE_PREVIEW ? `${text.slice(0, REFERENCE_VALUE_PREVIEW)}…` : text;
+  return {
+    type: 'info',
+    message: `Row 1 reads as a single value "${shown}" (used when the task has exactly one answer besides attention items).`,
   };
 }
 
