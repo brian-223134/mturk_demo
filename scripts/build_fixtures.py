@@ -29,6 +29,9 @@ salt가 공개되면 알려진 ID나 원문을 대조해 볼 수 있으므로 �
 
 Assignment.attention은 여기서 계산하지 않는다. 판정 로직을 src/domain/attention.ts 한 곳에만 두기 위해
 앱이 data/를 올릴 때 batch의 attentionRule로 계산한다.
+
+설정의 batch에 referenceColumn(입력 컬럼 이름)을 적으면 Review에서 답을 그 컬럼(GT 또는 LLM 라벨)과 대조한다.
+없거나 null이면 같은 HIT의 다른 worker들 majority와 대조한다.
 """
 
 from __future__ import annotations
@@ -238,6 +241,16 @@ def build_templates(config: dict, source: Path) -> list[dict]:
     return templates
 
 
+def review_reference(spec: dict, input_columns: list[str]) -> dict:
+    """Review의 대조 기준 (Batch.reference). referenceColumn이 없으면 다른 worker들의 majority다."""
+    column = spec.get("referenceColumn")
+    if not column:
+        return {"source": "majority"}
+    if column not in input_columns:
+        raise ValueError(f"{spec['id']}: referenceColumn {column!r}이 CSV의 입력 컬럼에 없다")
+    return {"source": "column", "column": column}
+
+
 def build_batch(spec: dict, source: Path, anonymizer: Anonymizer):
     header, rows = read_rows(source / spec["csv"])
     source_columns = [h for h in header if h.startswith("Input.")]
@@ -321,6 +334,7 @@ def build_batch(spec: dict, source: Path, anonymizer: Anonymizer):
             "expectedValue": spec["attentionExpected"],
             "minCorrectRatio": 1.0,
         },
+        "reference": review_reference(spec, input_columns),
         "requiredPoolIds": [],
         "excludedPoolIds": [],
         "createdAt": created,

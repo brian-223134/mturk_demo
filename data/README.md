@@ -20,6 +20,7 @@ data/
 
 각 필드의 의미는 `src/api/types.ts`에 정리되어 있습니다. PascalCase 필드는 MTurk API와 같은 이름이고, camelCase 필드는 콘솔이 추가한 것입니다.
 템플릿의 `placeholders`와 assignment의 `attention`은 파일에 적지 않습니다. 데이터를 읽어 들일 때 HTML과 batch의 `attentionRule`로부터 계산합니다.
+batch.json의 `reference`는 Review에서 답을 대조하는 기준입니다. `{ "source": "majority" }`이면 같은 HIT의 다른 worker들 majority와, `{ "source": "column", "column": "<입력 컬럼>" }`이면 그 컬럼의 값(GT 또는 LLM 라벨)과 대조하며, 없으면 majority로 봅니다.
 
 ## 수정하고 반영하기
 

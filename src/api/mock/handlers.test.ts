@@ -2,6 +2,7 @@
 
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { majority } from '../../domain/agreement';
 import { judgeAttention } from '../../domain/attention';
 import type { CreateBatchRequest, HitSettings } from '../types';
 import { createMockApi } from './handlers';
@@ -13,6 +14,7 @@ import { createMockTools } from './tools';
 
 const files = readSeedFiles(resolve(process.cwd(), 'data'));
 const F1 = 'batch-1000001';
+const F3 = 'batch-1000003';
 // F1의 게시 기간(2025-11-08까지)이 지난 뒤. 반려 번복 30일 제한은 테스트마다 따로 다룬다.
 const NOW = new Date('2026-09-19T00:00:00Z');
 
@@ -149,6 +151,84 @@ describe('검수 (5.3): M2 완료 기준 "F1에서 Submitted 6건을 검수해 �
     expect(fast.items.every((a) => a.workTimeInSeconds < 120)).toBe(true);
     const oneHit = await api.listAssignments(F1, { page: 1, pageSize: 50, filters: { HITId: all.items[0]!.HITId } });
     expect(oneHit.items.every((a) => a.HITId === all.items[0]!.HITId)).toBe(true);
+  });
+});
+
+describe('Review의 대조 기준 (reference)', () => {
+  it('column 모드: 입력 컬럼의 라벨을 문항에 대응시키고, attention 문항의 기준은 batch의 정답이다', async () => {
+    const { api } = setup();
+    expect((await api.getBatch(F3)).batch.reference).toEqual({ source: 'column', column: 'query_fact_coverage_check' });
+    const { items, total } = await api.listAssignments(F3, { page: 1, pageSize: 200 });
+    expect(total).toBe(48);
+    for (const a of items) {
+      for (const answer of a.answers) {
+        if (answer.name.startsWith('attention_')) expect(a.reference[answer.name]).toBe('Not Covered');
+        else expect(a.reference).toHaveProperty(answer.name);
+      }
+      expect(a.agreement).not.toBeNull();
+      expect(a.agreement! >= 0 && a.agreement! <= 1).toBe(true);
+    }
+    // 라벨 `Not covered`와 답 `Not Covered`는 같은 값으로 비교한다
+    expect(items.reduce((sum, a) => sum + a.agreement!, 0) / items.length).toBeCloseTo(0.973, 2);
+  });
+
+  it('majority 모드: 같은 HIT의 다른 worker들(반려 제외) majority. 다른 worker가 없거나 동률인 문항은 기준이 없다', async () => {
+    const { api } = setup();
+    expect((await api.getBatch(F1)).batch.reference).toEqual({ source: 'majority' });
+    const { items } = await api.listAssignments(F1, { page: 1, pageSize: 200 });
+    let alone = 0;
+    for (const a of items) {
+      const others = items.filter(
+        (o) => o.HITId === a.HITId && o.AssignmentId !== a.AssignmentId && o.AssignmentStatus !== 'Rejected',
+      );
+      if (others.length === 0) {
+        alone += 1;
+        expect(Object.keys(a.reference).filter((name) => !name.startsWith('attention_'))).toEqual([]);
+        expect(a.agreement).toBeNull();
+      }
+      for (const answer of a.answers) {
+        if (answer.name.startsWith('attention_')) {
+          expect(a.reference[answer.name]).toBe('not_grounded');
+          continue;
+        }
+        const expected = majority(others.flatMap((o) => o.answers.filter((x) => x.name === answer.name).map((x) => x.value)));
+        if (expected === null) expect(a.reference).not.toHaveProperty(answer.name);
+        else expect(a.reference[answer.name]).toBe(expected);
+      }
+    }
+    expect(alone).toBe(2); // 두 응답이 모두 반려된 HIT 하나
+  });
+
+  it('게시할 때 reference를 검증해 저장한다. 없으면 majority', async () => {
+    const { api } = setup();
+    const request = await sampleBatchRequest(api);
+    await expect(
+      api.createBatch({ ...request, reference: { source: 'column', column: 'no_such_column' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    await expect(
+      api.createBatch({ ...request, reference: { source: 'nope' } as unknown as CreateBatchRequest['reference'] }),
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+
+    const withColumn = await api.createBatch({ ...request, reference: { source: 'column', column: 'passage' } });
+    expect((await api.getBatch(withColumn.id)).batch.reference).toEqual({ source: 'column', column: 'passage' });
+    const byDefault = await api.createBatch(request);
+    expect((await api.getBatch(byDefault.id)).batch.reference).toEqual({ source: 'majority' });
+  });
+
+  it('기본 순서: rowIndex 오름차순, 같은 HIT 안에서는 WorkerId 오름차순', async () => {
+    const { api } = setup();
+    const { items } = await api.listAssignments(F1, { page: 1, pageSize: 200 });
+    expect(items).toHaveLength(132);
+    for (let i = 1; i < items.length; i += 1) {
+      const prev = items[i - 1]!;
+      const cur = items[i]!;
+      expect(cur.rowIndex).toBeGreaterThanOrEqual(prev.rowIndex);
+      if (cur.rowIndex === prev.rowIndex) expect(cur.WorkerId.localeCompare(prev.WorkerId)).toBeGreaterThanOrEqual(0);
+    }
+    // 한 필드로 정렬해도 같은 값끼리는 이 순서를 유지한다
+    const byStatus = await api.listAssignments(F1, { page: 1, pageSize: 200, sort: { field: 'AssignmentStatus', order: 'asc' } });
+    const submitted = byStatus.items.filter((a) => a.AssignmentStatus === 'Submitted').map((a) => a.rowIndex);
+    expect(submitted).toEqual([...submitted].sort((x, y) => x - y));
   });
 });
 

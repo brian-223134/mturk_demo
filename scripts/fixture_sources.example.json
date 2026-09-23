@@ -15,6 +15,7 @@
       "csv": "results/Batch_0000000_batch_results.csv",
       "templateId": "tpl-my-task",
       "attentionExpected": "not_grounded",
+      "referenceColumn": null,
       "blankColumns": []
     }
   ]

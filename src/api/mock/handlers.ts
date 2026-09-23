@@ -1,7 +1,7 @@
 // Api 인터페이스의 mock 구현. 브라우저 mock 모드와 mock API 서버(server/)가 이 파일을 함께 쓴다.
 // 계산은 src/domain의 순수 함수에 맡기고, 여기서는 검증, 상태 변경, MTurk 동작의 흉내만 한다.
 
-import { agreementWithOthers, collectItems, summarizeResults, type Vote } from '../../domain/agreement';
+import { collectItems, summarizeResults, type Vote } from '../../domain/agreement';
 import { DEFAULT_ATTENTION_PREFIX, isAttentionName } from '../../domain/attention';
 import {
   batchCost,
@@ -21,6 +21,12 @@ import {
   planTopUp,
   summarizeProgress,
 } from '../../domain/progress';
+import {
+  agreementWithReference,
+  majorityReference,
+  mapReferenceToAnswers,
+  parseReferenceCell,
+} from '../../domain/reference';
 import { extractPlaceholders } from '../../domain/template';
 import { computeWorkerStats, type WorkerStatsRecord } from '../../domain/workerStats';
 import type { Api } from '../client';
@@ -33,6 +39,7 @@ import {
   type BatchSummary,
   type Hit,
   type HitListItem,
+  type ReviewReference,
   type Worker,
   type WorkerDetail,
   type WorkerStats,
@@ -88,6 +95,17 @@ function stringArray(value: unknown, name: string): string[] {
 function objectBody<T>(value: T, name: string): T {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) invalid(`"${name}" must be a JSON object.`);
   return value;
+}
+
+/** Review의 대조 기준. 없으면 majority. column은 입력 컬럼에 있어야 한다. */
+function reviewReference(value: unknown, inputColumns: string[]): ReviewReference {
+  if (value === undefined || value === null) return { source: 'majority' };
+  const { source, column } = objectBody(value as { source?: unknown; column?: unknown }, 'reference');
+  if (source === 'majority') return { source: 'majority' };
+  if (source !== 'column') invalid('"reference.source" must be "majority" or "column".');
+  if (typeof column !== 'string' || !column) invalid('"reference.column" must be a column name.');
+  if (!inputColumns.includes(column)) invalid(`Reference column "${column}" is not one of the CSV columns.`);
+  return { source: 'column', column };
 }
 
 function notFound(what: string, id: string): never {
@@ -361,6 +379,7 @@ export function createMockApi(store: MockStore, options: MockApiOptions = {}): A
         stringArray(req.inputColumns, 'inputColumns');
         stringArray(req.requiredPoolIds, 'requiredPoolIds');
         stringArray(req.excludedPoolIds, 'excludedPoolIds');
+        const reference = reviewReference(req.reference, req.inputColumns);
         stringArray(req.settings.QualificationRequirements?.map((r) => r?.QualificationTypeId), 'QualificationRequirements[].QualificationTypeId');
         const name = typeof req.name === 'string' ? req.name.trim() : '';
         if (!name) invalid('Batch name is required.');
@@ -409,6 +428,7 @@ export function createMockApi(store: MockStore, options: MockApiOptions = {}): A
           inputColumns: [...req.inputColumns],
           settings: { ...s, Reward: (rewardCents / 100).toFixed(2) },
           attentionRule: req.attentionRule,
+          reference,
           requiredPoolIds: [...req.requiredPoolIds],
           excludedPoolIds: [...req.excludedPoolIds],
           createdAt: createdAt.toISOString(),
@@ -478,22 +498,51 @@ export function createMockApi(store: MockStore, options: MockApiOptions = {}): A
       read((state) => {
         const batch = findBatch(state, batchId);
         const prefix = attentionPrefixOf(batch);
+        const column = batch.reference?.source === 'column' ? batch.reference.column : null;
         const hitById = new Map(state.hits.filter((h) => h.batchId === batchId).map((h) => [h.HITId, h]));
         const inBatch = state.assignments.filter((a) => hitById.has(a.HITId));
         const byHit = groupBy(inBatch, (a) => a.HITId);
-        const real = (a: Assignment) => a.answers.filter((x) => !isAttentionName(x.name, prefix));
 
-        const items = inBatch.map((a): AssignmentListItem => ({
-          ...a,
-          rowIndex: hitById.get(a.HITId)!.rowIndex,
-          // 비교 기준에는 반려된 응답을 넣지 않는다 (workerStats와 같은 기준)
-          agreement: agreementWithOthers(
-            real(a),
-            (byHit.get(a.HITId) ?? [])
-              .filter((other) => other.AssignmentId !== a.AssignmentId && other.AssignmentStatus !== 'Rejected')
-              .map(real),
-          ),
-        }));
+        // column 모드: 셀은 HIT마다 한 번만 읽는다
+        const cellByHit = new Map<string, unknown>();
+        const parsedCell = (hit: Hit, name: string): unknown => {
+          if (!cellByHit.has(hit.HITId)) cellByHit.set(hit.HITId, parseReferenceCell(hit.input[name] ?? ''));
+          return cellByHit.get(hit.HITId);
+        };
+        const referenceOf = (a: Assignment): Record<string, string> => {
+          const values =
+            column !== null
+              ? mapReferenceToAnswers(parsedCell(hitById.get(a.HITId)!, column), a.answers, prefix)
+              : // 비교 기준에는 반려된 응답을 넣지 않는다 (workerStats와 같은 기준)
+                majorityReference(
+                  (byHit.get(a.HITId) ?? [])
+                    .filter((other) => other.AssignmentId !== a.AssignmentId && other.AssignmentStatus !== 'Rejected')
+                    .map((other) => other.answers),
+                );
+          // attention 문항의 기준은 batch에 적은 정답이다
+          if (batch.attentionRule) {
+            for (const answer of a.answers) {
+              if (isAttentionName(answer.name, prefix)) values[answer.name] = batch.attentionRule.expectedValue;
+            }
+          }
+          return values;
+        };
+
+        const items = inBatch
+          .map((a): AssignmentListItem => {
+            const reference = referenceOf(a);
+            return {
+              ...a,
+              rowIndex: hitById.get(a.HITId)!.rowIndex,
+              reference,
+              agreement: agreementWithReference(a.answers, reference, prefix),
+            };
+          })
+          // 기본 순서. 같은 HIT의 응답이 붙어 나오고, 정렬은 안정적이라 한 필드로 정렬해도 이 순서가 tiebreak가 된다
+          .sort(
+            (x, y) =>
+              x.rowIndex - y.rowIndex || x.WorkerId.localeCompare(y.WorkerId) || x.SubmitTime.localeCompare(y.SubmitTime),
+          );
         return applyListQuery(items, q, {
           customFilters: {
             attention: (a, value) =>

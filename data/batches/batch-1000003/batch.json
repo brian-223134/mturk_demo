@@ -37,6 +37,10 @@
     "expectedValue": "Not Covered",
     "minCorrectRatio": 1.0
   },
+  "reference": {
+    "source": "column",
+    "column": "query_fact_coverage_check"
+  },
   "requiredPoolIds": [],
   "excludedPoolIds": [],
   "createdAt": "2025-04-28T02:21:31Z"

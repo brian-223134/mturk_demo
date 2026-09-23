@@ -46,6 +46,11 @@ export interface AttentionRule {
   minCorrectRatio: number; // 통과 기준. 기본 1.0 (전부 정답)
 }
 
+/** Review에서 답을 대조하는 기준. 없으면(옛 저장본) majority로 본다. */
+export type ReviewReference =
+  | { source: 'majority' } // 같은 HIT의 다른 worker들(반려 제외)의 majority
+  | { source: 'column'; column: string }; // 입력 CSV의 컬럼 (GT 또는 LLM 라벨). inputColumns에 있어야 한다
+
 export interface Batch {
   id: string;
   name: string;
@@ -55,6 +60,7 @@ export interface Batch {
   inputColumns: string[];
   settings: HitSettings;
   attentionRule: AttentionRule | null;
+  reference?: ReviewReference; // Review의 대조 기준. 없으면 majority
   requiredPoolIds: string[]; // 이 pool의 worker만 참여
   excludedPoolIds: string[]; // 이 pool의 worker는 제외
   createdAt: string;
@@ -195,10 +201,13 @@ export interface HitListItem extends Omit<Hit, 'input'> {
   expired: boolean;
 }
 
-/** Assignment 목록의 항목. Review 표의 Row와 Agree 열에 쓴다. */
+/** Assignment 목록의 항목. Review 표의 Row, Answers, Agree 열에 쓴다. */
 export interface AssignmentListItem extends Assignment {
   rowIndex: number;
-  agreement: number | null; // 같은 HIT의 다른 worker들 majority와 같은 비율 (8.5와 같은 방식)
+  /** 문항 이름 → 대조 기준 값. attention 문항은 batch의 expectedValue. 기준이 없는 문항은 키가 없다 */
+  reference: Record<string, string>;
+  /** 일반 문항(attention 제외) 중 reference와 같은 비율. 비교할 문항이 없으면 null */
+  agreement: number | null;
 }
 
 export interface WorkerAssignmentSummary {
@@ -264,6 +273,7 @@ export interface CreateBatchRequest {
   inputColumns: string[];
   settings: HitSettings;
   attentionRule: AttentionRule | null;
+  reference?: ReviewReference; // 없으면 majority. 서버가 column ∈ inputColumns를 검증한다
   requiredPoolIds: string[];
   excludedPoolIds: string[];
   answerSchema?: AnswerField[];

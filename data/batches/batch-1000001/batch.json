@@ -37,6 +37,9 @@
     "expectedValue": "not_grounded",
     "minCorrectRatio": 1.0
   },
+  "reference": {
+    "source": "majority"
+  },
   "requiredPoolIds": [],
   "excludedPoolIds": [],
   "createdAt": "2025-03-17T21:50:46Z"
