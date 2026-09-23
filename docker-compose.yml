@@ -4,8 +4,9 @@
 #   docker compose --profile dev up dev    dev + api   → http://localhost:5173   (Vite HMR)
 #   docker compose --profile mock up web-mock          → http://localhost:8081   (서버 없이 브라우저만으로. 비상용)
 #   docker compose run --rm test                         Vitest 단위 테스트
-#   docker compose run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.txt --spec var/<task>/task_spec.json --out var/<task>/out
-#                                                        원본 + prompt → hits.csv + template.html (agent/README.md). 입력·출력은 var/ 아래
+#   docker compose run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>
+#                                                        원본 + prompt → hits.csv + template.html (agent/README.md). 입력은 var/ 아래,
+#                                                        출력은 output/<task>/ 아래 (--out 을 빼면 output/<원본 파일 이름>/)
 #   docker compose run --rm agent test                   agent 단위 테스트 (unittest)
 #   docker compose exec api npm run sql -- "SELECT status, COUNT(*) FROM assignments GROUP BY 1"
 #
@@ -101,7 +102,8 @@ services:
       - ./example:/app/example:ro
 
   # 원본 데이터와 prompt로 HIT 단위 CSV와 MTurk 템플릿을 만드는 Python 파이프라인 (agent/README.md).
-  # 코드는 bind mount로 쓰므로 고쳐도 이미지를 다시 빌드할 필요가 없다. 입력과 출력은 var/<task>/ (gitignore) 아래에 둔다.
+  # 코드는 bind mount로 쓰므로 고쳐도 이미지를 다시 빌드할 필요가 없다. 실험용 입력은 var/<task>/ 에, 출력은 output/<task>/ 에
+  # 둔다 (둘 다 gitignore). --out 을 빼면 output/<원본 파일 이름>/ 이 기본 출력 폴더다.
   # assets/ 는 데이터 형식을 이해하기 위한 예시 자료일 뿐이므로 mount 하지 않는다.
   # OpenRouter 호출은 크레딧을 쓰므로 AGENT_ALLOW_API=1 을 붙여 실행할 때만 허용된다. 키와 모델 설정 이름(AGENT_MODEL)은
   # environment/.env 에서 읽고, 모델 설정 파일은 environment/models/ 에서 읽는다.
@@ -118,8 +120,10 @@ services:
     working_dir: /work
     volumes:
       - ./agent:/work/agent:ro
-      # 실험용 입력·출력을 두는 곳, gitignore됨. 다른 폴더가 필요하면 `docker compose run -v <폴더>:/work/<이름> …`로 추가
+      # 실험용 입력을 두는 곳, gitignore됨. 다른 폴더가 필요하면 `docker compose run -v <폴더>:/work/<이름> …`로 추가
       - ./var:/work/var
+      # 실행 결과 기본 폴더 (--out 을 빼면 output/<원본 파일 이름>/), gitignore됨
+      - ./output:/work/output
       # 모델 설정 yaml
       - ./environment/models:/work/environment/models:ro
 
