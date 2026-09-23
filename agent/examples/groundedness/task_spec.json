@@ -1,0 +1,127 @@
+{
+  "spec_version": 1,
+  "task": {
+    "id": "passage-fact-support",
+    "title": "Judge whether each statement is supported by a passage",
+    "description": "Read one passage and decide, for each short statement, whether the passage supports it.",
+    "keywords": [
+      "reading",
+      "fact checking",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.id",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "passage",
+        "path": "$.passages.retriever_a",
+        "limit": 4
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.question",
+        "label": "Question",
+        "role": "context",
+        "style": "text"
+      },
+      "passage": {
+        "path": "{passage}",
+        "label": "Passage",
+        "role": "context",
+        "style": "passage"
+      },
+      "facts": {
+        "path": "$.facts.model_a[*]",
+        "label": "Statement",
+        "role": "target",
+        "style": "text"
+      }
+    },
+    "question": {
+      "text": "Is this statement supported by the passage?",
+      "options": [
+        {
+          "value": "grounded",
+          "label": "Supported"
+        },
+        {
+          "value": "not_grounded",
+          "label": "Not supported"
+        }
+      ],
+      "answer_suffix": ""
+    },
+    "hint": {
+      "label_path": "$.labels.retriever_a.model_a.passage_fact_support['Passage {passage_no}']['Fact {target_no}'][0]",
+      "reason_path": "$.labels.retriever_a.model_a.passage_fact_support['Passage {passage_no}']['Fact {target_no}'][1]",
+      "map": {
+        "Yes": "grounded",
+        "No": "not_grounded"
+      },
+      "missing": null
+    },
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 4,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected_value": "not_grounded",
+      "max_targets": 2,
+      "mismatch": {
+        "swap_fields": [
+          "question",
+          "passage"
+        ],
+        "distance": 3
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "Your task is to decide whether each short statement is **supported by the passage** shown in the same tab.",
+    "background": "The statements were written to answer the question at the top of each tab. The passage was retrieved automatically and may or may not talk about the same thing. We want to know whether a careful reader of the passage alone would agree that the statement is true.",
+    "criteria": [
+      {
+        "label": "Supported",
+        "text": "The passage says what the statement says, directly or in slightly different words. Everything in the statement can be confirmed from the passage."
+      },
+      {
+        "label": "Not supported",
+        "text": "The passage does not mention the statement, contradicts it, or confirms only part of it. Use this option when you would need outside knowledge to accept the statement."
+      }
+    ],
+    "steps": [
+      "Read the question, then read the whole passage.",
+      "For each statement below the passage, ask: does this passage, by itself, confirm the statement?",
+      "Choose **Supported** or **Not supported** for every statement. Do not leave any statement unanswered.",
+      "Move to the next tab. The Submit button becomes active when every statement in every tab has an answer."
+    ],
+    "notes": [
+      "Judge only from the passage. Do not use what you already know about the topic.",
+      "A statement that is partly confirmed and partly missing counts as **Not supported**.",
+      "The same statements appear with several different passages; judge each passage on its own."
+    ],
+    "tip": "If the passage is about a different topic from the question, every statement is almost certainly Not supported.",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": "llm_reason"
+  }
+}

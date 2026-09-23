@@ -1,0 +1,2550 @@
+[
+  {
+    "id": "r001",
+    "question": "How do honeybees tell other bees where to find flowers?",
+    "answer": [
+      "They perform a waggle dance inside the hive that encodes the direction and distance of the flowers."
+    ],
+    "passages": {
+      "retriever_a": [
+        "A honeybee colony in summer can hold forty thousand workers, a single queen and a few hundred drones. Workers change jobs as they age: young bees clean cells and feed larvae, middle-aged bees build comb and guard the entrance, and the oldest bees fly out to gather nectar and pollen.",
+        "Inside the dark hive, a returning forager runs in a short straight line while shaking her body, then loops back and repeats. Other workers follow her closely. The angle of that straight run, measured from vertical on the comb, matches the angle between the sun and the food, and the length of the run tells the distance to the flowers.",
+        "Nectar is carried back to the hive in a special stomach and passed from bee to bee. As the bees fan the thin liquid with their wings, water evaporates until the sugary syrup thickens into honey, which is sealed under a thin cap of wax for the winter months.",
+        "Flowers that rely on bees are often blue, purple or yellow and frequently carry ultraviolet patterns that are invisible to people. These patterns act like landing strips that guide a visiting bee toward the nectar at the centre of the bloom.",
+        "Beekeepers have long noticed that when one forager finds a rich patch of clover, dozens of hive mates soon arrive at the same patch. The forager advertises the find by dancing on the comb; the excited pattern of the dance tells the other workers that the food is worth collecting and roughly where it is.",
+        "On cold mornings honeybees cluster tightly around the queen and shiver their flight muscles to produce heat. The cluster slowly rotates so that bees on the chilly outer layer move inward to warm up while others take their place.",
+        "Bees keep track of the sun's position even when it is hidden by cloud, because their eyes detect the polarisation pattern of the sky. This helps a forager fly a straight line home after wandering across a meadow for an hour.",
+        "Wax comb is built from flakes secreted by glands on the underside of young workers. The cells are hexagonal, a shape that stores the most honey for the least wax, and the comb hangs in parallel sheets separated by a bee-sized gap."
+      ],
+      "retriever_b": [
+        "A queen bee may lay two thousand eggs in a single day during spring. Each egg is placed at the bottom of a cell, and nurse bees decide whether the larva becomes a worker or a queen by what they feed it during its first days.",
+        "Beekeepers have long noticed that when one forager finds a rich patch of clover, dozens of hive mates soon arrive at the same patch. The forager advertises the find by dancing on the comb; the excited pattern of the dance tells the other workers that the food is worth collecting and roughly where it is.",
+        "Drones are male bees whose only role is to mate with a queen from another colony. They have no sting, do not gather food, and are pushed out of the hive in autumn when the workers stop feeding them.",
+        "A honeybee colony in summer can hold forty thousand workers, a single queen and a few hundred drones. Workers change jobs as they age: young bees clean cells and feed larvae, middle-aged bees build comb and guard the entrance, and the oldest bees fly out to gather nectar and pollen.",
+        "On cold mornings honeybees cluster tightly around the queen and shiver their flight muscles to produce heat. The cluster slowly rotates so that bees on the chilly outer layer move inward to warm up while others take their place.",
+        "Inside the dark hive, a returning forager runs in a short straight line while shaking her body, then loops back and repeats. Other workers follow her closely. The angle of that straight run, measured from vertical on the comb, matches the angle between the sun and the food, and the length of the run tells the distance to the flowers.",
+        "Nectar is carried back to the hive in a special stomach and passed from bee to bee. As the bees fan the thin liquid with their wings, water evaporates until the sugary syrup thickens into honey, which is sealed under a thin cap of wax for the winter months.",
+        "Bees keep track of the sun's position even when it is hidden by cloud, because their eyes detect the polarisation pattern of the sky. This helps a forager fly a straight line home after wandering across a meadow for an hour."
+      ]
+    },
+    "subqueries": {
+      "Subquery 1": "What is the waggle dance?",
+      "Subquery 2": "How does the dance show direction?"
+    },
+    "facts": {
+      "model_a": {
+        "Fact 1": "Honeybees perform a waggle dance to share the location of food sources.",
+        "Fact 2": "The angle of the waggle run relative to vertical shows the direction of the food relative to the sun."
+      },
+      "model_b": {
+        "Fact 1": "Honeybees perform a waggle dance to share the location of food sources.",
+        "Fact 2": "The angle of the waggle run relative to vertical shows the direction of the food relative to the sun."
+      }
+    },
+    "labels": {
+      "retriever_a": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about flower colours and ultraviolet patterns and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about flower colours and ultraviolet patterns and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foragers recruiting hive mates by dancing and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about how wax comb is built and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how wax comb is built and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 describes the waggle dance and its purpose."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains how the angle of the dance shows direction."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about flower colours and ultraviolet patterns and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about flower colours and ultraviolet patterns and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foragers recruiting hive mates by dancing and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage says bees use the sun to find direction, which loosely matches the statement."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about how wax comb is built and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how wax comb is built and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 describes the waggle dance and its purpose. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains how the angle of the dance shows direction."
+            ]
+          }
+        }
+      },
+      "retriever_b": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about egg laying and the raising of queens and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about egg laying and the raising of queens and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foragers recruiting hive mates by dancing and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about the role of drones and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the role of drones and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 describes the waggle dance and its purpose."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains how the angle of the dance shows direction."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about egg laying and the raising of queens and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about egg laying and the raising of queens and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foragers recruiting hive mates by dancing and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about the role of drones and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the role of drones and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the make-up of a colony and the jobs of workers and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how the colony keeps warm and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how nectar becomes honey and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether honeybees perform a waggle dance to share where food is."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how bees navigate by the sky and does not say whether the angle of the waggle run from vertical gives the direction of the food relative to the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 describes the waggle dance and its purpose. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains how the angle of the dance shows direction."
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "r002",
+    "question": "Why are there two high tides each day on most coasts?",
+    "answer": [
+      "The moon's gravity raises a bulge of water on the side of the earth facing it and another on the far side, and the earth rotates through both bulges each day."
+    ],
+    "passages": {
+      "retriever_a": [
+        "Twice a month, when the sun, moon and earth line up, the pull of the sun adds to the pull of the moon and the tides are unusually large. These are called spring tides, though they have nothing to do with the season. When the sun and moon pull at right angles, the tides are smaller and are called neap tides.",
+        "Harbour masters publish tide tables months in advance. The tables list the time and height of each high and low water, and fishermen use them to decide when a boat can safely cross a sandbar at the mouth of the river.",
+        "The moon pulls the ocean toward itself, raising a bulge of water on the side of the earth that faces it. A second bulge forms on the far side, where the water is pulled less strongly than the solid earth beneath it. As the planet turns once a day, every coast passes through both bulges, which is why most shores see two high tides.",
+        "The shape of a coastline changes how big the tides are. In a long, narrowing bay the incoming water is squeezed and can rise by more than ten metres, while on a small island in the open ocean the difference between high and low water may be less than a metre.",
+        "Picture the oceans as a stretched shell of water with two humps: one on the side nearest the moon and one directly opposite. The solid earth spins underneath this shell once every twenty-four hours, carrying each harbour into a hump, out of it, into the second hump and out again, giving two high waters a day.",
+        "Tide pools are rocky hollows that keep a little seawater when the tide goes out. Starfish, anemones and small crabs live in them, and they must cope with water that warms in the sun and grows saltier until the next high tide floods the pool again.",
+        "The moon takes about twenty-nine and a half days to go around the earth and return to the same phase. Because it moves a little further along its orbit each day, it rises roughly fifty minutes later each evening than it did the evening before.",
+        "Engineers have built barrages across some estuaries to capture the energy of the tides. Water flowing in and out through turbines generates electricity at predictable times, unlike wind, but the barrages can change the mud flats that wading birds depend on."
+      ],
+      "retriever_b": [
+        "The sun also pulls on the oceans, but because it is so much further away its effect on the tides is less than half that of the moon. Its main role is to make the tides bigger or smaller depending on how it lines up with the moon.",
+        "A rip current is a narrow band of water flowing quickly away from the beach through a gap in the sandbar. Swimmers caught in one should not fight it directly but swim sideways along the shore until they are out of the current.",
+        "Picture the oceans as a stretched shell of water with two humps: one on the side nearest the moon and one directly opposite. The solid earth spins underneath this shell once every twenty-four hours, carrying each harbour into a hump, out of it, into the second hump and out again, giving two high waters a day.",
+        "Twice a month, when the sun, moon and earth line up, the pull of the sun adds to the pull of the moon and the tides are unusually large. These are called spring tides, though they have nothing to do with the season. When the sun and moon pull at right angles, the tides are smaller and are called neap tides.",
+        "Harbour masters publish tide tables months in advance. The tables list the time and height of each high and low water, and fishermen use them to decide when a boat can safely cross a sandbar at the mouth of the river.",
+        "The moon pulls the ocean toward itself, raising a bulge of water on the side of the earth that faces it. A second bulge forms on the far side, where the water is pulled less strongly than the solid earth beneath it. As the planet turns once a day, every coast passes through both bulges, which is why most shores see two high tides.",
+        "The shape of a coastline changes how big the tides are. In a long, narrowing bay the incoming water is squeezed and can rise by more than ten metres, while on a small island in the open ocean the difference between high and low water may be less than a metre.",
+        "The moon takes about twenty-nine and a half days to go around the earth and return to the same phase. Because it moves a little further along its orbit each day, it rises roughly fifty minutes later each evening than it did the evening before."
+      ]
+    },
+    "subqueries": {
+      "Subquery 1": "What causes the tidal bulges?",
+      "Subquery 2": "Why does each coast pass through two bulges?"
+    },
+    "facts": {
+      "model_a": {
+        "Fact 1": "The earth rotates through two tidal bulges each day, one facing the moon and one on the opposite side."
+      },
+      "model_b": {
+        "Fact 1": "The earth rotates through two tidal bulges each day, one facing the moon and one on the opposite side."
+      }
+    },
+    "labels": {
+      "retriever_a": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about spring and neap tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about tide tables and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about how coastlines change the size of tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about life in tide pools and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the moon's orbit and rising time and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about tidal energy barrages and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Not covered",
+              "No fact explains what causes the bulges."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 1 says the earth rotates through both bulges each day."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about spring and neap tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about tide tables and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about how coastlines change the size of tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about life in tide pools and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the moon's orbit and rising time and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about tidal energy barrages and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Not covered",
+              "No fact explains what causes the bulges. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 1 says the earth rotates through both bulges each day."
+            ]
+          }
+        }
+      },
+      "retriever_b": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the sun's smaller effect on the tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about rip currents and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about spring and neap tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about tide tables and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about how coastlines change the size of tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about the moon's orbit and rising time and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Not covered",
+              "No fact explains what causes the bulges."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 1 says the earth rotates through both bulges each day."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the sun's smaller effect on the tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about rip currents and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "Yes",
+                "The passage describes the sun and moon pulling on the oceans, which implies the tidal bulges."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about tide tables and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about how coastlines change the size of tides and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about the moon's orbit and rising time and does not say whether the earth turns through two bulges of water each day, one under the moon and one opposite it."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Not covered",
+              "No fact explains what causes the bulges. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 1 says the earth rotates through both bulges each day."
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "r003",
+    "question": "Why does bread dough rise while it rests?",
+    "answer": [
+      "Yeast feeds on sugars in the flour and releases carbon dioxide, which is trapped by the gluten network and inflates the dough."
+    ],
+    "passages": {
+      "retriever_a": [
+        "A sourdough starter is a jar of flour and water in which wild yeasts and bacteria have settled. It must be fed fresh flour every day or two, and the bacteria produce the acids that give sourdough its sharp flavour and long shelf life.",
+        "Bread yeast is a living fungus. When it is mixed into flour and water it begins to feed on the sugars that the flour releases, and as it feeds it gives off carbon dioxide and a little alcohol. The gas is what makes the dough swell; the alcohol mostly bakes away in the oven.",
+        "The crust turns brown in the oven because sugars and proteins on the surface react in the heat. Bakers spray water into the oven during the first minutes of baking so that the surface stays soft a little longer and the loaf can expand fully before the crust sets.",
+        "Wheat flour contains two proteins that, when wet and kneaded, join into a stretchy web called gluten. This web is elastic enough to hold the bubbles of gas produced during rising, so instead of escaping, the gas inflates the dough like thousands of tiny balloons.",
+        "Kneading is the folding and pushing that turns a shaggy mass into a smooth ball. Ten minutes of kneading by hand is usually enough; the dough is ready when a small piece can be stretched thin enough to see light through without tearing.",
+        "Bakers put dough in a warm corner of the kitchen for a reason. Yeast works faster as the temperature rises toward body heat, so warm dough doubles in size in an hour, while dough left in a cold pantry may take most of a day to rise.",
+        "Salt does more than season bread. It slows the yeast slightly so the dough rises evenly, tightens the dough so it holds its shape, and helps the crust colour. Bread made without salt tastes flat and rises so fast that it often collapses.",
+        "The rising of dough is simply yeast breathing. It consumes the sugars in the flour and exhales carbon dioxide, and it breathes faster when warm. This is why a bowl of dough set near a warm stove rises in a fraction of the time it takes in a cool room."
+      ],
+      "retriever_b": [
+        "Not all breads rise. Flatbreads such as tortillas and chapatis are rolled thin and cooked quickly on a hot surface, and many of them contain no yeast at all. Their soft texture comes from steam puffing up the dough for a few seconds during cooking.",
+        "The rising of dough is simply yeast breathing. It consumes the sugars in the flour and exhales carbon dioxide, and it breathes faster when warm. This is why a bowl of dough set near a warm stove rises in a fraction of the time it takes in a cool room.",
+        "Homemade bread goes stale quickly because it has no preservatives. Keep it in a paper bag at room temperature for a day or two; the refrigerator actually speeds up staling, while freezing slices and toasting them straight from the freezer works well.",
+        "A sourdough starter is a jar of flour and water in which wild yeasts and bacteria have settled. It must be fed fresh flour every day or two, and the bacteria produce the acids that give sourdough its sharp flavour and long shelf life.",
+        "Wheat flour contains two proteins that, when wet and kneaded, join into a stretchy web called gluten. This web is elastic enough to hold the bubbles of gas produced during rising, so instead of escaping, the gas inflates the dough like thousands of tiny balloons.",
+        "Bread yeast is a living fungus. When it is mixed into flour and water it begins to feed on the sugars that the flour releases, and as it feeds it gives off carbon dioxide and a little alcohol. The gas is what makes the dough swell; the alcohol mostly bakes away in the oven.",
+        "Salt does more than season bread. It slows the yeast slightly so the dough rises evenly, tightens the dough so it holds its shape, and helps the crust colour. Bread made without salt tastes flat and rises so fast that it often collapses.",
+        "Bakers put dough in a warm corner of the kitchen for a reason. Yeast works faster as the temperature rises toward body heat, so warm dough doubles in size in an hour, while dough left in a cold pantry may take most of a day to rise."
+      ]
+    },
+    "subqueries": {
+      "Subquery 1": "What gas does yeast produce?",
+      "Subquery 2": "What holds the gas inside the dough?"
+    },
+    "facts": {
+      "model_a": {
+        "Fact 1": "Yeast in bread dough feeds on sugars and releases carbon dioxide gas.",
+        "Fact 2": "Gluten forms a stretchy network that traps gas bubbles inside the dough.",
+        "Fact 3": "Dough rises faster in a warm place because yeast is more active at warm temperatures."
+      },
+      "model_b": {
+        "Fact 1": "Yeast in bread dough feeds on sugars and releases carbon dioxide gas.",
+        "Fact 2": "Gluten forms a stretchy network that traps gas bubbles inside the dough.",
+        "Fact 3": "Dough rises faster in a warm place because yeast is more active at warm temperatures."
+      }
+    },
+    "labels": {
+      "retriever_a": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about sourdough starters and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about sourdough starters and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about sourdough starters and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about how the crust forms and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how the crust forms and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about how the crust forms and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about kneading and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about kneading and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about kneading and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the role of salt and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the role of salt and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the role of salt and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about yeast consuming sugar and working faster when warm and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 names carbon dioxide."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says the gluten network traps the gas."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about sourdough starters and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about sourdough starters and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about sourdough starters and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about how the crust forms and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about how the crust forms and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about how the crust forms and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about kneading and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about kneading and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about kneading and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the role of salt and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the role of salt and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the role of salt and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about yeast consuming sugar and working faster when warm and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage says yeast breathes faster when warm but does not state that the dough itself rises faster."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 names carbon dioxide. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says the gluten network traps the gas."
+            ]
+          }
+        }
+      },
+      "retriever_b": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about flatbreads and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about flatbreads and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about flatbreads and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about yeast consuming sugar and working faster when warm and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about storing bread and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about storing bread and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about storing bread and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about sourdough starters and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about sourdough starters and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about sourdough starters and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the role of salt and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the role of salt and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the role of salt and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 names carbon dioxide."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says the gluten network traps the gas."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about flatbreads and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about flatbreads and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about flatbreads and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about yeast consuming sugar and working faster when warm and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about storing bread and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about storing bread and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about storing bread and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about sourdough starters and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about sourdough starters and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about sourdough starters and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about how gluten holds gas and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about what yeast feeds on and produces and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the role of salt and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the role of salt and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the role of salt and does not say whether dough rises faster when it is warm because the yeast works faster."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether yeast eats the sugars in the dough and gives off carbon dioxide."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the effect of warmth on rising and does not say whether gluten makes a stretchy network that holds the gas bubbles."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that dough rises faster when it is warm because the yeast works faster."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 names carbon dioxide. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says the gluten network traps the gas."
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "r004",
+    "question": "When was the covered bridge at Marlow Bend built, and why does it have a roof?",
+    "answer": [
+      "It was built in 1852, and it was roofed to protect its wooden trusses from rain and snow."
+    ],
+    "passages": {
+      "retriever_a": [
+        "Every September the meadow beside the bridge hosts the Marlow Bend harvest fair. Stalls sell apple butter and cider, the school band plays on a hay wagon, and the day ends with lanterns floated down the river from the bridge's upstream side.",
+        "The Marlow River is shallow and fast for most of its length, tumbling over gravel bars that make it popular with people who fish for trout. Only at the bend does it slow and deepen, which is why the village grew up on that spot.",
+        "The covered bridge at Marlow Bend was completed in 1852 by a crew of local carpenters led by a millwright named Abel Corrigan. It replaced a ferry that had carried farm carts across the river since the village was founded, and it is the oldest structure in the county still in daily use.",
+        "A grist mill stood just downstream of the village until a flood carried it away. Its millstones were dug out of the riverbank years later and now sit at the entrance to the town library, where children like to climb on them.",
+        "People sometimes assume the roof of a covered bridge was meant to shelter travellers, but its real purpose was to protect the timber. An uncovered wooden truss soaked by rain and snow would rot within a decade or two, while a roofed and sided bridge could last a century.",
+        "In recent years volunteers have replaced the bridge's roof shingles and repainted the siding in the same dull red that appears in old photographs. Traffic is limited to one vehicle at a time, and a sign at each end asks drivers to walk their horses.",
+        "Nobody is sure where the name Marlow Bend came from. One story credits a surveyor named Marlow who camped at the bend; another says it is a corruption of an older word for the marshy ground where the river turns.",
+        "A brass plaque on the northern portal records that the bridge was raised in 1852 and that its builders covered it, in the words of the plaque, so that the beams might be spared the ruin of rain and snow. The trusses inside are the original pine."
+      ],
+      "retriever_b": [
+        "The general store on the main street has sold hardware, seed and penny sweets since before the bridge existed. Its wooden floor still creaks in the same places, and the current owners keep the original glass jars on the counter.",
+        "A brass plaque on the northern portal records that the bridge was raised in 1852 and that its builders covered it, in the words of the plaque, so that the beams might be spared the ruin of rain and snow. The trusses inside are the original pine.",
+        "Winters at Marlow Bend are long, and the river freezes solid enough for skating in most years. The village keeps a bonfire going on the bank on Saturday evenings, and the bridge's roof keeps its deck clear of snow for the walk home.",
+        "Every September the meadow beside the bridge hosts the Marlow Bend harvest fair. Stalls sell apple butter and cider, the school band plays on a hay wagon, and the day ends with lanterns floated down the river from the bridge's upstream side.",
+        "The covered bridge at Marlow Bend was completed in 1852 by a crew of local carpenters led by a millwright named Abel Corrigan. It replaced a ferry that had carried farm carts across the river since the village was founded, and it is the oldest structure in the county still in daily use.",
+        "The Marlow River is shallow and fast for most of its length, tumbling over gravel bars that make it popular with people who fish for trout. Only at the bend does it slow and deepen, which is why the village grew up on that spot.",
+        "In recent years volunteers have replaced the bridge's roof shingles and repainted the siding in the same dull red that appears in old photographs. Traffic is limited to one vehicle at a time, and a sign at each end asks drivers to walk their horses.",
+        "People sometimes assume the roof of a covered bridge was meant to shelter travellers, but its real purpose was to protect the timber. An uncovered wooden truss soaked by rain and snow would rot within a decade or two, while a roofed and sided bridge could last a century."
+      ]
+    },
+    "subqueries": {
+      "Subquery 1": "When was the bridge built?",
+      "Subquery 2": "Why was the bridge covered?"
+    },
+    "facts": {
+      "model_a": {
+        "Fact 1": "The Marlow Bend covered bridge was built in 1852.",
+        "Fact 2": "The bridge was given a roof to protect its wooden trusses from the weather."
+      },
+      "model_b": {
+        "Fact 1": "The Marlow Bend covered bridge was built in 1852.",
+        "Fact 2": "The bridge was given a roof to protect its wooden trusses from the weather."
+      }
+    },
+    "labels": {
+      "retriever_a": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the building of the bridge in 1852 and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the old grist mill and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the old grist mill and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about why covered bridges have roofs and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the origin of the village name and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the origin of the village name and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the year 1852."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains that the roof protects the trusses."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the building of the bridge in 1852 and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the old grist mill and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the old grist mill and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about why covered bridges have roofs and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about the origin of the village name and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the origin of the village name and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The plaque quotation is indirect and does not clearly state the purpose of the roof."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the year 1852. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains that the roof protects the trusses."
+            ]
+          }
+        }
+      },
+      "retriever_b": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the general store and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the general store and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about winter in the village and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about winter in the village and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the building of the bridge in 1852 and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about why covered bridges have roofs and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the year 1852."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains that the roof protects the trusses."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the general store and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the general store and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about winter in the village and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about winter in the village and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the harvest fair and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the building of the bridge in 1852 and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the river and the village site and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about recent restoration work and does not say whether the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about why covered bridges have roofs and does not say whether the bridge was built in 1852."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that the roof was added to keep rain and snow off the wooden trusses."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the year 1852. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 explains that the roof protects the trusses."
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "r005",
+    "question": "Why does a rainbow have the shape of an arc?",
+    "answer": [
+      "Sunlight leaves each raindrop at a fixed angle of about 42 degrees, so the drops that send colour to your eye lie on a circle around the point opposite the sun, and the ground hides the lower part of that circle."
+    ],
+    "passages": {
+      "retriever_a": [
+        "Red is always on the outside of a primary rainbow and violet on the inside, because red light bends the least as it passes through water and violet bends the most. The band of colours is broad enough that a careful observer can pick out six or seven distinct hues.",
+        "Rainbows are most often seen in the late afternoon after a shower, when the sun is low in the west and rain is still falling in the east. With the sun behind you and the rain in front, the conditions are right, and a garden hose on a sunny evening will produce a small one on demand.",
+        "Sunlight enters a raindrop, bends, reflects off the back of the drop and bends again on the way out. For red light the total turn is about 42 degrees from the direction of the incoming sunlight. Every drop that sits at that angle from the line between the sun and your eye sends red light to you, and those drops form a circle around the point opposite the sun.",
+        "A second, fainter rainbow sometimes appears outside the first with its colours reversed. It is produced by light that reflects twice inside each drop. Between the two bows the sky looks noticeably darker, a region that has been given the name of a medieval scholar.",
+        "From an aeroplane or a high mountain a rainbow can be seen as a complete circle, because there are raindrops below the observer as well as above. On the ground the lower part of the circle would be beneath the horizon, so only the upper arc is visible.",
+        "Because the bow is defined by the angle between the sun, the drops and the observer's eye, two people standing side by side see rainbows made by different drops. It is impossible to walk to the end of a rainbow: as you move, the bow moves with you.",
+        "A fogbow is a pale, almost white arc that forms in fog rather than rain. The droplets in fog are so small that the colours overlap and wash out, leaving a broad ghostly band that is easy to miss against a grey sky.",
+        "On rare nights a bright full moon can produce a rainbow in falling rain. The light is so faint that the eye sees the moonbow as white, but a long camera exposure reveals the same colours as a daytime bow."
+      ],
+      "retriever_b": [
+        "Painters have struggled with rainbows for centuries. Many early paintings show the colours in the wrong order or give the bow a tight curve that no real rainbow has, because the artists worked from memory rather than from observation.",
+        "From an aeroplane or a high mountain a rainbow can be seen as a complete circle, because there are raindrops below the observer as well as above. On the ground the lower part of the circle would be beneath the horizon, so only the upper arc is visible.",
+        "The geometry of the rainbow is a cone with its point at your eye and its axis pointing away from the sun. The cone's half-angle is roughly 42 degrees, the angle at which water drops return the most light. Wherever the surface of that cone meets falling rain, you see colour, and the intersection is a circle.",
+        "Red is always on the outside of a primary rainbow and violet on the inside, because red light bends the least as it passes through water and violet bends the most. The band of colours is broad enough that a careful observer can pick out six or seven distinct hues.",
+        "Because the bow is defined by the angle between the sun, the drops and the observer's eye, two people standing side by side see rainbows made by different drops. It is impossible to walk to the end of a rainbow: as you move, the bow moves with you.",
+        "A second, fainter rainbow sometimes appears outside the first with its colours reversed. It is produced by light that reflects twice inside each drop. Between the two bows the sky looks noticeably darker, a region that has been given the name of a medieval scholar.",
+        "Sunlight enters a raindrop, bends, reflects off the back of the drop and bends again on the way out. For red light the total turn is about 42 degrees from the direction of the incoming sunlight. Every drop that sits at that angle from the line between the sun and your eye sends red light to you, and those drops form a circle around the point opposite the sun.",
+        "A fogbow is a pale, almost white arc that forms in fog rather than rain. The droplets in fog are so small that the colours overlap and wash out, leaving a broad ghostly band that is easy to miss against a grey sky."
+      ]
+    },
+    "subqueries": "Subquery 1: At what angle does light leave a raindrop?",
+    "facts": {
+      "model_a": {
+        "Fact 1": "Light leaves each raindrop at about 42 degrees from the direction of the sunlight, so the drops that look coloured lie on a circle around the point opposite the sun."
+      },
+      "model_b": {
+        "Fact 1": "Light leaves each raindrop at about 42 degrees from the direction of the sunlight, so the drops that look coloured lie on a circle around the point opposite the sun."
+      }
+    },
+    "labels": {
+      "retriever_a": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the order of the colours and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about when and where rainbows appear and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about double rainbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about seeing a rainbow as a full circle and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about why each observer sees a different bow and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about fogbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about moonbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the angle of about 42 degrees."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the order of the colours and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about when and where rainbows appear and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about double rainbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about seeing a rainbow as a full circle and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about why each observer sees a different bow and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about fogbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about moonbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the angle of about 42 degrees. (Same judgement.)"
+            ]
+          }
+        }
+      },
+      "retriever_b": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about rainbows in paintings and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "No",
+                "The passage is about seeing a rainbow as a full circle and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the order of the colours and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about why each observer sees a different bow and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about double rainbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about fogbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the angle of about 42 degrees."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about rainbows in paintings and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage explains that the bow is a circle whose lower part is hidden, which overlaps with the statement."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about the order of the colours and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about why each observer sees a different bow and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about double rainbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about fogbows and does not say whether rainbow light leaves the drops at about 42 degrees, which puts the coloured drops on a circle around the point opposite the sun."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 gives the angle of about 42 degrees. (Same judgement.)"
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "r006",
+    "question": "How can sailors tell which lighthouse they are looking at during the night?",
+    "answer": [
+      "Each lighthouse flashes in its own timed pattern, called its characteristic, and nautical charts list these patterns so sailors can match the flashes to a named light."
+    ],
+    "passages": {
+      "retriever_a": [
+        "Lighthouse keepers once lived on the site with their families, trimming wicks, polishing glass and winding the clockwork that turned the lens. Most lights are now automatic, and the keepers' cottages have become holiday rentals or small museums.",
+        "No two lighthouses within sight of each other flash the same way. One may give a single flash every five seconds, another two quick flashes every ten, and a third a steady light with a brief eclipse. This timed pattern is called the light's characteristic, and it is the lighthouse's signature.",
+        "When fog hides the light, a lighthouse sounds a horn instead. Like the flashes, the blasts follow a timed pattern, but sound bends and echoes in ways that light does not, so sailors treat the horn as a warning rather than a precise fix.",
+        "On a nautical chart each lighthouse is marked with a short code such as Fl(2) 10s, meaning two flashes every ten seconds. A navigator who sees a light on the horizon times the flashes with a watch, finds the matching code on the chart, and knows which headland lies ahead.",
+        "Building a lighthouse on a rock washed by the open sea was one of the hardest engineering tasks of its age. Stones were cut to interlock like a puzzle so that the waves could not pry them apart, and work could proceed only on the few calm days each summer.",
+        "The lamp of a lighthouse is surrounded by a drum of glass prisms that gathers the light into a few narrow beams. The whole assembly floats on a bath of mercury or rides on rollers and turns slowly, so the beams sweep around the horizon like the spokes of a wheel.",
+        "In daylight a lighthouse is identified by its daymark: the colour and pattern of its tower. Red and white bands, black and white spirals or a plain white column make each tower recognisable from a distance without any light at all.",
+        "Every light on the coast has its own rhythm of flashes, and that rhythm is printed on the chart beside the light's position. Matching the rhythm you see to the rhythm on the chart is the oldest trick in night navigation, and it still works when the electronics fail."
+      ],
+      "retriever_b": [
+        "Early lighthouses burned wood, then coal, then whale oil in rows of wicks. Oil lamps gave way to gas and then to electric bulbs, and the newest lights use banks of small diodes that can run for years on a solar panel and a battery.",
+        "Every light on the coast has its own rhythm of flashes, and that rhythm is printed on the chart beside the light's position. Matching the rhythm you see to the rhythm on the chart is the oldest trick in night navigation, and it still works when the electronics fail.",
+        "Migrating birds are drawn to lighthouses on cloudy nights and sometimes strike the glass in large numbers. Some stations now switch to a slower flash or a different colour during migration season, which appears to reduce the strikes.",
+        "Lighthouse keepers once lived on the site with their families, trimming wicks, polishing glass and winding the clockwork that turned the lens. Most lights are now automatic, and the keepers' cottages have become holiday rentals or small museums.",
+        "The lamp of a lighthouse is surrounded by a drum of glass prisms that gathers the light into a few narrow beams. The whole assembly floats on a bath of mercury or rides on rollers and turns slowly, so the beams sweep around the horizon like the spokes of a wheel.",
+        "No two lighthouses within sight of each other flash the same way. One may give a single flash every five seconds, another two quick flashes every ten, and a third a steady light with a brief eclipse. This timed pattern is called the light's characteristic, and it is the lighthouse's signature.",
+        "When fog hides the light, a lighthouse sounds a horn instead. Like the flashes, the blasts follow a timed pattern, but sound bends and echoes in ways that light does not, so sailors treat the horn as a warning rather than a precise fix.",
+        "On a nautical chart each lighthouse is marked with a short code such as Fl(2) 10s, meaning two flashes every ten seconds. A navigator who sees a light on the horizon times the flashes with a watch, finds the matching code on the chart, and knows which headland lies ahead."
+      ]
+    },
+    "subqueries": {
+      "Subquery 1": "What is a light's characteristic?",
+      "Subquery 2": "How do sailors look up a light?",
+      "Subquery 3": "How is the beam produced?"
+    },
+    "facts": {
+      "model_a": {
+        "Fact 1": "Each lighthouse flashes a distinct timed pattern called its characteristic.",
+        "Fact 2": "Nautical charts list the flash pattern of each lighthouse so that sailors can identify it.",
+        "Fact 3": "A rotating lens focuses the lamp into beams that sweep across the sea."
+      },
+      "model_b": {
+        "Fact 1": "Every lighthouse flashes a distinct timed pattern called its characteristic.",
+        "Fact 2": "Nautical charts list the flash pattern of each lighthouse so that sailors can identify it.",
+        "Fact 3": "A rotating lens focuses the lamp into beams that sweep across the sea."
+      }
+    },
+    "labels": {
+      "retriever_a": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about foghorns and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foghorns and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about foghorns and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about building lighthouses on sea rocks and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about building lighthouses on sea rocks and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about building lighthouses on sea rocks and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about the rotating lens and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the rotating lens and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about daymarks and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about daymarks and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about daymarks and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about matching flash rhythms to the chart and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 defines the characteristic."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says charts list the patterns."
+            ],
+            "Subquery 3": [
+              "Covered",
+              "Fact 3 describes the rotating lens."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "Yes",
+                "The passage says the horn follows a timed pattern like the flashes, which implies each light has a pattern."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foghorns and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about foghorns and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about building lighthouses on sea rocks and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about building lighthouses on sea rocks and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about building lighthouses on sea rocks and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "No",
+                "The passage is about the rotating lens and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the rotating lens and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about daymarks and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about daymarks and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about daymarks and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about matching flash rhythms to the chart and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 defines the characteristic. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says charts list the patterns."
+            ],
+            "Subquery 3": [
+              "Covered",
+              "Fact 3 describes the rotating lens."
+            ]
+          }
+        }
+      },
+      "retriever_b": {
+        "model_a": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the history of lighthouse lamps and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the history of lighthouse lamps and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the history of lighthouse lamps and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about matching flash rhythms to the chart and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about birds and lighthouses and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about birds and lighthouses and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about birds and lighthouses and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about the rotating lens and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the rotating lens and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about foghorns and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foghorns and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about foghorns and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 defines the characteristic."
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says charts list the patterns."
+            ],
+            "Subquery 3": [
+              "Covered",
+              "Fact 3 describes the rotating lens."
+            ]
+          }
+        },
+        "model_b": {
+          "passage_fact_support": {
+            "Passage 1": {
+              "Fact 1": [
+                "No",
+                "The passage is about the history of lighthouse lamps and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the history of lighthouse lamps and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the history of lighthouse lamps and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 2": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about matching flash rhythms to the chart and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 3": {
+              "Fact 1": [
+                "No",
+                "The passage is about birds and lighthouses and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about birds and lighthouses and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about birds and lighthouses and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 4": {
+              "Fact 1": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about lighthouse keepers and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 5": {
+              "Fact 1": [
+                "No",
+                "The passage is about the rotating lens and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the rotating lens and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "Yes",
+                "The passage states that a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 6": {
+              "Fact 1": [
+                "Yes",
+                "The passage states that every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about the characteristic of a light and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 7": {
+              "Fact 1": [
+                "No",
+                "The passage is about foghorns and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "No",
+                "The passage is about foghorns and does not say whether charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about foghorns and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            },
+            "Passage 8": {
+              "Fact 1": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether every lighthouse has its own timed flash pattern, known as its characteristic."
+              ],
+              "Fact 2": [
+                "Yes",
+                "The passage states that charts record each light's flash pattern so that a sailor can identify the light."
+              ],
+              "Fact 3": [
+                "No",
+                "The passage is about light codes printed on charts and does not say whether a turning lens concentrates the lamp into beams that sweep over the water."
+              ]
+            }
+          },
+          "subquery_fact_coverage": {
+            "Subquery 1": [
+              "Covered",
+              "Fact 1 defines the characteristic. (Same judgement.)"
+            ],
+            "Subquery 2": [
+              "Covered",
+              "Fact 2 says charts list the patterns."
+            ],
+            "Subquery 3": [
+              "Covered",
+              "Fact 3 describes the rotating lens."
+            ]
+          }
+        }
+      }
+    }
+  }
+]
