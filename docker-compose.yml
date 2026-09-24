@@ -217,6 +217,9 @@ services:
       API_UPSTREAM: ${API_UPSTREAM:-http://backend:8000}
     volumes:
       - ./frontend/src:/usr/share/nginx/html:ro
+      # Create 의 `Load sample template` / `Load sample CSV` 가 /example/… 로 읽는 예시 파일. nginx 의 alias 가 /example/ 로 잇는다
+      # (html 폴더 안에 mount 하면 읽기 전용 mount 안에 mount point 를 만들 수 없어 컨테이너가 뜨지 않는다. Dockerfile 도 같은 자리에 복사한다)
+      - ./example:/usr/share/nginx/example:ro
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${FRONTEND_PORT:-3000}:80"
 
@@ -231,6 +234,9 @@ services:
     volumes:
       - ./frontend:/app/frontend:ro
       - ./prototype/src/api/http/routes.ts:/app/prototype/src/api/http/routes.ts:ro
+      # lib-csv / lib-data-check 테스트가 README 의 업로드 시나리오대로 example/ 의 파일을 읽고, 시나리오 4 는 data/templates 의 템플릿을 읽는다
+      - ./example:/app/example:ro
+      - ./data/templates:/app/data/templates:ro
 
 volumes:
   db:

@@ -27,6 +27,20 @@ server {
         proxy_send_timeout 600s;
     }
 
+    # Create 의 `Load sample template` / `Load sample CSV` 가 읽는 예시 파일 (저장소의 example/). html 폴더 안에 mount 하면
+    # 읽기 전용 bind mount(frontend/src) 안에 mount point 를 만들 수 없어 컨테이너가 뜨지 않으므로 옆 폴더에 두고 alias 로 잇는다.
+    # 없는 파일은 SPA fallback 이 아니라 404 로 답한다.
+    location /example/ {
+        alias /usr/share/nginx/example/;
+        add_header Cache-Control "no-cache";
+        # 기본 mime.types 에는 csv 가 없어 application/octet-stream 으로 내려간다
+        types {
+            text/csv csv;
+            text/html html;
+            text/markdown md;
+        }
+    }
+
     # 빌드 산출물이 아니라 소스 그대로라 파일 이름에 해시가 없다. 그래서 html, js, css 모두 캐시하지 않는다.
     # SPA 라우팅: /manage/batch-1000001/review 같은 경로에서 새로고침해도 앱이 뜬다.
     location / {

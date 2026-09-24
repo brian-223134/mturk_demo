@@ -1,1 +1,534 @@
 /* Create 마법사(pages/create.js, pages/create/*)의 스타일. 공용 토큰과 기본 스타일은 styles.css 에 있다. */
+
+/* ── 제목 줄과 단계 표시줄 ───────────────────────────────────────────────── */
+
+.page-header {
+  justify-content: space-between;
+}
+.page-header .page-title {
+  margin-bottom: 0;
+}
+.page-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel-steps {
+  padding: 8px 12px;
+}
+.wizard-steps {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.wizard-step {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--muted);
+  cursor: default;
+}
+.wizard-step:disabled {
+  color: #b5b5b5;
+}
+.wizard-step.done {
+  color: var(--text);
+  cursor: pointer;
+}
+.wizard-step.done:hover {
+  background: #f3f3f1;
+}
+.wizard-step.active {
+  color: var(--link);
+  font-weight: 600;
+}
+.wizard-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 12px;
+  font-weight: 600;
+}
+.wizard-step.active .wizard-step-number {
+  background: var(--link);
+  border-color: var(--link);
+  color: #fff;
+}
+.wizard-step.done .wizard-step-number {
+  background: #f0f6ff;
+  border-color: var(--link);
+  color: var(--link);
+}
+.wizard-step + .wizard-step::before {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: var(--border);
+  margin-right: 8px;
+}
+
+/* ── 단계 공통 ───────────────────────────────────────────────────────────── */
+
+.step-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+.step-footer-panel {
+  padding-top: 0;
+  border-top: none;
+}
+.step-footer-panel .step-footer {
+  margin-top: 0;
+}
+.step-hint:empty {
+  display: none;
+}
+.section-title {
+  margin: 20px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.section-title:first-child {
+  margin-top: 4px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  margin-bottom: 16px;
+  background: #f0efec;
+  border-radius: 6px;
+}
+.segmented-item {
+  font: inherit;
+  padding: 4px 14px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.segmented-item:hover {
+  color: var(--link);
+}
+.segmented-item.active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+
+.placeholder-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+}
+.placeholder-list .placeholder {
+  margin-right: 0;
+}
+.placeholder-error {
+  border-color: #ffccc7;
+  background: #fff2f0;
+  color: #cf1322;
+}
+
+.desc-single {
+  grid-template-columns: 220px 1fr;
+  margin-top: 16px;
+}
+.desc-single dd.wide {
+  grid-column: span 1;
+}
+.desc-single dd {
+  border-right: none;
+}
+.desc dd .tag {
+  margin-bottom: 2px;
+}
+
+/* 폼 항목: styles.css 의 .field 에 오류 문구와 가로 배치를 더한다 */
+.field input[type='number'] {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: var(--radius);
+  background: #fff;
+  width: 100%;
+}
+.field input:disabled,
+.field select:disabled {
+  background: #f5f5f5;
+  color: #999;
+}
+.field-error {
+  color: var(--critical);
+  font-size: 12px;
+}
+.field-error:empty {
+  display: none;
+}
+.field.has-error input,
+.field.has-error select,
+.field.has-error textarea,
+.field.has-error .pool-list {
+  border-color: var(--critical);
+}
+.field .required {
+  color: var(--critical);
+  font-weight: 400;
+}
+.field-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.field-row > .field {
+  flex: 1 1 160px;
+  min-width: 160px;
+}
+.field-row > .field-grow {
+  flex: 3 1 320px;
+  max-width: 520px;
+}
+.field-wide {
+  max-width: 640px;
+}
+.field-inline {
+  margin-bottom: 0;
+  min-width: 160px;
+}
+.prefix-input,
+.suffix-input {
+  display: flex;
+  align-items: stretch;
+}
+.prefix-input .prefix,
+.suffix-input .suffix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.prefix-input .prefix {
+  border-right: none;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.suffix-input .suffix {
+  border-left: none;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.prefix-input input {
+  border-radius: 0 var(--radius) var(--radius) 0 !important;
+}
+.suffix-input input {
+  border-radius: var(--radius) 0 0 var(--radius) !important;
+}
+.form-actions.inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.notice-actions {
+  margin-top: 8px;
+}
+.notice-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.btn-link {
+  border: none;
+  background: none;
+  color: var(--link);
+  padding: 0 4px;
+}
+
+/* ── Template ────────────────────────────────────────────────────────────── */
+
+.template-table tbody tr.template-row {
+  cursor: pointer;
+}
+.template-table tbody tr.selected td {
+  background: #f0f6ff;
+}
+.template-name-cell {
+  display: flex;
+  flex-direction: column;
+}
+.template-editor textarea {
+  width: 100%;
+}
+#generate-mode .jobs-panel {
+  margin-top: 16px;
+}
+.use-result-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ── Data ────────────────────────────────────────────────────────────────── */
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 28px 16px;
+  border: 1px dashed #c9c8c2;
+  border-radius: var(--radius);
+  background: #fafaf9;
+  cursor: pointer;
+  text-align: center;
+}
+.dropzone:hover,
+.dropzone.dragging {
+  border-color: var(--link);
+  background: #f0f6ff;
+}
+.dropzone-compact {
+  padding: 10px 16px;
+  color: var(--muted);
+}
+.dropzone-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+.dropzone-text {
+  font-size: 15px;
+}
+.dropzone-compact .dropzone-text {
+  font-size: 13px;
+}
+.data-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+.data-summary .btn {
+  margin-left: auto;
+}
+.warning-list {
+  margin: 0;
+  padding-left: 20px;
+}
+.check-list {
+  border-bottom: 1px solid var(--border);
+}
+.check-line {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.check-tag {
+  width: 60px;
+  text-align: center;
+  flex: none;
+  margin-right: 0;
+}
+.check-body {
+  min-width: 0;
+  flex: 1;
+}
+.check-note {
+  margin-top: 4px;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.data-preview {
+  table-layout: fixed;
+  min-width: 100%;
+}
+.data-preview th,
+.data-preview td {
+  min-width: 240px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.data-preview th:first-child,
+.data-preview td:first-child {
+  min-width: 56px;
+  max-width: 56px;
+  width: 56px;
+}
+.cell-truncated {
+  cursor: help;
+}
+
+/* ── Settings ────────────────────────────────────────────────────────────── */
+
+.settings-form .field-row-5 > .field {
+  flex: 1 1 140px;
+}
+/* Description 은 코드가 아니라 문장이다 (styles.css 의 textarea 는 고정폭) */
+.settings-form #s-Description {
+  font-family: inherit;
+  font-size: inherit;
+}
+.settings-cost {
+  margin: 4px 0 12px;
+}
+.qual-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.qual-label {
+  width: 300px;
+  padding-top: 6px;
+}
+.pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: var(--radius);
+  background: #fff;
+  min-height: 38px;
+}
+.pool-option input:disabled + * {
+  color: #999;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.switch {
+  appearance: none;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: #c9c8c2;
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+  transition: background 0.15s;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.switch:checked {
+  background: var(--link);
+}
+.switch:checked::after {
+  left: 20px;
+}
+
+/* ── Preview & Cost ──────────────────────────────────────────────────────── */
+
+.two-col {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.cost-table td.tabular {
+  font-variant-numeric: tabular-nums;
+}
+.cost-table tr[data-cost='balance'] td {
+  border-top: 2px solid var(--border);
+}
+.answer-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.mono {
+  font-family: var(--mono);
+}
+.row-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row-nav input[type='number'] {
+  font: inherit;
+  width: 72px;
+  padding: 2px 6px;
+  border: 1px solid #d9d9d9;
+  border-radius: var(--radius);
+}
+.preview-frame {
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: var(--radius);
+  background: #fff;
+  display: block;
+}
+.preview-result {
+  margin-top: 12px;
+}
+.preview-result:empty {
+  display: none;
+}
+.answers-json {
+  max-height: 220px;
+}
+
+/* ── Publish ─────────────────────────────────────────────────────────────── */
+
+#publish-summary {
+  margin-top: 12px;
+}
+#publish-summary dd .tag {
+  margin-right: 4px;
+}
+
+@media (max-width: 900px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .desc-single {
+    grid-template-columns: 160px 1fr;
+  }
+  .qual-label {
+    width: 100%;
+  }
+}
