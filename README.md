@@ -31,7 +31,7 @@ docker compose up --build
 
 | 명령 | 설명 |
 |---|---|
-| `docker compose --profile dev up dev` | 개발용 서버입니다. `src/`를 고치면 화면에 바로 반영됩니다. http://localhost:5173 |
+| `docker compose --profile dev up dev` | 개발용 서버입니다. `prototype/src/`를 고치면 화면에 바로 반영됩니다. http://localhost:5173 |
 | `docker compose --profile mock up web-mock` | API 서버 없이 브라우저만으로 동작하는 버전입니다. http://localhost:8081 |
 | `docker compose run --rm test` | 단위 테스트를 실행합니다. |
 | `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"` | DB의 내용을 SQL로 조회합니다. |
@@ -44,12 +44,13 @@ docker compose up --build
 
 ### Docker 없이 실행하기
 
-Node 24 이상이 필요합니다 (Node에 내장된 SQLite를 사용합니다).
+Node 24 이상이 필요합니다 (Node에 내장된 SQLite를 사용합니다). 콘솔과 mock API 서버의 코드는 `prototype/` 폴더에 있으므로 npm 명령은 그 안에서 실행합니다.
 
 ```bash
+cd prototype
 npm install
 npm run dev                         # 브라우저만으로 동작 (http://localhost:5173)
-npm run server & npm run dev:http   # mock API 서버와 함께 실행. DB는 var/mturk-console.sqlite
+npm run server & npm run dev:http   # mock API 서버와 함께 실행. DB는 저장소 루트의 var/mturk-console.sqlite
 npm test && npm run typecheck
 ```
 
@@ -193,23 +194,23 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 콘솔이 처음 실행될 때 읽는 데이터는 [data/](data/) 폴더에 있습니다. 데이터는 JSON으로, 템플릿은 HTML 파일로 관리합니다. 폴더 구조와 수정 방법은 [data/README.md](data/README.md)에 정리되어 있습니다.
 
 - 파일을 고친 뒤 **Reset to fixtures**를 누르면 반영됩니다. 파일끼리 맞지 않는 부분이 있으면 어느 파일의 무엇이 잘못되었는지 알려 줍니다.
-- 콘솔에서 만든 상태는 **Mock tools → Export data (JSON)**으로 내려받을 수 있습니다. 이 파일을 다른 사람에게 전달해 **Import data**로 불러오게 하거나, `npm run data:unpack -- <파일>`로 `data/` 구조로 풀어 새로운 시작 상태로 삼을 수 있습니다.
+- 콘솔에서 만든 상태는 **Mock tools → Export data (JSON)**으로 내려받을 수 있습니다. 이 파일을 다른 사람에게 전달해 **Import data**로 불러오게 하거나, `prototype/`에서 `npm run data:unpack -- <파일>`을 실행해 `data/` 구조로 풀어 새로운 시작 상태로 삼을 수 있습니다.
 - 들어 있는 batch 세 개는 실제 annotation 결과를 **익명화한 것**입니다. ID는 모두 새로 만들었고, 본문은 같은 길이의 합성 텍스트로 바꿨습니다. 응답 값, 검수 상태, 작업 시간은 그대로 두었기 때문에 진행률, worker 지표, Fleiss' κ는 원본과 같습니다.
 - 익명화에 쓰는 salt(`scripts/.fixture_salt`)와 원본 파일 목록(`scripts/fixture_sources.json`)은 저장소와 Docker 이미지에 포함하지 않습니다.
 
 ## 동작 방식
 
-화면 코드는 `src/api/client.ts`의 `api` 객체만 호출합니다. 그 뒤에서 실제로 무엇이 동작할지는 빌드할 때 `VITE_API_MODE`로 정하며, 어느 쪽이든 화면 코드는 동일합니다.
+화면 코드는 `prototype/src/api/client.ts`의 `api` 객체만 호출합니다. 그 뒤에서 실제로 무엇이 동작할지는 빌드할 때 `VITE_API_MODE`로 정하며, 어느 쪽이든 화면 코드는 동일합니다.
 현재 어떤 방식으로 동작 중인지는 Mock tools 메뉴 맨 아래에 표시됩니다.
 
 | | `http` (Docker 기본값) | `mock` |
 |---|---|---|
-| 동작하는 곳 | mock API 서버 (`server/`) | 브라우저 안 |
+| 동작하는 곳 | mock API 서버 (`prototype/server/`) | 브라우저 안 |
 | 저장 위치 | SQLite | 해당 브라우저의 IndexedDB |
 | 시작 데이터 | `data/` 폴더를 디스크에서 읽음 | `data/` 폴더가 빌드 결과에 포함됨 |
-| 요청 처리와 계산 | 두 방식 모두 `src/api/mock/handlers.ts`와 `src/domain/`의 **같은 코드**를 사용 | |
+| 요청 처리와 계산 | 두 방식 모두 `prototype/src/api/mock/handlers.ts`와 `prototype/src/domain/`의 **같은 코드**를 사용 | |
 
-REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
+REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
 Production 백엔드(FastAPI)는 같은 경로를 구현하며, 화면은 부르는 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
 
 ## 원본 데이터에서 HIT 만들기 (`agent/`)
@@ -249,24 +250,33 @@ docker compose run --rm agent run <원본> --prompt @<prompt 파일> --spec <spe
 
 ## 폴더 구조
 
+프로토타입 콘솔과 mock API 서버는 `prototype/` 안에 있고, 시작 데이터와 예시 파일, 문서는 저장소 루트에 있습니다.
+실제 서비스용 화면 `frontend/`(vanilla JS)와 백엔드 `backend/`(FastAPI)는 `prototype/` 옆에 폴더를 추가해 만들 예정이며, 아직 없습니다.
+
 ```
+prototype/          프로토타입 콘솔(React + antd)과 mock API 서버. npm 명령은 이 폴더에서 실행합니다
+├─ src/
+│  ├─ api/
+│  │  ├─ types.ts   데이터 모델
+│  │  ├─ client.ts  화면이 호출하는 API 인터페이스와 동작 방식 선택
+│  │  ├─ mock/      메모리 저장소, 요청 처리, 가짜 응답 생성, data/ 읽기와 쓰기
+│  │  └─ http/      REST 경로 표와 HTTP 클라이언트
+│  ├─ domain/       계산 로직: 비용, attention 판정, 진행률, majority와 κ, worker 지표, 템플릿 렌더링
+│  ├─ features/     화면: create, manage, workers
+│  └─ components/   공용 컴포넌트: 미리보기 프레임, 구성 막대, Mock tools 메뉴 등
+├─ server/          mock API 서버 (HTTP 처리, SQLite 저장)
+├─ scripts/         내려받은 상태를 data/로 푸는 스크립트(data:unpack)와 DB 조회 스크립트(sql)
+├─ Dockerfile       web, api, dev, test 이미지. 빌드 컨텍스트는 data/와 example/을 함께 복사하기 위해 저장소 루트입니다
+├─ nginx.conf       web 이미지의 nginx 설정 (정적 파일, /api 프록시)
+└─ package.json, vite.config.ts, tsconfig.json, index.html
 agent/              원본 데이터와 prompt로 HIT 단위 CSV와 템플릿을 만드는 파이프라인 (Python)
 data/               시작 데이터 (JSON + 템플릿 HTML)
-docs/               Create의 사용 방법, 화면에 나오는 값을 읽는 방법
 example/            Create에 올려 볼 예시 템플릿과 CSV
-server/             mock API 서버 (HTTP 처리, SQLite 저장)
-scripts/            데이터 변환과 예시 파일 생성, DB 조회 스크립트
-src/
-├─ api/
-│  ├─ types.ts      데이터 모델
-│  ├─ client.ts     화면이 호출하는 API 인터페이스와 동작 방식 선택
-│  ├─ mock/         메모리 저장소, 요청 처리, 가짜 응답 생성, data/ 읽기와 쓰기
-│  └─ http/         REST 경로 표와 HTTP 클라이언트
-├─ domain/          계산 로직: 비용, attention 판정, 진행률, majority와 κ, worker 지표, 템플릿 렌더링
-├─ features/        화면: create, manage, workers
-└─ components/      공용 컴포넌트: 미리보기 프레임, 구성 막대, Mock tools 메뉴 등
-Dockerfile, docker-compose.yml, docker/nginx.conf
+docs/               Create의 사용 방법, 화면에 나오는 값을 읽는 방법
+environment/        agent의 모델 설정(models/)과 OpenRouter 키를 두는 .env
+scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
+docker-compose.yml  web, api, dev, test, web-mock, agent 서비스
 ```
 
-- 계산 로직은 모두 `src/domain/`의 순수 함수로 작성했고 단위 테스트가 있습니다.
+- 계산 로직은 모두 `prototype/src/domain/`의 순수 함수로 작성했고 단위 테스트가 있습니다.
 - `npm test`는 계산 로직 외에도 `data/`가 기대한 규모인지, κ가 statsmodels의 값과 같은지, REST 요청과 SQLite 저장이 제대로 되는지, `example/`의 파일이 위 시나리오대로 동작하는지를 확인합니다.

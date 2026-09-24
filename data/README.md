@@ -18,7 +18,7 @@ data/
    └─ assignments.json           응답 목록. 한 줄에 assignment 하나
 ```
 
-각 필드의 의미는 `src/api/types.ts`에 정리되어 있습니다. PascalCase 필드는 MTurk API와 같은 이름이고, camelCase 필드는 콘솔이 추가한 것입니다.
+각 필드의 의미는 `prototype/src/api/types.ts`에 정리되어 있습니다. PascalCase 필드는 MTurk API와 같은 이름이고, camelCase 필드는 콘솔이 추가한 것입니다.
 템플릿의 `placeholders`와 assignment의 `attention`은 파일에 적지 않습니다. 데이터를 읽어 들일 때 HTML과 batch의 `attentionRule`로부터 계산합니다.
 batch.json의 `reference`는 Review에서 답을 대조하는 기준입니다. `{ "source": "majority" }`이면 같은 HIT의 다른 worker들 majority와, `{ "source": "column", "column": "<입력 컬럼>" }`이면 그 컬럼의 값(GT 또는 LLM 라벨)과 대조하며, 없으면 majority로 봅니다.
 
@@ -52,8 +52,8 @@ data/batches/batch-1000001/assignments.json: assignment 3ABC... points to unknow
 
 ```bash
 # 1. 콘솔에서 Mock tools → Export data (JSON)을 누르면 mturk-console-data-<시각>.json 파일이 내려받아집니다.
-# 2. 그 파일을 이 폴더의 구조로 풉니다 (templates/와 batches/를 지우고 다시 씁니다).
-npm run data:unpack -- <내려받은 파일>.json
+# 2. 그 파일을 이 폴더의 구조로 풉니다 (templates/와 batches/를 지우고 다시 씁니다). npm 명령은 prototype/ 폴더에서 실행합니다.
+cd prototype && npm run data:unpack -- <내려받은 파일>.json
 # 3. 콘솔에서 Mock tools → Reset to fixtures를 누릅니다.
 ```
 
@@ -82,7 +82,7 @@ MTurk Requester 웹사이트에서 내려받은 결과 CSV와 템플릿이 있�
 ```bash
 cp scripts/fixture_sources.example.json scripts/fixture_sources.json   # 읽을 CSV와 템플릿을 적습니다 (git에서 제외되는 파일)
 python3 scripts/build_fixtures.py --source <원본 폴더>
-npm test          # data/의 규모와 변환 규칙을 확인합니다. 기대값은 src/api/mock/data.test.ts에 있습니다
+cd prototype && npm test   # data/의 규모와 변환 규칙을 확인합니다. 기대값은 prototype/src/api/mock/data.test.ts에 있습니다
 ```
 
 - 입력 셀이 Python 리터럴(리스트, dict) 문자열이 아닌 CSV라면, `build_fixtures.py`의 `Anonymizer.cell`을 그 형식에 맞게 고쳐야 합니다.
