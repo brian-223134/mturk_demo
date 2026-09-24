@@ -231,7 +231,7 @@ One row per HIT, every cell a JSON value (so the template can use it as a JavaSc
 | the reference column | object `{answer name: option value}`; attention answers are `expected_value`; targets without a hint are omitted |
 | the reason column (if set) | object `{answer name: reason text}` |
 
-MTurk rejects rows larger than 64 KB, so keep `items_per_hit × text length` in mind (4–6 items for passages of several hundred words).
+The console warns about rows larger than 64 KB (MTurk's HIT size limit, kept as a guideline), so keep `items_per_hit × text length` in mind (4–6 items for passages of several hundred words).
 
 ## 9. How to design a spec from a prompt
 

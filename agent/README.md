@@ -1,6 +1,6 @@
 # agent: 원본 데이터에서 HIT 묶음까지
 
-`agent/`는 annotation 원본 데이터와 "무엇을 판정하게 할지" 적은 prompt를 받아, MTurk에 게시할 수 있는 HIT 묶음을 만드는 파이프라인입니다. 원본을 자동으로 분석하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 CSV와 MTurk crowd-form HTML 템플릿을 만들고, 그 결과가 콘솔에 올릴 수 있는 상태인지 검증합니다.
+`agent/`는 annotation 원본 데이터와 "무엇을 판정하게 할지" 적은 prompt를 받아, 콘솔에 올릴 HIT 묶음을 만드는 파이프라인입니다. 원본을 자동으로 분석하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 CSV와 MTurk crowd-form HTML 템플릿을 만들고, 그 결과가 콘솔에 올릴 수 있는 상태인지 검증합니다.
 
 파이프라인은 Python 표준 라이브러리만 사용합니다. OpenRouter로 spec을 만들 때 모델 설정 파일을 읽기 위한 PyYAML 하나만 더 필요하며, 이것은 Docker 이미지 안에만 설치됩니다 (아래 [모델 설정](#모델-설정)). 실행은 항상 저장소 루트에서 `python3 -m agent …` 또는 Docker로 합니다.
 

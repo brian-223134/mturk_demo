@@ -2,8 +2,8 @@
 
 Amazon Mechanical Turk(MTurk)로 진행하는 annotation 작업을 **게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
-지금은 **mock 단계**입니다. 실제 MTurk에는 연결하지 않으며, 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다.
-화면 구성을 검토하고 실제 백엔드를 설계하기 위한 프로토타입입니다. Production 용도의 설계를 진행할 때, mono-repo 구조로 진행할 예정이며, 기술 스택은 frontend: vanilla javascript, backend: fastapi(python)으로 생각하고 있습니다.
+지금은 **mock 단계**입니다. 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다.
+실제 MTurk에는 연동하지 않습니다. MTurk의 용어와 화면 구성, 그리고 HIT, assignment, reward, qualification, attention check 같은 annotation 설정 방식을 차용한 자체 annotation 콘솔을 목표로 하며, 이 프로토타입은 그 화면과 백엔드를 설계하기 위한 것입니다. Production 용도의 설계를 진행할 때, mono-repo 구조로 진행할 예정이며, 기술 스택은 frontend: vanilla javascript, backend: fastapi(python)으로 생각하고 있습니다.
 
 | 탭 | 하는 일 |
 |---|---|
@@ -59,7 +59,7 @@ npm test && npm run typecheck
 
 ### 상단 바
 
-- **`MOCK` 배지**: 현재 환경을 나타냅니다. 실제 MTurk와 연동하면 `SANDBOX`(파랑) 또는 `PRODUCTION`(빨강)으로 표시됩니다.
+- **`MOCK` 배지**: 현재 환경을 나타냅니다. mock에서는 항상 `MOCK`입니다. `SANDBOX`(파랑)와 `PRODUCTION`(빨강)은 production 콘솔에서 시험 환경과 실제 환경을 구분하기 위해 남겨 둔 값입니다.
 - **`Balance`**: 잔액입니다. batch를 게시하거나 응답을 추가로 모집하면 비용이 미리 차감되고, 응답을 반려하면 그만큼 돌아옵니다. 잔액이 부족하면 게시와 재모집을 할 수 없습니다.
 - **`Mock tools`**: mock 환경에서만 보이는 도구 모음입니다.
   - `Generate fake submissions…`: 아직 비어 있는 응답 자리에 검수 대기 상태의 가짜 응답을 채웁니다. 실제 worker 없이도 검수 과정을 따라가 볼 수 있습니다.
@@ -108,11 +108,11 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 오른쪽 위의 버튼으로 `Workers`와 `Pools` 화면을 오갑니다.
 
 - **Worker 목록**: 모든 batch를 합산한 worker별 지표를 보여 줍니다. 제출, 승인, 반려 수와 반려율, attention 실패율, 작업 시간 중앙값, majority 일치율, 참여한 batch 수, 마지막 활동일을 볼 수 있습니다. 정렬, 검색, 필터를 지원하고, 여러 명을 선택해 pool에 넣거나 뺄 수 있습니다.
-- **차단(`Block…`)**: worker를 차단하면 그 worker의 MTurk 계정에 불이익이 갈 수 있습니다. 그래서 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다.
+- **차단(`Block…`)**: 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다. MTurk에서 차단이 worker 계정에 불이익을 주던 것을 따라, 차단을 마지막 수단으로 두는 설계입니다.
 - **Pools**: pool을 만들고 구성원을 확인하거나 뺄 수 있습니다. `Fill by criteria…`는 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율 등)을 입력하면 **해당하는 worker가 몇 명인지 먼저 보여 주고**, 확인한 뒤에 추가합니다.
 - **Worker 상세**: 지표 요약, batch별 참여 이력, 메모를 볼 수 있습니다. batch 이름을 누르면 그 worker의 응답만 걸러진 Review 화면으로 이동합니다.
 
-pool은 Create의 `Settings` 단계에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. 실제 MTurk와 연동하면 pool 하나가 custom Qualification 하나에 대응합니다.
+pool은 Create의 `Settings` 단계에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. MTurk의 custom Qualification과 같은 역할입니다.
 
 ## 예시 파일로 mock 테스팅 해보기
 
@@ -165,7 +165,7 @@ Settings의 `Expected value`에는 `not_grounded`를 입력합니다. Preview에
 | `3-data-checks/empty-cells.csv` | 빈 셀이 있는 CSV | `WARN` 2 row(s) have empty cells: row 3, 5. 경고만 하고 진행은 막지 않습니다. |
 | `3-data-checks/excel-utf8-bom.csv` | Excel에서 "CSV UTF-8"로 저장한 파일 (맨 앞에 BOM, 줄 끝은 CRLF) | `10 rows, 5 columns, UTF-8 (BOM removed)`. 정상적으로 처리됩니다. BOM을 그대로 두면 첫 컬럼 이름이 달라져 `${...}`와 맞지 않게 됩니다. |
 | `3-data-checks/excel-cp949.csv` | 한국어 Excel에서 일반 "CSV"로 저장한 파일 (CP949) | **업로드가 거절됩니다.** `The file is not valid UTF-8. Save it again as "CSV UTF-8" and upload it again.` 그대로 읽으면 글자가 깨진 채 게시되기 때문입니다. 앞서 올린 CSV는 그대로 유지됩니다. |
-| `3-data-checks/large-rows.csv` | 한 행의 입력이 64KB를 넘는 CSV | `WARN` max 70.2 KB. 1 row(s) exceed MTurk's 64 KB Question limit. 실제 연동에서는 ExternalQuestion 방식으로 게시해야 한다는 뜻입니다. mock에서는 그대로 진행됩니다. |
+| `3-data-checks/large-rows.csv` | 한 행의 입력이 64KB를 넘는 CSV | `WARN` max 70.2 KB. 1 row(s) exceed MTurk's 64 KB Question limit. MTurk의 HIT 크기 제한을 기준으로 삼은 경고이며, 진행은 막지 않습니다. |
 
 ### 시나리오 4. 미리 저장된 템플릿 사용하기
 
@@ -210,7 +210,7 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 | 요청 처리와 계산 | 두 방식 모두 `src/api/mock/handlers.ts`와 `src/domain/`의 **같은 코드**를 사용 | |
 
 REST 경로는 [src/api/http/routes.ts](src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
-실제 MTurk와 연동할 때는 같은 경로를 구현한 백엔드(예: FastAPI + boto3)로 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
+Production 백엔드(FastAPI)는 같은 경로를 구현하며, 화면은 부르는 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
 
 ## 원본 데이터에서 HIT 만들기 (`agent/`)
 
