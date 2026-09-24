@@ -1,0 +1,564 @@
+/* Manage의 Review·HITs·Results 탭과 Worker Pool 화면(pages/batch.js, pages/workers.js, pages/manage/*, pages/workers/*)의 스타일. 공용 토큰과 기본 스타일은 styles.css 에 있다. */
+
+/* hidden 속성이 .field 같은 display 지정에 밀리지 않게 한다 (반려 사유 칸, 차단 사유 칸) */
+[hidden] {
+  display: none !important;
+}
+
+/* ── 도구줄과 입력 ───────────────────────────────────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.toolbar-split {
+  justify-content: space-between;
+}
+.toolbar-right {
+  justify-content: flex-end;
+}
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.toolbar-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.toolbar .card-title {
+  margin: 0;
+}
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-label {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.filter-group {
+  gap: 10px;
+}
+.input {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+}
+.input:focus {
+  outline: 2px solid rgba(29, 95, 196, 0.25);
+  border-color: var(--link);
+}
+.input-small {
+  padding: 2px 6px;
+  font-size: 13px;
+}
+textarea.input {
+  width: 100%;
+  resize: vertical;
+}
+.input-suffix {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.suffix {
+  color: var(--muted);
+  font-size: 13px;
+}
+.btn-danger {
+  border-color: #ffa39e;
+  color: #cf1322;
+}
+.btn-danger:hover:not(:disabled) {
+  border-color: #cf1322;
+  color: #cf1322;
+  background: #fff1f0;
+}
+.btn-link {
+  border-color: transparent;
+  background: none;
+  color: var(--link);
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.btn-link:disabled {
+  background: none;
+}
+.btn-loading {
+  position: relative;
+  color: transparent !important;
+}
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-top-color: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.btn-primary.btn-loading::after {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.radio input[type='number'] {
+  width: 70px;
+}
+.legend {
+  margin: 0 0 8px;
+}
+.id-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 4px 0;
+}
+
+/* ── 메뉴 버튼 ─────────────────────────────────────────────────────────── */
+
+details.menu {
+  position: relative;
+  display: inline-block;
+}
+details.menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+details.menu > summary::-webkit-details-marker {
+  display: none;
+}
+details.menu-disabled > summary {
+  color: #aaa;
+  cursor: not-allowed;
+  background: #f5f5f5;
+}
+.menu-caret {
+  font-size: 11px;
+}
+.menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 220px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+.export-menu .menu-list {
+  left: auto;
+  right: 0;
+  min-width: 420px;
+}
+.menu-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover:not(:disabled) {
+  background: #f3f6fb;
+}
+.menu-item:disabled {
+  color: #aaa;
+  cursor: not-allowed;
+}
+.menu-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── 표: 정렬, 선택, 행 클릭 ───────────────────────────────────────────── */
+
+.table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.table th.sortable:hover {
+  color: var(--link);
+}
+.table th.sorted {
+  color: var(--link);
+}
+.sort-indicator {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #bbb;
+}
+.table th.sorted .sort-indicator {
+  color: var(--link);
+}
+.table .cell-select {
+  width: 36px;
+  text-align: center;
+}
+.table .cell-select input {
+  margin: 0;
+  vertical-align: middle;
+}
+.table tr.row-clickable {
+  cursor: pointer;
+}
+.table tr.row-selected td {
+  background: #e6f4ff;
+}
+.table tr.row-expanded > td {
+  background: #fafaf9;
+  padding: 8px 16px 12px 40px;
+}
+.table .cell-actions {
+  white-space: nowrap;
+}
+.is-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.assignment-table {
+  font-size: 13px;
+}
+.worker-link:hover {
+  text-decoration: none;
+}
+.vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 1px 4px 1px 0;
+}
+.tag-purple {
+  background: #f9f0ff;
+  border-color: #d3adf7;
+  color: #531dab;
+}
+.tag-rejected {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.cell-pre {
+  max-height: 160px;
+  margin: 0;
+}
+.pager-size {
+  margin-left: auto;
+}
+.text-good {
+  color: #389e0d;
+}
+
+/* ── 모달과 drawer ─────────────────────────────────────────────────────── */
+
+.modal-backdrop,
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  overflow: auto;
+}
+.modal-backdrop {
+  z-index: 1000;
+}
+.drawer-backdrop {
+  z-index: 900;
+  justify-content: flex-end;
+  padding: 0;
+}
+.modal {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 100%;
+  outline: none;
+}
+.modal-head,
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title,
+.drawer-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+}
+.modal-close,
+.drawer-close {
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.modal-body {
+  padding: 16px 20px;
+}
+.modal-text {
+  margin: 0 0 10px;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+.modal-body .notice {
+  margin: 0 0 10px;
+}
+.modal-task .modal-body {
+  padding: 12px;
+}
+.drawer {
+  height: 100%;
+  background: #fff;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.drawer-head .drawer-close {
+  order: -1;
+}
+.drawer-extra {
+  display: flex;
+  gap: 8px;
+}
+.drawer-body {
+  padding: 16px 20px;
+  overflow: auto;
+  flex: 1;
+}
+.drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 8px;
+}
+.desc-3 {
+  grid-template-columns: 110px 1fr 110px 1fr 110px 1fr;
+}
+.desc-3 dd.wide {
+  grid-column: span 5;
+}
+.desc-3 dd:nth-of-type(2n) {
+  border-right: 1px solid var(--border);
+}
+.desc-3 dd:nth-of-type(3n) {
+  border-right: none;
+}
+.answers-table .tag {
+  margin: 1px 4px 1px 0;
+}
+
+/* ── task 미리보기 ──────────────────────────────────────────────────────── */
+
+.task-frame {
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+}
+.task-submitted {
+  margin-top: 12px;
+}
+.task-submitted-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── 알림 ───────────────────────────────────────────────────────────────── */
+
+.toasts {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+}
+.toast {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--neutral);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.toast-title {
+  font-weight: 600;
+}
+.toast-message {
+  margin-top: 4px;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.toast-success {
+  border-left-color: var(--good);
+}
+.toast-info {
+  border-left-color: var(--blue);
+}
+.toast-warning {
+  border-left-color: var(--warning);
+}
+.toast-error {
+  border-left-color: var(--critical);
+}
+
+/* ── Worker Pool ───────────────────────────────────────────────────────── */
+
+.page-header-split {
+  justify-content: space-between;
+}
+.page-header .page-title {
+  margin: 0;
+}
+.page-badges {
+  display: inline-flex;
+  gap: 4px;
+}
+.segmented {
+  display: inline-flex;
+  background: #f0efec;
+  border-radius: 6px;
+  padding: 2px;
+}
+.segment {
+  padding: 4px 14px;
+  border-radius: 4px;
+  color: var(--text);
+}
+.segment:hover {
+  text-decoration: none;
+  color: var(--link);
+}
+.segment.active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+.worker-title code {
+  font-size: 18px;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+.stats-grid .stat + .stat {
+  margin-top: 0;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 5fr 3fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.card-table .table {
+  border-left: none;
+  border-right: none;
+}
+.card + .card,
+.two-col + .card {
+  margin-top: 16px;
+}
+#worker-history-card {
+  margin-bottom: 16px;
+}
+.pool-members {
+  padding: 4px 0;
+}
+.criteria {
+  margin: 8px 0 12px;
+}
+.criteria .filter {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.fill-count {
+  margin: 4px 0 8px;
+  font-size: 15px;
+}
+.fill-result {
+  min-height: 96px;
+}
+.cards-4 {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+@media (max-width: 900px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .desc-3 {
+    grid-template-columns: 110px 1fr;
+  }
+  .desc-3 dd.wide {
+    grid-column: span 1;
+  }
+}

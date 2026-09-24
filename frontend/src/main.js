@@ -18,5 +18,7 @@ route('/manage', manage.render, { tab: 'manage' });
 route('/manage/:batchId', batch.render, { tab: 'manage' });
 route('/manage/:batchId/:tab', batch.render, { tab: 'manage' });
 route('/workers', workers.render, { tab: 'workers' });
+route('/workers/pools', workers.renderPools, { tab: 'workers' }); // :workerId 보다 먼저 (등록 순서대로 맞춘다)
+route('/workers/:workerId', workers.renderDetail, { tab: 'workers' });
 
 start();
