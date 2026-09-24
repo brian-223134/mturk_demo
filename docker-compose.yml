@@ -174,6 +174,23 @@ services:
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
 
+  # vanilla JS 화면. 빌드 단계가 없어 frontend/src 를 그대로 서빙하고, /api 는 backend 로 넘긴다.
+  # 개발 중에는 bind mount 로 파일을 고치면 새로고침만으로 반영된다. API_UPSTREAM 을 바꾸면 prototype 의 mock API 에도 붙는다.
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: mturk-console:frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-http://backend:8000}
+    volumes:
+      - ./frontend/src:/usr/share/nginx/html:ro
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${FRONTEND_PORT:-3000}:80"
+
 volumes:
   db:
   backend-db:
