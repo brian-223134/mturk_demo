@@ -74,7 +74,7 @@ describe('parseCsv', () => {
   });
 
   it('reads the bundled sample CSV: 10 rows, 5 columns, no empty cells', () => {
-    const text = readFileSync(new URL('../../../example/1-task-data/data.csv', import.meta.url), 'utf8');
+    const text = readFileSync(new URL('../../../../example/1-task-data/data.csv', import.meta.url), 'utf8');
     const csv = parseCsv(text, 'data.csv');
     expect(csv.columns).toEqual(['item_id', 'passage', 'sentence_1', 'sentence_2', 'attention_sentence']);
     expect(csv.rows).toHaveLength(10);

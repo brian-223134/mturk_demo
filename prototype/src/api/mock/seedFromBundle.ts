@@ -3,13 +3,14 @@
 
 import type { SeedFiles } from './seedFiles';
 
-const jsonFiles = import.meta.glob<unknown>('/data/**/*.json', { import: 'default' });
-const htmlFiles = import.meta.glob<string>('/data/**/*.html', { query: '?raw', import: 'default' });
+// Vite의 root는 prototype/이고 data/는 저장소 루트에 있으므로, 이 파일 기준의 상대 경로로 가리킨다.
+const jsonFiles = import.meta.glob<unknown>('../../../../data/**/*.json', { import: 'default' });
+const htmlFiles = import.meta.glob<string>('../../../../data/**/*.html', { query: '?raw', import: 'default' });
 
 export async function loadSeedFilesFromBundle(): Promise<SeedFiles> {
   const loaders = { ...jsonFiles, ...htmlFiles };
   const entries = await Promise.all(
-    Object.entries(loaders).map(async ([path, load]) => [path.replace(/^\/data\//, ''), await load()] as const),
+    Object.entries(loaders).map(async ([path, load]) => [path.replace(/^(\.\.\/)+data\//, ''), await load()] as const),
   );
   return Object.fromEntries(entries);
 }

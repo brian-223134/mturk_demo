@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
@@ -11,6 +12,9 @@ export default defineConfig({
     watch: usePolling ? { usePolling: true, interval: 300 } : undefined,
     // http 모드(VITE_API_MODE=http)에서 브라우저는 같은 origin의 /api를 부르고, dev 서버가 mock API 서버로 넘긴다
     proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8787' },
+    // Vite의 root는 이 폴더(prototype/)지만, mock 모드의 시작 데이터 data/와 "Load sample"이 쓰는 example/은 저장소 루트에 있다.
+    // dev 서버는 root 밖의 파일을 기본으로 거부하므로 저장소 루트 전체를 허용한다.
+    fs: { allow: [fileURLToPath(new URL('..', import.meta.url))] },
   },
   test: {
     environment: 'node',

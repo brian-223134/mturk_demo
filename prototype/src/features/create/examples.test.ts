@@ -3,12 +3,13 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { checkData } from '../../domain/dataCheck';
 import { extractPlaceholders } from '../../domain/template';
 import { CsvError, readCsvFile } from './csv';
 
-const root = process.cwd();
+const root = fileURLToPath(new URL('../../../..', import.meta.url)); // 저장소 루트 (example/와 data/가 있는 곳)
 const bytes = (path: string) => readFileSync(resolve(root, 'example', path));
 const text = (path: string) => readFileSync(resolve(root, path), 'utf-8');
 // 브라우저에서 파일을 올릴 때와 같이 바이트에서 시작한다 (인코딩 검사를 거친다)

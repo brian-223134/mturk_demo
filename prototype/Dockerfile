@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 #
-# MTurk Console (mock). 용도별 target을 한 파일에서 만든다. 보통은 docker-compose.yml을 통해 쓴다.
+# MTurk Console (mock). 용도별 target을 한 파일에서 만든다. 보통은 저장소 루트의 docker-compose.yml을 통해 쓴다.
+# 빌드 컨텍스트는 저장소 루트다 (data/와 example/을 복사해야 하므로). 이미지 안은 저장소와 같은 배치로 둔다:
+# Node 앱은 /app/prototype, 시작 데이터는 /app/data, 예시 파일은 /app/example.
 #
 #   web   빌드한 정적 파일을 nginx로 서빙하고 /api는 api 서비스로 넘긴다. 리뷰와 시연용 (기본 target)
 #   api   mock API 서버 (Node + SQLite). data/ 폴더를 DB에 올리고 REST로 답한다
@@ -13,22 +15,22 @@ ARG NODE_VERSION=24
 # 의존성만 설치한다. package.json과 package-lock.json이 바뀔 때만 다시 실행된다.
 # root가 아닌 node 사용자로 설치해서, dev와 test가 node_modules/.vite 캐시를 쓸 수 있게 한다.
 FROM node:${NODE_VERSION}-slim AS deps
-WORKDIR /app
-RUN chown node:node /app
+RUN mkdir -p /app/prototype && chown -R node:node /app
+WORKDIR /app/prototype
 USER node
-COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node prototype/package.json prototype/package-lock.json ./
 RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 npm ci
 
 # ── source ──────────────────────────────────────────────────────────────────
 # 필요한 경로만 복사한다. scripts/의 fixture 변환 스크립트와 salt, 문서는 이미지에 들어가지 않는다.
 FROM deps AS source
-COPY --chown=node:node index.html tsconfig.json vite.config.ts ./
+COPY --chown=node:node prototype/index.html prototype/tsconfig.json prototype/vite.config.ts ./
+COPY --chown=node:node prototype/src ./src
+COPY --chown=node:node prototype/server ./server
+COPY --chown=node:node prototype/scripts ./scripts
 # example/의 예시 파일은 Create의 "Load sample" 버튼이 쓰므로 빌드에 필요하다
-COPY --chown=node:node example ./example
-COPY --chown=node:node src ./src
-COPY --chown=node:node server ./server
-COPY --chown=node:node data ./data
-COPY --chown=node:node scripts/sql.ts scripts/unpack-state.ts ./scripts/
+COPY --chown=node:node example /app/example
+COPY --chown=node:node data /app/data
 
 # ── api ─────────────────────────────────────────────────────────────────────
 FROM source AS api
@@ -65,8 +67,8 @@ RUN npm run build
 
 # ── web ─────────────────────────────────────────────────────────────────────
 FROM nginx:stable-alpine AS web
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY prototype/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/prototype/dist /usr/share/nginx/html
 EXPOSE 80
 # localhost는 ::1로 풀릴 수 있는데 nginx는 IPv4에만 열려 있다
 HEALTHCHECK --interval=10s --timeout=3s --start-period=3s --retries=3 \

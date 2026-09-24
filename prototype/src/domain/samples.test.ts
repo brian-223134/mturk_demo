@@ -1,11 +1,10 @@
 // example/1-task-data의 예시 템플릿과 CSV가 서로 맞는지 확인한다 (5.5). Create의 "Load sample" 버튼이 이 파일을 쓴다.
 
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { extractPlaceholders } from './template';
 
-const read = (name: string) => readFileSync(resolve(process.cwd(), 'example/1-task-data', name), 'utf-8');
+const read = (name: string) => readFileSync(new URL(`../../../example/1-task-data/${name}`, import.meta.url), 'utf-8');
 
 /** 테스트용 최소 CSV 파서 (RFC 4180: 따옴표 안의 쉼표, 줄바꿈, "" 처리). 앱은 M1에서 PapaParse를 쓴다. */
 function parseCsv(text: string): string[][] {

@@ -9,6 +9,7 @@
 
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createMockApi } from '../src/api/mock/handlers';
 import { assembleState } from '../src/api/mock/seedFiles';
 import { readSeedFiles } from '../src/api/mock/seedFromDisk';
@@ -19,8 +20,11 @@ import { createSqliteSnapshot } from './sqliteSnapshot';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '127.0.0.1';
-const DATA_DIR = resolve(process.env.DATA_DIR ?? 'data');
-const DB_PATH = resolve(process.env.DB_PATH ?? 'var/mturk-console.sqlite');
+// data/와 var/는 저장소 루트(prototype/의 상위)에 있다. 호스트의 prototype/에서 실행하든 컨테이너의 /app/prototype에서
+// 실행하든 같은 곳을 보도록, 현재 폴더가 아니라 이 파일의 위치에서 계산한다.
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const DATA_DIR = resolve(process.env.DATA_DIR ?? resolve(REPO_ROOT, 'data'));
+const DB_PATH = resolve(process.env.DB_PATH ?? resolve(REPO_ROOT, 'var/mturk-console.sqlite'));
 // 요청이 너무 빨리 끝나면 로딩 상태를 볼 수 없다 (7.2). 네트워크가 있으므로 브라우저 mock(200~500ms)보다 짧게 둔다.
 const [minDelay = 100, maxDelay = 300] = (process.env.MOCK_DELAY_MS ?? '100-300').split('-').map(Number);
 

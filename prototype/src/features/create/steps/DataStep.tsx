@@ -97,7 +97,7 @@ export default function DataStep({ template, data, check, update, onBack, onNext
     setReading(true);
     try {
       // example/ 폴더의 파일을 그대로 쓴다. 사람이 직접 올려 보는 파일과 버튼이 채우는 내용이 같다.
-      const { default: text } = await import('../../../../example/1-task-data/data.csv?raw');
+      const { default: text } = await import('../../../../../example/1-task-data/data.csv?raw');
       accept(parseCsv(text, 'data.csv'));
     } catch (error) {
       fail('the sample CSV', error);

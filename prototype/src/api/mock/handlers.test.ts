@@ -1,6 +1,6 @@
 // mock Api의 변경 동작: 검수, 재모집, 게시, 결과, export, worker pool, 가짜 제출 (명세 5.3, 5.4, 7.2, 7.3, 8장)
 
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { majority } from '../../domain/agreement';
 import { judgeAttention } from '../../domain/attention';
@@ -12,7 +12,7 @@ import { createMemorySnapshot } from './snapshot';
 import { MockStore, type StoreState } from './store';
 import { createMockTools } from './tools';
 
-const files = readSeedFiles(resolve(process.cwd(), 'data'));
+const files = readSeedFiles(fileURLToPath(new URL('../../../../data', import.meta.url)));
 const F1 = 'batch-1000001';
 const F3 = 'batch-1000003';
 // F1의 게시 기간(2025-11-08까지)이 지난 뒤. 반려 번복 30일 제한은 테스트마다 따로 다룬다.

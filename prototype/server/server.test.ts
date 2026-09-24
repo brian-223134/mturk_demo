@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHttpClient } from '../src/api/http/client';
@@ -17,7 +18,7 @@ import { createMockTools } from '../src/api/mock/tools';
 import { createRequestHandler } from './app';
 import { createSqliteSnapshot } from './sqliteSnapshot';
 
-const files = readSeedFiles(resolve(process.cwd(), 'data'));
+const files = readSeedFiles(fileURLToPath(new URL('../../data', import.meta.url)));
 const F1 = 'batch-1000001';
 const cleanups: (() => void | Promise<void>)[] = [];
 

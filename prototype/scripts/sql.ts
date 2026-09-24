@@ -5,9 +5,11 @@
 //   npm run sql                          (인자가 없으면 테이블별 행 수)
 
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
-const dbPath = resolve(process.env.DB_PATH ?? 'var/mturk-console.sqlite');
+// 기본 DB 위치는 저장소 루트의 var/ (mock API 서버와 같다)
+const dbPath = resolve(process.env.DB_PATH ?? fileURLToPath(new URL('../../var/mturk-console.sqlite', import.meta.url)));
 const query =
   process.argv.slice(2).join(' ').trim() ||
   ['templates', 'batches', 'hits', 'assignments', 'pools', 'worker_meta']

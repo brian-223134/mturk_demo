@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../types';
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createMockApi } from './handlers';
 import { assembleState } from './seedFiles';
 import { readSeedFiles } from './seedFromDisk';
 import { createMemorySnapshot, type SnapshotBackend } from './snapshot';
 import { MockStore, SNAPSHOT_VERSION, type StoreState } from './store';
 
-const fixtures = readSeedFiles(resolve(process.cwd(), 'data'));
+const fixtures = readSeedFiles(fileURLToPath(new URL('../../../../data', import.meta.url)));
 // 세 batch의 게시 기간이 모두 지난 시점
 const NOW = new Date('2026-09-19T00:00:00Z');
 

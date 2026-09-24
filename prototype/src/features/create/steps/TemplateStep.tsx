@@ -84,7 +84,7 @@ export default function TemplateStep({ draft, update, templates, loading, error,
     setLoadingSample(true);
     try {
       // example/ 폴더의 파일을 그대로 쓴다. 사람이 직접 올려 보는 파일과 버튼이 채우는 내용이 같다.
-      const { default: html } = await import('../../../../example/1-task-data/template.html?raw');
+      const { default: html } = await import('../../../../../example/1-task-data/template.html?raw');
       // 시연을 반복해도 같은 템플릿이 계속 쌓이지 않게, 이미 저장된 예시가 있으면 그것을 덮어쓴다
       const existing = templates?.find((t) => t.name === SAMPLE_TEMPLATE_NAME);
       update({

@@ -6,11 +6,13 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { splitState } from '../src/api/mock/seedFiles';
 import { writeSeedFiles } from '../src/api/mock/seedFromDisk';
 import { parseStateFile } from '../src/api/mock/tools';
 
-const [source, target = 'data'] = process.argv.slice(2);
+// 대상 폴더를 주지 않으면 저장소 루트의 data/ (prototype/의 상위)
+const [source, target = fileURLToPath(new URL('../../data', import.meta.url))] = process.argv.slice(2);
 if (!source) {
   console.error('usage: npm run data:unpack -- <exported.json> [data dir]');
   process.exit(1);

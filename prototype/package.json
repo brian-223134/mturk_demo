@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "fixtures": "python3 scripts/build_fixtures.py",
+    "fixtures": "python3 ../scripts/build_fixtures.py",
     "data:unpack": "tsx scripts/unpack-state.ts",
     "sql": "tsx scripts/sql.ts"
   },

@@ -1,5 +1,8 @@
 # MTurk Console (mock)
 #
+# 프로토타입 콘솔(React)과 mock API 서버는 prototype/ 아래에 있다 (Dockerfile도 prototype/Dockerfile). 빌드 컨텍스트는
+# data/와 example/을 함께 복사하기 위해 저장소 루트로 두고, 이미지 안에서도 같은 배치(/app/prototype, /app/data)를 유지한다.
+#
 #   docker compose up --build              web + api   → http://localhost:8080   (시연용. 데이터는 SQLite에 남는다)
 #   docker compose --profile dev up dev    dev + api   → http://localhost:5173   (Vite HMR)
 #   docker compose --profile mock up web-mock          → http://localhost:8081   (서버 없이 브라우저만으로. 비상용)
@@ -22,6 +25,7 @@ services:
   api:
     build:
       context: .
+      dockerfile: prototype/Dockerfile
       target: api
     image: mturk-console:api
     environment:
@@ -39,6 +43,7 @@ services:
   web:
     build:
       context: .
+      dockerfile: prototype/Dockerfile
       target: web
       args:
         VITE_API_MODE: http
@@ -56,6 +61,7 @@ services:
     profiles: [mock]
     build:
       context: .
+      dockerfile: prototype/Dockerfile
       target: web
       args:
         VITE_API_MODE: mock
@@ -67,6 +73,7 @@ services:
     profiles: [dev]
     build:
       context: .
+      dockerfile: prototype/Dockerfile
       target: dev
     image: mturk-console:dev
     depends_on:
@@ -83,21 +90,22 @@ services:
     volumes:
       # 소스만 mount한다. 프로젝트 전체를 mount하면 macOS에서 설치한 node_modules가 컨테이너의
       # Linux용 node_modules를 덮어써서 rolldown 같은 네이티브 바이너리가 깨진다.
-      - ./src:/app/src
+      - ./prototype/src:/app/prototype/src
       - ./example:/app/example
-      - ./index.html:/app/index.html
-      - ./vite.config.ts:/app/vite.config.ts:ro
+      - ./prototype/index.html:/app/prototype/index.html
+      - ./prototype/vite.config.ts:/app/prototype/vite.config.ts:ro
 
   test:
     profiles: [test]
     build:
       context: .
+      dockerfile: prototype/Dockerfile
       target: test
     image: mturk-console:test
     volumes:
       # 이미지를 다시 빌드하지 않아도 지금 작업 중인 코드와 데이터로 테스트한다
-      - ./src:/app/src:ro
-      - ./server:/app/server:ro
+      - ./prototype/src:/app/prototype/src:ro
+      - ./prototype/server:/app/prototype/server:ro
       - ./data:/app/data:ro
       - ./example:/app/example:ro
 

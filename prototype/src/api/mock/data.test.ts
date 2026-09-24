@@ -1,12 +1,12 @@
 // data/ 폴더(scripts/build_fixtures.py의 출력)가 설계 명세 7.1과 맞는지, 그리고 data/ ↔ 상태 변환이 맞는지 확인한다.
 
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { extractPlaceholders } from '../../domain/template';
 import { SeedError, assembleState, serializeSeedFile, splitState } from './seedFiles';
 import { readSeedFiles } from './seedFromDisk';
 
-const files = readSeedFiles(resolve(process.cwd(), 'data'));
+const files = readSeedFiles(fileURLToPath(new URL('../../../../data', import.meta.url)));
 const NOW = new Date('2026-09-19T00:00:00Z');
 // data/에는 attention 판정이 없다. 올릴 때 계산된다.
 const fixtures = assembleState(structuredClone(files), NOW);
