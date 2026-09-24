@@ -1,7 +1,13 @@
 """콘솔 REST. 경로 표(app/routes.py)의 모든 경로를 등록한다.
 
-이번 단계에서 실제로 동작하는 것: health, listTemplates, getTemplate, listBatches, getBatch, getAccount.
-나머지는 501 NOT_IMPLEMENTED 봉투를 돌려주는 stub 이라, 화면이 "아직 없는 기능"을 알아볼 수 있다.
+핸들러는 화면별 모듈에 있고, 각 모듈이 자기 몫의 IMPLEMENTED(경로 이름 → 핸들러)를 내놓는다. 여기서는 그것을 합쳐 경로 표의
+이름·경로·operationId 로 등록한다. 경로 표에 있는데 어느 모듈도 구현하지 않은 이름이 있으면 501 NOT_IMPLEMENTED stub 을 붙인다
+(지금은 그런 경로가 없다).
+
+    console.py   health, listTemplates, getTemplate, listBatches, getBatch, getAccount
+    create.py    saveTemplate, deleteTemplate, createBatch, listPools
+    manage.py    listHits, getHit, listAssignments, approveAssignments, rejectAssignments, addAssignments, expireBatch, getResults, exportBatch
+    workers.py   listWorkers, getWorker, updateWorkerNote, createPool, addWorkersToPool, removeWorkersFromPool, blockWorkers, unblockWorkers
 
 batch 요약(BatchSummary, BatchDetail)은 prototype/src/api/mock/handlers.ts 의 summarizeBatch 와 같은 계산이다:
 HIT 별 진행률(app/domain/progress.py) → batch 상태, needsReview, 진행률 합계, 비용(app/domain/cost.py).
@@ -18,6 +24,7 @@ from app.db import Database
 from app.domain.cost import batch_cost, uses_masters
 from app.domain.progress import AssignmentCounts, HitProgress, batch_status, hit_progress, is_expired, summarize_progress
 from app.errors import ApiError, not_found
+from app.routers import create, manage, workers
 from app.routes import API_PREFIX, API_ROUTES, RouteDef, fastapi_path
 
 
@@ -101,6 +108,9 @@ IMPLEMENTED: dict[str, Callable] = {
     "listBatches": list_batches,
     "getBatch": get_batch,
     "getAccount": get_account,
+    **create.IMPLEMENTED,
+    **manage.IMPLEMENTED,
+    **workers.IMPLEMENTED,
 }
 
 

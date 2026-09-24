@@ -113,3 +113,12 @@ def batch_cost(hits: list[dict], reward: str, masters: bool) -> dict:
 def format_cents(cents: float) -> str:
     """달러 표시. JS 의 toFixed(2) 처럼 센트 단위에서 0.5 를 올려 반올림한다 (2.4 센트 → $0.02, 12.5 센트 → $0.13)."""
     return f"${math.floor(cents + 0.5) / 100:.2f}"
+
+
+def unit_cost_cents(reward: str, hit_max_assignments: int, masters: bool) -> float | int:
+    """assignment 1건의 값 (reward + 수수료). HIT 의 MaxAssignments 에 따라 수수료율이 달라진다 (handlers.ts 의 unitCostCents).
+
+        unit_cost_cents("0.05", 3, False) == 6,  unit_cost_cents("0.10", 3, False) == 12,  unit_cost_cents("0.05", 10, False) == 7
+    """
+    reward_cents = reward_to_cents(reward)
+    return js_number(reward_cents + fee_cents_per_assignment(reward_cents, fee_percent(hit_max_assignments, masters)))

@@ -2,7 +2,7 @@
 
 routes.ts 는 실제 백엔드의 계약서다. 두 표가 어긋나면 화면(frontend)이 부르는 경로와 서버가 받는 경로가 달라지므로,
 이름, 메서드, 경로, 인자 순서를 모두 비교하고, 표의 경로가 전부 FastAPI 앱에 등록되어 있는지(OpenAPI 문서와 실제 요청으로),
-mock 환경 전용 MOCK_ROUTES 는 등록되어 있지 않은지도 본다.
+mock 환경 전용 MOCK_ROUTES 는 등록되어 있지 않은지도 본다. 경로 표의 어느 경로도 501 stub 으로 남아 있지 않은지도 확인한다.
 """
 
 from __future__ import annotations
@@ -58,7 +58,8 @@ def test_fastapi_path_conversion() -> None:
 
 
 def test_every_table_route_is_registered(app: FastAPI, client: TestClient) -> None:
-    """표의 모든 경로가 /api 아래에 같은 메서드와 이름(operationId)으로 등록되어 있고, 실제 요청도 라우터가 받는다. health 도 있다."""
+    """표의 모든 경로가 /api 아래에 같은 메서드와 이름(operationId)으로 등록되어 있고, 실제 요청도 라우터가 받으며, 어느 경로도
+    501 NOT_IMPLEMENTED stub 이 아니다. health 도 있다."""
     paths = app.openapi()["paths"]
     for name, route in API_ROUTES.items():
         path = API_PREFIX + fastapi_path(route.path)
@@ -66,7 +67,9 @@ def test_every_table_route_is_registered(app: FastAPI, client: TestClient) -> No
         operation = paths[path].get(route.method.lower())
         assert operation is not None, f"{name}: {route.method} {path} is not registered"
         assert operation["operationId"] == name
-        assert not is_unrouted(probe(client, route.method, path)), f"{name}: {route.method} {path} is not routed"
+        response = probe(client, route.method, path)
+        assert not is_unrouted(response), f"{name}: {route.method} {path} is not routed"
+        assert response.status_code != 501, f"{name}: {route.method} {path} still answers 501 NOT_IMPLEMENTED"
     assert "get" in paths[f"{API_PREFIX}/health"]
     assert client.get(f"{API_PREFIX}/health").status_code == 200
 

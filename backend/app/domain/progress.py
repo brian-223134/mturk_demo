@@ -118,3 +118,39 @@ def summarize_progress(hits: list[HitProgress]) -> dict:
         "open": sum(h.open for h in hits),
         "rejectRate": reject_rate(approved, rejected),
     }
+
+
+# ---- 재모집 --------------------------------------------------------------------------------------
+# progress.test.ts 'planTopUp' 의 기대값:
+#     plan_top_up(3, 3, shortfall 2, "fill-to-target") == TopUpPlan(2)
+#     plan_top_up(3, 3, shortfall 0, "fill-to-target") == TopUpPlan(0, "No shortfall: …")
+#     plan_top_up(6, 6, shortfall 0, 4)  → add 0, reason "MTurk limit: … cannot exceed 9 (now 6, requested +4)."
+#     plan_top_up(10, 10, shortfall 0, 5) == TopUpPlan(5)     (처음부터 10 이상이면 상한이 없다)
+
+MAX_TOTAL_WHEN_CREATED_UNDER_10 = 9   # 처음에 10 미만으로 만든 HIT 는 추가해도 합계가 10 이상이 될 수 없다 (MTurk 제약)
+HIGH_VOLUME_THRESHOLD = 10
+
+
+@dataclass(frozen=True)
+class TopUpPlan:
+    add: int                   # 0 이면 건너뛴다
+    reason: str | None = None  # 건너뛴 사유
+
+
+def plan_top_up(max_assignments: int, initial_max_assignments: int, shortfall: int, mode: int | str) -> TopUpPlan:
+    """HIT 1개에 assignment 를 몇 개 추가할지. mode 가 숫자면 그만큼, 'fill-to-target' 이면 부족분만큼.
+
+    상한을 넘으면 일부만 추가하지 않고 그 HIT 를 건너뛴다 (일부만 추가해도 목표를 채울 수 없다).
+    """
+    requested = shortfall if mode == "fill-to-target" else mode
+    if isinstance(requested, bool) or not isinstance(requested, (int, float)) or requested != int(requested) or requested < 0:
+        raise ValueError(f"Invalid number of assignments to add: {mode}")
+    requested = int(requested)
+    if requested == 0:
+        return TopUpPlan(0, "No shortfall: open and submitted assignments already cover the target.")
+    if initial_max_assignments < HIGH_VOLUME_THRESHOLD:
+        room = MAX_TOTAL_WHEN_CREATED_UNDER_10 - max_assignments
+        if requested > room:
+            return TopUpPlan(0, f"MTurk limit: a HIT created with fewer than 10 assignments cannot exceed "
+                                f"{MAX_TOTAL_WHEN_CREATED_UNDER_10} (now {max_assignments}, requested +{requested}).")
+    return TopUpPlan(requested)

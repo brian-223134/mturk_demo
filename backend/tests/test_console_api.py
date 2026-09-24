@@ -1,4 +1,5 @@
-"""콘솔 REST (/api/…). data/ 로 seed 한 앱의 응답이 프로토타입 mock API 와 같은지 확인한다.
+"""콘솔 REST (/api/…) 의 기본 조회: health, 템플릿, batch 목록과 상세, 계정, 오류 봉투. data/ 로 seed 한 앱의 응답이 프로토타입
+mock API 와 같은지 확인한다. 화면별 경로는 test_create_api.py, test_manage_api.py, test_workers_api.py 에 있다.
 
 batch 의 기대값은 backend/README.md 의 확인 결과와 프로토타입의 data.test.ts, handlers.test.ts 에서 온 것이다:
     batch-1000001  40 HIT, assignment 132 (Approved 108, Rejected 18, Submitted 6), $0.05, 만료됨 → expired, needsReview
@@ -122,22 +123,18 @@ def test_get_batch(client: TestClient) -> None:
     assert missing.json() == {"error": {"code": "NOT_FOUND", "message": "Batch not found: batch-0"}}
 
 
-def test_stubs_answer_501(client: TestClient) -> None:
-    """경로 표에 있지만 아직 구현하지 않은 경로는 모두 501 NOT_IMPLEMENTED 봉투를 돌려준다."""
-    stubs = [name for name in API_ROUTES if name not in IMPLEMENTED]
-    assert len(stubs) == len(API_ROUTES) - 5
-    for name in stubs:
-        route = API_ROUTES[name]
+def test_every_table_route_is_implemented(client: TestClient) -> None:
+    """경로 표의 모든 경로가 구현되어 있다: IMPLEMENTED 가 표를 다 덮고, 어떤 경로도 501 NOT_IMPLEMENTED 를 내지 않는다."""
+    assert set(IMPLEMENTED) == set(API_ROUTES)
+    for name, route in API_ROUTES.items():
         url = API_PREFIX + fastapi_path(route.path).format(**{param: "x" for param in _params(route.path)})
         if route.method in ("POST", "PUT"):
             response = client.request(route.method, url, json={})
         else:
             response = client.request(route.method, url)
-        assert response.status_code == 501, (name, url, response.text)
-        body = response.json()
-        assert body["error"]["code"] == "NOT_IMPLEMENTED", name
-        assert name in body["error"]["message"], name
-        assert route.path.split("/:")[0] in body["error"]["message"], name
+        assert response.status_code != 501, (name, url, response.text)
+        if response.status_code >= 400:
+            assert response.json()["error"]["code"] in ("INVALID_REQUEST", "NOT_FOUND"), (name, response.text)
 
 
 def _params(path: str) -> list[str]:

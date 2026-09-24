@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from pathlib import Path
@@ -71,3 +72,61 @@ def wait_for_job(client: TestClient, job_id: str, timeout: float = 30.0) -> dict
 
 def step_statuses(job: dict) -> dict[str, str]:
     return {step["name"]: step["status"] for step in job["steps"]}
+
+
+# ---- 콘솔 REST 테스트의 공통 도구 ----------------------------------------------------------------
+
+F1 = "batch-1000001"   # pilot close-ended chunk-fact: 40 HIT, Submitted 6, Approved 108, Rejected 18, 만료됨, reference majority
+F2 = "batch-1000002"   # open-ended query-fact coverage (model B): 16 HIT, reference column
+F3 = "batch-1000003"   # close-ended query-fact coverage (model A): 16 HIT, reference column
+
+# handlers.test.ts 의 SETTINGS
+SETTINGS = {
+    "Title": "Sentence-passage relevance",
+    "Description": "Read a passage and judge sentences.",
+    "Keywords": "English, Reading",
+    "Reward": "0.10",
+    "MaxAssignments": 3,
+    "AssignmentDurationInSeconds": 1800,
+    "LifetimeInSeconds": 30 * 24 * 3600,
+    "AutoApprovalDelayInSeconds": 30 * 24 * 3600,
+    "QualificationRequirements": [],
+}
+
+
+def list_query(page: int = 1, page_size: int = 25, sort: str | None = None, filters: dict | None = None) -> dict:
+    """ListQuery 를 routes.ts 의 규칙대로 query string 인자로 (sort=필드:방향, filters=JSON)."""
+    query: dict = {"page": page, "pageSize": page_size}
+    if sort:
+        query["sort"] = sort
+    if filters:
+        query["filters"] = json.dumps(filters)
+    return query
+
+
+def sample_batch_request(client: TestClient, rows: int = 10) -> dict:
+    """handlers.test.ts 의 sampleBatchRequest: 템플릿을 하나 저장하고 그 템플릿으로 게시 요청을 만든다."""
+    template = client.post("/api/templates", json={
+        "name": "Sample relevance",
+        "html": "<html><head></head><body><script>var d = window.TASK_DATA;</script></body></html>",
+    }).json()
+    return {
+        "name": "demo batch",
+        "templateId": template["id"],
+        "inputColumns": ["item_id", "passage"],
+        "rows": [{"item_id": f"s{i}", "passage": f"passage {i}"} for i in range(rows)],
+        "settings": SETTINGS,
+        "attentionRule": {"namePrefix": "attention_", "expectedValue": "not_grounded", "minCorrectRatio": 1},
+        "requiredPoolIds": [],
+        "excludedPoolIds": [],
+        "answerSchema": [
+            {"name": "general_1", "values": ["grounded", "not_grounded"]},
+            {"name": "attention_1", "values": ["grounded", "not_grounded"]},
+        ],
+    }
+
+
+def error_of(response) -> tuple[int, str, str]:
+    """(상태, code, message)."""
+    body = response.json()
+    return response.status_code, body["error"]["code"], body["error"]["message"]
