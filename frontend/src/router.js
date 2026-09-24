@@ -2,51 +2,25 @@
 // 같은 origin 의 <a href="/…"> 클릭은 가로채 pushState 로 처리하고, 뒤로/앞으로(popstate)도 같은 dispatch 를 탄다.
 // 페이지가 fetch 를 기다리는 동안 다른 곳으로 이동하면 signal 이 abort 되므로, 페이지는 await 뒤에 signal.aborted 를 확인한다.
 // render 가 함수를 돌려주면 다음 이동 때 그 함수를 불러 준다 (폴링 타이머 정리 등).
+// 패턴 컴파일과 매칭은 router-match.js 에 있다 (DOM 없이 테스트할 수 있도록 분리).
 
 import { el } from './components/dom.js';
 import { errorNotice } from './components/notice.js';
+import { compilePattern, matchRoute } from './router-match.js';
 
 const routes = [];
 let container = null;
 let onNavigate = () => {};
 let current = { abort: null, cleanup: null };
 
-function compile(pattern) {
-  const keys = [];
-  const source = pattern
-    .split('/')
-    .map((segment) => {
-      if (segment.startsWith(':')) {
-        keys.push(segment.slice(1));
-        return '([^/]+)';
-      }
-      return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    })
-    .join('/');
-  return { regex: new RegExp(`^${source}/?$`), keys };
-}
-
 /** route('/manage/:batchId', module.render, { tab: 'manage' }) 또는 route('/', null, { redirect: '/create' }) */
 export function route(pattern, handler, meta = {}) {
-  routes.push({ ...compile(pattern), handler, meta });
+  routes.push({ ...compilePattern(pattern), handler, meta });
 }
 
 export function configure(options) {
   container = options.container;
   onNavigate = options.onNavigate ?? onNavigate;
-}
-
-function match(pathname) {
-  for (const r of routes) {
-    const m = r.regex.exec(pathname);
-    if (!m) continue;
-    const params = {};
-    r.keys.forEach((key, i) => {
-      params[key] = decodeURIComponent(m[i + 1]);
-    });
-    return { ...r, params };
-  }
-  return null;
 }
 
 export function navigate(path, { replace = false } = {}) {
@@ -67,7 +41,7 @@ function notFound(pathname) {
 
 async function dispatch() {
   const pathname = location.pathname;
-  const found = match(pathname);
+  const found = matchRoute(routes, pathname);
   if (found?.meta.redirect) {
     navigate(found.meta.redirect, { replace: true });
     return;

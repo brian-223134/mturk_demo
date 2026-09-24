@@ -27,10 +27,18 @@ frontend/
 ├─ Dockerfile              nginx:stable-alpine. nginx.conf.template 과 src/ 를 복사합니다 (빌드 컨텍스트는 저장소 루트)
 ├─ nginx.conf.template     listen 80, /api/ 프록시(${API_UPSTREAM}), SPA fallback, no-cache
 ├─ README.md
+├─ tests/                 node --test 로 도는 단위 테스트 (아래 "테스트")
+│  ├─ helpers/routes-ts.js  routes.ts 의 경로 표를 정규식으로 읽는 도우미
+│  ├─ routes.test.js      경로 표 대조와 encodeRequest
+│  ├─ client.test.js      fetch 를 가짜로 바꾼 API 클라이언트 검사
+│  ├─ format.test.js      표시 도우미
+│  ├─ dom.test.js         escapeHtml, join, el
+│  └─ router.test.js      경로 패턴 매칭
 └─ src/
    ├─ index.html           루트 요소 하나와 <script type="module" src="/main.js">
    ├─ main.js              레이아웃을 그리고 라우터에 페이지를 등록합니다
    ├─ router.js            history API 라우터. /create, /manage, /manage/:batchId(/:tab), /workers. / 는 /create 로 보냅니다
+   ├─ router-match.js      경로 패턴 → 정규식(compilePattern), 경로에 맞는 route 찾기(matchRoute). DOM 을 쓰지 않아 Node 에서 테스트합니다
    ├─ styles.css           밝은 테마. 배지 색은 mock 회색, sandbox 파랑, production 빨강
    ├─ api-client/          (api/ 가 아닌 이유: /api/ 는 nginx 가 backend 로 넘기는 경로라 정적 파일과 겹칩니다)
    │  ├─ routes.js         REST 경로 표(API_ROUTES)와 agent job 경로(AGENT_ROUTES), 요청 인코딩(encodeRequest)
@@ -78,4 +86,18 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 아직 없는 것은 다음과 같습니다. batch 게시 마법사(템플릿 편집, CSV 검사, 미리보기), 검수(승인, 반려, 재모집), 만료와 export, worker 선택과 pool 편집, 차단, worker 상세입니다. 화면의 해당 자리에 "come in a later phase"로 표시해 두었습니다.
 
-`frontend/tests/`는 다음 단계에서 추가합니다. 지금은 `docker compose` 로 띄운 뒤 브라우저로 확인합니다.
+## 테스트
+
+`frontend/tests/`는 Node의 내장 test runner(`node --test`)와 `node:assert`만 씁니다. npm 의존성과 package.json이 없고, compose의 `frontend-test` 서비스가 `node:24-slim` 이미지에 `frontend/`와 프로토타입의 경로 표(`prototype/src/api/http/routes.ts`)를 읽기 전용으로 mount해 실행합니다. 이미지를 빌드하지 않으므로 파일을 고친 뒤 바로 다시 돌리면 됩니다.
+
+```
+docker compose run --rm frontend-test
+```
+
+테스트는 `src/`의 모듈을 그대로 import합니다. 부를 때 `document`나 `window`가 필요한 모듈(`pages/`, `layout.js`, `router.js`의 이동 부분)은 여기서 다루지 않고 브라우저로 확인합니다.
+
+- `routes.test.js`: `API_ROUTES`가 `routes.ts`의 표와 키 순서, 메서드, 경로, 인자 순서까지 같은지, mock 전용 경로가 없는지, `AGENT_ROUTES`의 다섯 경로가 맞는지, 그리고 `encodeRequest`가 경로 인자, `q`(page, pageSize, sort, filters), 이름 있는 인자의 JSON body, `body` 인자, DELETE, multipart를 규칙대로 싣는지 확인합니다. `helpers/routes-ts.js`가 TS 파일을 컴파일하지 않고 정규식으로 표를 읽습니다.
+- `client.test.js`: `globalThis.fetch`를 가짜로 바꿔 `call()`과 `api.<route>()`가 보내는 메서드, URL, 헤더, body를 확인하고, 200 JSON, 204, 오류 봉투(501 `NOT_IMPLEMENTED`, 404 `NOT_FOUND`, 모르는 code), JSON이 아닌 502, fetch 자체의 실패가 각각 어떤 값이나 `ApiError`가 되는지 봅니다. `isApiError`, `createJob(formData)`(multipart, JSON Content-Type 없음), `fileUrl`도 확인합니다.
+- `format.test.js`: `formatCents`, `formatPercent`, `formatDateTime`/`formatDate`(TZ를 UTC로 고정), `formatDurationSeconds`, `formatElapsed`, `EMPTY` 등 표시 도우미를 확인합니다.
+- `dom.test.js`: `escapeHtml`, `join`과, 아주 작은 가짜 `document`를 넣은 `el`/`append`/`clear`의 속성과 자식 처리를 확인합니다.
+- `router.test.js`: `router-match.js`의 `compilePattern`과 `matchRoute`가 main.js의 패턴(`/manage/:batchId/:tab` 등)에 경로를 맞추고 params를 뽑는지, 맞지 않는 경로는 null인지 확인합니다.
