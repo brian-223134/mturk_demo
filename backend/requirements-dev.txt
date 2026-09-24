@@ -1,0 +1,8 @@
+# backend 테스트에만 필요한 패키지 목록이다. backend/Dockerfile 의 test stage 가 실행 이미지(runtime stage) 위에 이 파일로
+# 설치하므로 테스트 이미지(mturk-console:backend-test)에만 들어가고, 실행 이미지와 호스트의 Python 에는 설치되지 않는다.
+# 실행에 필요한 패키지는 requirements.txt 에만 적는다.
+
+pytest>=8.4,<10
+# FastAPI 의 TestClient(starlette.testclient)가 쓰는 HTTP 클라이언트. starlette 1.x 는 httpx2 를 먼저 찾고, 예전 httpx 는
+# 되긴 하지만 deprecated 경고를 낸다.
+httpx2>=2,<3

@@ -165,9 +165,16 @@ docker-compose.yml의 `backend` 서비스가 컨테이너 경로로 채워 줍�
 
 ```
 backend/
-├─ Dockerfile            python:3.14-slim. 빌드 컨텍스트는 저장소 루트 (agent/ 와 backend/app 을 함께 복사)
+├─ Dockerfile            python:3.14-slim. runtime stage(실행 이미지)와, 그 위에 requirements-dev.txt 를 더한 test stage.
+│                        빌드 컨텍스트는 저장소 루트 (agent/ 와 backend/app 을 함께 복사)
 ├─ requirements.txt      fastapi, uvicorn[standard], python-multipart, pyyaml
+├─ requirements-dev.txt  pytest, httpx2 (테스트 이미지에만 설치)
+├─ pytest.ini            pytest 설정 (tests/ 폴더, import 경로)
 ├─ README.md
+├─ tests/                pytest 테스트 (아래 "테스트")
+│   ├─ conftest.py       임시 폴더에 DB 와 job 출력을 두고 create_app(Settings(...)) 으로 앱을 만드는 fixture
+│   ├─ helpers.py        저장소 경로, routes.ts 파서, 예시 업로드, job 완료 대기
+│   └─ test_*.py         경로 표, 계산 규칙, seed, 콘솔 REST, agent job API, 오류 봉투
 └─ app/
    ├─ main.py            create_app() 팩토리, 요청 로그 middleware, lifespan (DB 초기화, job worker 시작)
    ├─ settings.py        환경변수 → Settings
@@ -188,9 +195,19 @@ backend/
 
 ## 테스트
 
-`backend/tests/`는 다음 단계에서 추가합니다. 계획은 다음과 같습니다.
+`backend/tests/`는 pytest 테스트입니다. 실행 이미지 위에 `requirements-dev.txt`(pytest, httpx2)만 더 설치한 test stage(`backend/Dockerfile`의 `FROM runtime AS test`)로 만든 이미지에서 돌리므로, 개발 의존성은 그 테스트 이미지에만 들어가고 실행 이미지(`backend` 서비스)와 호스트의 Python 에는 설치되지 않습니다.
 
-- `app/routes.py`가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나 같은지 대조하는 테스트
-- `app/domain/`의 계산 규칙이 프로토타입 테스트의 기대값과 같은지 확인하는 테스트 (docstring에 적어 둔 값)
-- `data/`로 seed 한 뒤 목록과 상세가 프로토타입 mock API의 응답과 같은지 확인하는 테스트
-- 예시(`agent/examples/groundedness/`)로 job을 접수해 `succeeded`까지 가는지, 그리고 400 조건들을 확인하는 테스트
+```bash
+docker compose build backend-test            # 처음 한 번, 그리고 requirements*.txt 를 바꿨을 때
+docker compose run --rm backend-test         # 전체 테스트 (1~2초). 코드와 data/ 는 bind mount 라 다시 빌드할 필요가 없습니다
+docker compose run --rm backend-test pytest -q tests/test_console_api.py -k batches   # 일부만
+```
+
+테스트는 `create_app(Settings(...))`로 앱을 만들되 SQLite 와 job 출력은 pytest 의 임시 폴더에 두고, 시작 데이터는 저장소의 `data/`, 모델 설정은 `environment/models/`를 읽습니다. `environment/.env`는 읽지 않고(임시 env 파일을 씁니다) OpenRouter 는 부르지 않습니다 (`AGENT_ALLOW_API=0`). 경로는 파일 위치에서 저장소 루트를 찾아 정하므로 컨테이너에서도, 호스트에서 `backend/`로 들어가 `pytest`를 돌려도 같습니다. 파일마다 다루는 것은 다음과 같습니다.
+
+- `test_routes_table.py`: `app/routes.py`의 경로 표가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나(이름, 메서드, 경로, 인자 순서) 같은지, 표의 모든 경로가 앱에 등록되어 있는지, `MOCK_ROUTES`는 등록되어 있지 않은지 확인합니다.
+- `test_domain.py`: `app/domain/`의 진행률, 비용, attention 계산이 프로토타입 테스트(`prototype/src/domain/*.test.ts`)의 기대값과 같은지 확인합니다.
+- `test_seed_db.py`: `data/`로 seed 한 규모(templates 2, batches 3, hits 72, assignments 231, pools 2, workers 60), 처음 켤 때 `seed`이고 같은 DB 파일을 다시 열면 `snapshot`인 것, 깨진 seed 폴더(임시 사본에서 파일을 지운 것)에서 `SeedError`가 나는 것을 확인합니다.
+- `test_console_api.py`: health, 템플릿 목록과 상세, batch 목록과 상세의 상태·`needsReview`·진행률·비용, 계정, 없는 자원과 없는 경로의 404, 구현하지 않은 모든 경로의 501, 잘못된 입력의 400 봉투를 확인합니다.
+- `test_agent_jobs_api.py`: 모델 목록, 예시(`agent/examples/groundedness/`)로 접수한 job 이 `succeeded`까지 가는 것(단계, 파일 9개, 검증, 요약)과 결과 파일 내려받기, 400 조건들(raw 없음, spec 도 prompt 도 없음, LLM 호출 불허, 잘못된 spec), spec 이 원본과 맞지 않을 때 `preprocess`에서 `failed`가 되는 것, `prompt_text`, 다른 앱이 같은 출력 폴더를 열어도 job 이 남는 것을 확인합니다.
+- `test_errors.py`: 오류 봉투(`ApiError`의 code → 상태 코드, 검증 오류 422 → 400, 없는 경로와 다른 메서드 → 404, 그 밖의 예외 → 500)를 작은 임시 앱으로 확인합니다.

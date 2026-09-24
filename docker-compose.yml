@@ -23,6 +23,8 @@
 #                                                                          ├─▶ SQLite (volume "backend-db"), 처음 한 번 ./data 로 채움
 #                                                                          └─▶ agent/ (import) → ./output/jobs/<job id>/
 #   API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api    frontend 를 prototype 의 mock API 에 붙여 본다
+#   docker compose run --rm backend-test                backend 테스트 (pytest, 테스트 이미지 안에만 설치)
+#   docker compose run --rm frontend-test               frontend 테스트 (node:test, npm 의존성 없음)
 #
 # 처음 상태로 완전히 돌리려면: 화면의 Mock tools → Reset to fixtures, 또는 `docker compose down -v` (DB volume 삭제).
 
@@ -174,6 +176,32 @@ services:
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
 
+  # backend 의 pytest 테스트 (backend/tests). 실행 이미지 위에 backend/requirements-dev.txt(pytest, httpx2)만 더 설치한
+  # backend/Dockerfile 의 test stage 로 만든다. 코드(backend/, agent/)와 data/, 모델 설정, 그리고 대조용으로 읽는 prototype 의
+  # 경로 표(routes.ts)와 domain 테스트는 읽기 전용 bind mount 라 고쳐도 다시 빌드할 필요가 없다 (requirements*.txt 를 바꿨을 때만).
+  # SQLite 와 job 출력은 pytest 의 임시 폴더(/tmp, tmpfs)에 만들고, OpenRouter 는 부르지 않는다 (AGENT_ALLOW_API=0 고정).
+  #   docker compose build backend-test
+  #   docker compose run --rm backend-test                          전체
+  #   docker compose run --rm backend-test pytest -q tests/test_console_api.py   일부만
+  backend-test:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: test
+    image: mturk-console:backend-test
+    environment:
+      AGENT_ALLOW_API: "0"
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./agent:/app/agent:ro
+      - ./data:/app/data:ro
+      - ./environment/models:/app/environment/models:ro
+      - ./prototype/src/api/http/routes.ts:/app/prototype/src/api/http/routes.ts:ro
+      - ./prototype/src/domain:/app/prototype/src/domain:ro
+    tmpfs:
+      # pytest 의 tmp_path (DB, job 출력, data/ 의 깨진 사본)
+      - /tmp
 
   # vanilla JS 화면. 빌드 단계가 없어 frontend/src 를 그대로 서빙하고, /api 는 backend 로 넘긴다.
   # 개발 중에는 bind mount 로 파일을 고치면 새로고침만으로 반영된다. API_UPSTREAM 을 바꾸면 prototype 의 mock API 에도 붙는다.
