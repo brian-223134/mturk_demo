@@ -67,10 +67,11 @@ npm test && npm run typecheck
 | `frontend` | http://localhost:3000 | vanilla JavaScript 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api`를 `backend`로 전달합니다. |
 | `backend` | http://localhost:8000/api/health | FastAPI 백엔드입니다. 프로토타입의 REST 경로 표를 같은 경로, 같은 JSON으로 구현하고, `agent/`를 import해 `/api/agent/jobs`로 노출합니다. |
 
-이번 단계에서 동작하는 것은 다음과 같습니다.
+production 뼈대에서 되는 것은 다음과 같습니다.
 
-- Manage의 batch 목록과 Overview, 상단 바의 환경 배지와 잔액, Create의 저장된 템플릿 목록입니다. 아직 없는 기능(검수, HIT 목록, worker 목록 등)은 backend가 501을 돌려주고, 화면은 `Not implemented in the backend yet`으로 표시합니다.
-- Create의 **Generate from raw data**입니다. 원본 데이터(JSON, JSONL, CSV)와 prompt, 필요하면 task spec을 올리면 backend가 agent 파이프라인을 돌려 `hits.csv`, `template.html`, `settings.json`을 만듭니다. 화면에서 단계별 진행과 검증 결과를 보고 파일을 내려받습니다. spec 없이 LLM으로 spec을 만들려면 화면의 OpenRouter 스위치와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다.
+- backend는 프로토타입 REST 경로 표의 경로를 모두 구현했고, 같은 시작 데이터에 대해 프로토타입 mock API와 같은 응답을 돌려줍니다.
+- 화면은 프로토타입의 세 탭을 모두 옮겼습니다. Create는 Template → Data → Settings → Preview & Cost → Publish 5단계 마법사이고, Template 단계에서 저장된 템플릿 선택, HTML 업로드·붙여넣기, **Generate from raw data** 세 방식 중 고릅니다. Generate는 원본 데이터(JSON, JSONL, CSV)와 prompt, 필요하면 task spec을 올리면 backend가 agent 파이프라인을 돌려 템플릿과 HIT CSV, 설정을 만들고, `Use this result`로 마법사에 채웁니다. spec 없이 LLM으로 spec을 만들려면 화면의 OpenRouter 스위치와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다.
+- 아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, 검수 화면은 시작 데이터의 batch로 확인합니다.
 
 실행 방법과 API는 [backend/README.md](backend/README.md)에, 화면 구성은 [frontend/README.md](frontend/README.md)에 정리되어 있습니다. 테스트는 각 폴더의 `tests/`에 있으며 `docker compose run --rm backend-test`와 `docker compose run --rm frontend-test`로 실행합니다.
 
