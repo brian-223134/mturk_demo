@@ -1,0 +1,9 @@
+# backend 가 쓰는 외부 패키지 목록이다. backend/Dockerfile 이 이 파일로 설치하므로 컨테이너 안에만 설치되고,
+# 호스트의 Python 에는 아무것도 설치하지 않는다. 외부 패키지가 필요해지면 여기에만 적는다.
+
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+# multipart/form-data 업로드 (POST /api/agent/jobs)
+python-multipart>=0.0.9,<1
+# agent 가 모델 설정 yaml(environment/models/*.yaml)을 읽는 데 쓴다 (agent/requirements.txt 와 같은 조건)
+pyyaml>=6,<7

@@ -17,6 +17,13 @@
 #                                                          ▲ 처음 한 번, 그리고 Reset to fixtures 때
 #                                                        ./data (JSON + HTML)
 #
+# Production 뼈대 (frontend/, backend/):
+#   docker compose up --build              frontend + backend → http://localhost:3000   (vanilla JS 화면, FastAPI)
+#   브라우저 ──▶ frontend (nginx: frontend/src 정적 파일, /api 프록시) ──▶ backend (FastAPI: 콘솔 REST + agent job API)
+#                                                                          ├─▶ SQLite (volume "backend-db"), 처음 한 번 ./data 로 채움
+#                                                                          └─▶ agent/ (import) → ./output/jobs/<job id>/
+#   API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api    frontend 를 prototype 의 mock API 에 붙여 본다
+#
 # 처음 상태로 완전히 돌리려면: 화면의 Mock tools → Reset to fixtures, 또는 `docker compose down -v` (DB volume 삭제).
 
 name: mturk-console
@@ -135,5 +142,38 @@ services:
       # 모델 설정 yaml
       - ./environment/models:/work/environment/models:ro
 
+  # ── Production 뼈대 ─────────────────────────────────────────────────────────
+  # FastAPI 백엔드. 콘솔 REST(/api/…)는 prototype/src/api/http/routes.ts 의 경로 표를 그대로 구현하고,
+  # agent 파이프라인은 /api/agent/jobs 로 노출한다 (agent/ 를 import). 의존성은 backend/requirements.txt 로 이미지 안에만 설치한다.
+  # 코드는 bind mount 로 쓰므로 고쳐도 다시 빌드할 필요가 없다 (uvicorn --reload). OpenRouter 호출은 AGENT_ALLOW_API=1 일 때만.
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: mturk-console:backend
+    env_file:
+      - path: ./environment/.env
+        required: false
+    environment:
+      AGENT_ALLOW_API: ${AGENT_ALLOW_API:-0}
+      DATA_DIR: /app/data
+      DB_PATH: /app/var/backend.sqlite
+      OUTPUT_DIR: /app/output
+      MODELS_DIR: /app/environment/models
+      ENV_FILE: /app/environment/.env
+    volumes:
+      - ./backend/app:/app/backend/app:ro
+      - ./agent:/app/agent:ro
+      - ./data:/app/data:ro
+      - ./environment/models:/app/environment/models:ro
+      - ./environment/.env:/app/environment/.env:ro
+      # agent job 의 입력과 결과 (output/jobs/<job id>/), gitignore 됨
+      - ./output:/app/output
+      # SQLite. prototype 의 db volume 과 별개다
+      - backend-db:/app/var
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+
 volumes:
   db:
+  backend-db:

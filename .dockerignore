@@ -17,6 +17,9 @@ scripts/fixture_sources.json
 
 # 이미지에 필요 없는 문서와 Docker 설정 자체
 *.md
+# 예외: agent 의 OpenRouter planner 가 실행 시점에 읽는 참고 문서와 예시 prompt 는 backend 이미지에 들어가야 한다
+!agent/spec_reference.md
+!agent/examples/*/prompt.md
 **/Dockerfile
 docker-compose.yml
 .dockerignore
