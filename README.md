@@ -19,10 +19,12 @@ Docker만 설치되어 있으면 됩니다.
 docker compose up --build
 ```
 
-브라우저에서 http://localhost:8080 을 열면 됩니다. 컨테이너 두 개가 실행됩니다.
+브라우저에서 http://localhost:8080 을 열면 프로토타입 콘솔이, http://localhost:3000 을 열면 production 뼈대의 화면이 나옵니다. 컨테이너 네 개가 실행됩니다.
 
-- `web`: 화면을 제공하고 `/api` 요청을 `api`로 전달합니다 (nginx).
-- `api`: mock API 서버입니다 (Node + SQLite). 처음 실행될 때 [data/](data/) 폴더의 내용을 DB에 채웁니다.
+- `web`: 프로토타입 화면을 제공하고 `/api` 요청을 `api`로 전달합니다 (nginx).
+- `api`: 프로토타입의 mock API 서버입니다 (Node + SQLite). 처음 실행될 때 [data/](data/) 폴더의 내용을 DB에 채웁니다.
+- `frontend`: 실제 서비스용 화면(vanilla JavaScript)의 뼈대입니다. `/api` 요청을 `backend`로 전달합니다 (nginx).
+- `backend`: FastAPI 백엔드입니다. 처음 실행될 때 [data/](data/)로 DB를 채우고, agent 파이프라인을 job API로 노출합니다.
 
 승인과 반려, batch 게시, pool 편집 같은 변경 사항은 SQLite에 저장됩니다. 그래서 브라우저나 PC를 바꿔도 같은 상태를 볼 수 있습니다.
 처음 상태로 되돌리려면 화면 오른쪽 위의 **Mock tools → Reset to fixtures**를 누르거나, `docker compose down -v`로 DB를 지웁니다.
@@ -33,7 +35,9 @@ docker compose up --build
 |---|---|
 | `docker compose --profile dev up dev` | 개발용 서버입니다. `prototype/src/`를 고치면 화면에 바로 반영됩니다. http://localhost:5173 |
 | `docker compose --profile mock up web-mock` | API 서버 없이 브라우저만으로 동작하는 버전입니다. http://localhost:8081 |
-| `docker compose run --rm test` | 단위 테스트를 실행합니다. |
+| `docker compose run --rm test` | 프로토타입의 단위 테스트를 실행합니다 (Vitest). |
+| `docker compose run --rm backend-test` | backend의 테스트를 실행합니다 (pytest, 테스트 이미지 안에만 설치). |
+| `docker compose run --rm frontend-test` | frontend의 테스트를 실행합니다 (Node 내장 test runner, npm 의존성 없음). |
 | `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"` | DB의 내용을 SQL로 조회합니다. |
 
 ### 알아 두면 좋은 점
@@ -53,6 +57,22 @@ npm run dev                         # 브라우저만으로 동작 (http://local
 npm run server & npm run dev:http   # mock API 서버와 함께 실행. DB는 저장소 루트의 var/mturk-console.sqlite
 npm test && npm run typecheck
 ```
+
+## Production 뼈대: `frontend/`와 `backend/`
+
+프로토타입으로 확인한 화면과 REST 계약을 실제 서비스용 스택으로 옮기는 중입니다. `docker compose up --build`로 프로토타입과 함께 뜹니다.
+
+| 서비스 | 주소 | 하는 일 |
+|---|---|---|
+| `frontend` | http://localhost:3000 | vanilla JavaScript 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api`를 `backend`로 전달합니다. |
+| `backend` | http://localhost:8000/api/health | FastAPI 백엔드입니다. 프로토타입의 REST 경로 표를 같은 경로, 같은 JSON으로 구현하고, `agent/`를 import해 `/api/agent/jobs`로 노출합니다. |
+
+이번 단계에서 동작하는 것은 다음과 같습니다.
+
+- Manage의 batch 목록과 Overview, 상단 바의 환경 배지와 잔액, Create의 저장된 템플릿 목록입니다. 아직 없는 기능(검수, HIT 목록, worker 목록 등)은 backend가 501을 돌려주고, 화면은 `Not implemented in the backend yet`으로 표시합니다.
+- Create의 **Generate from raw data**입니다. 원본 데이터(JSON, JSONL, CSV)와 prompt, 필요하면 task spec을 올리면 backend가 agent 파이프라인을 돌려 `hits.csv`, `template.html`, `settings.json`을 만듭니다. 화면에서 단계별 진행과 검증 결과를 보고 파일을 내려받습니다. spec 없이 LLM으로 spec을 만들려면 화면의 OpenRouter 스위치와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다.
+
+실행 방법과 API는 [backend/README.md](backend/README.md)에, 화면 구성은 [frontend/README.md](frontend/README.md)에 정리되어 있습니다. 테스트는 각 폴더의 `tests/`에 있으며 `docker compose run --rm backend-test`와 `docker compose run --rm frontend-test`로 실행합니다.
 
 ## 화면 둘러보기
 
@@ -250,10 +270,17 @@ docker compose run --rm agent run <원본> --prompt @<prompt 파일> --spec <spe
 
 ## 폴더 구조
 
-프로토타입 콘솔과 mock API 서버는 `prototype/` 안에 있고, 시작 데이터와 예시 파일, 문서는 저장소 루트에 있습니다.
-실제 서비스용 화면 `frontend/`(vanilla JS)와 백엔드 `backend/`(FastAPI)는 `prototype/` 옆에 폴더를 추가해 만들 예정이며, 아직 없습니다.
+실제 서비스용 화면 `frontend/`와 백엔드 `backend/`, 프로토타입 `prototype/`, 파이프라인 `agent/`가 나란히 있고, 시작 데이터와 예시 파일, 문서는 저장소 루트에 있습니다.
 
 ```
+frontend/           실제 서비스용 화면 (vanilla JavaScript). src/ 를 nginx 가 그대로 서빙합니다
+├─ src/             index.html, main.js, router.js, api-client/(경로 표와 HTTP 클라이언트), pages/, components/, styles.css
+├─ nginx.conf.template  정적 파일과 /api 프록시
+└─ Dockerfile
+backend/            FastAPI 백엔드. 콘솔 REST 와 /api/agent job API
+├─ app/             main.py, routes.py(경로 표), routers/, domain/(진행률·비용 계산), db.py, seed.py, agent_jobs/
+├─ requirements.txt 이미지 안에만 설치하는 의존성
+└─ Dockerfile
 prototype/          프로토타입 콘솔(React + antd)과 mock API 서버. npm 명령은 이 폴더에서 실행합니다
 ├─ src/
 │  ├─ api/
@@ -275,7 +302,7 @@ example/            Create에 올려 볼 예시 템플릿과 CSV
 docs/               Create의 사용 방법, 화면에 나오는 값을 읽는 방법
 environment/        agent의 모델 설정(models/)과 OpenRouter 키를 두는 .env
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
-docker-compose.yml  web, api, dev, test, web-mock, agent 서비스
+docker-compose.yml  web, api, dev, test, web-mock, agent, backend, frontend 서비스
 ```
 
 - 계산 로직은 모두 `prototype/src/domain/`의 순수 함수로 작성했고 단위 테스트가 있습니다.
