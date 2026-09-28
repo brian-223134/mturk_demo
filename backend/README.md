@@ -134,17 +134,22 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 
 | 메서드와 경로 | 하는 일 |
 |---|---|
+| `GET /api/agent/example/raw.json` | Prompt 후보 비교용 합성 raw 예시를 내려받습니다. |
 | `GET /api/agent/models` | 모델 설정 목록입니다. `{"models": [{"name", "model", "api", "provider_tag"}], "default": "<이름>", "api_allowed": bool, "prompt_candidates": [...]}`. `models`는 `MODELS_DIR`의 `*.yaml`을 `agent.config.load_model_config`로 읽은 것이고(읽지 못한 파일은 건너뛰고 로그에 남깁니다), `default`는 `AGENT_MODEL`(환경변수 → `ENV_FILE`)이 가리키는 이름, `api_allowed`는 서버의 `AGENT_ALLOW_API`가 `1`인지입니다. |
 | `POST /api/agent/jobs` | job을 접수합니다 (`multipart/form-data`). 응답은 202 `{"job": <Job>}`입니다. |
 | `GET /api/agent/jobs` | `{"jobs": [<Job>, …]}`. 최신순이며, 서버를 다시 켜기 전에 돌린 job도 `OUTPUT_DIR/jobs/`에서 읽어 함께 보입니다. |
 | `GET /api/agent/jobs/{id}` | `<Job>`. 없으면 404입니다. |
+| `GET /api/agent/jobs/{id}/inputs` | 저장된 raw 참조, prompt 본문, 모델 설정과 spec 유무입니다. |
+| `PUT /api/agent/jobs/{id}/review` | 실행 상태와 별도로 후보의 품질 평가를 저장합니다. |
 | `GET /api/agent/jobs/{id}/files/{name}` | 결과 파일입니다. `job.files`에 있는 이름만 받으며(그 밖의 이름은 404), 확장자에 따라 `Content-Type`을 정하고(`.csv` text/csv, `.html` text/html, `.json` application/json, `.md` text/markdown, `.jsonl` application/x-ndjson) `Content-Disposition: attachment; filename="<name>"`을 붙입니다. |
 
 ### POST /api/agent/jobs 의 필드
 
 | 필드 | 종류 | 설명 |
 |---|---|---|
-| `raw` | 파일, 필수 | 원본 데이터입니다. JSON, JSONL, CSV를 받으며 형식은 agent의 `source.load_records`가 확장자로 정합니다. |
+| `raw` | 파일 | 원본 데이터입니다. JSON, JSONL, CSV를 받으며 형식은 agent의 `source.load_records`가 확장자로 정합니다. `source_job_id`로 재사용하지 않으면 필수입니다. |
+| `source_job_id` | 문자열 | Raw 업로드를 생략하면 이 job의 raw를 복사합니다. Prompt는 새로 전달합니다. |
+| `reuse_spec` | `"true"` / `"false"` | `source_job_id`의 spec도 복사할지입니다. 기본은 false이며 새 spec 업로드와 함께 사용할 수 없습니다. |
 | `prompt` | 파일 | annotation 목적을 적은 prompt(`prompt.md`)입니다. `prompt_text`로 본문을 문자열로 보내도 됩니다. |
 | `prompt_text` | 문자열 | prompt 본문입니다. `prompt` 파일 대신 씁니다. |
 | `spec` | 파일 | 손으로 쓴 `task_spec.json`입니다. 있으면 LLM을 부르지 않고 이 spec을 그대로 씁니다(file planner). 접수할 때 `agent.spec.load_spec`으로 검사해 잘못되어 있으면 400으로 알립니다. |
