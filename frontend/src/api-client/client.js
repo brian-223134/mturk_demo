@@ -82,6 +82,8 @@ export const agent = {
   listModels: () => call('listModels'),
   listJobs: () => call('listJobs'),
   getJob: (id) => call('getJob', [id]),
+  getJobInputs: (id) => call('getJobInputs', [id]),
+  reviewJob: (id, body) => call('reviewJob', [id, body]),
   createJob,
   fileUrl,
 };

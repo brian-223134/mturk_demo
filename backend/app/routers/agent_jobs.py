@@ -13,6 +13,7 @@ prompt 가 필수이고, 요청의 allow_api=true 와 서버의 AGENT_ALLOW_API=
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import shutil
@@ -25,7 +26,7 @@ from starlette.datastructures import UploadFile
 from agent.config import ConfigError, load_model_config, selected_model_name
 from agent.spec import SpecError, load_spec
 
-from app.agent_jobs.models import INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, Job, JobInput, PlannerInfo
+from app.agent_jobs.models import INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, Job, JobInput, PlannerInfo, now_iso
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
 from app.errors import ApiError, invalid
 from app.settings import ALLOW_API_VARIABLE, Settings
@@ -82,6 +83,29 @@ def parse_bool(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in TRUE_VALUES
 
 
+def saved_input(runner: JobRunner, job: dict, kind: str) -> Path:
+    """저장된 input 메타데이터로만 파일을 찾으며 경로 이탈과 symlink를 막는다."""
+    name = job["input"].get(kind)
+    if kind == "prompt" and name == PROMPT_TEXT_MARKER:
+        name = PROMPT_TEXT_FILE
+    directory = runner.job_dir(job["id"]) / INPUT_DIR
+    path = directory / (name or "")
+    if not name or path.is_symlink() or path.resolve().parent != directory.resolve() or not path.is_file():
+        raise ApiError("NOT_FOUND", f"Saved {kind} input is unavailable for this job.")
+    return path
+
+
+def file_hash(path: Path) -> str:
+    with path.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def copy_input(path: Path, directory: Path) -> str:
+    target = unique_path(directory, safe_filename(path.name, "input.json"))
+    shutil.copyfile(path, target)
+    return target.name
+
+
 # ---- models ---------------------------------------------------------------------------------
 
 
@@ -108,9 +132,18 @@ async def create_job(request: Request) -> dict:
     runner = _runner(request)
     form = await request.form()
 
+    source_id = form.get("source_job_id")
+    source_job = None
+    if source_id:
+        if not isinstance(source_id, str):
+            raise invalid('"source_job_id" must be a job id.')
+        source_job = runner.snapshot(source_id)
+        if source_job is None:
+            raise ApiError("NOT_FOUND", "Source job not found.")
     raw = form.get("raw")
-    if not isinstance(raw, UploadFile):
+    if not isinstance(raw, UploadFile) and (raw is not None or source_job is None):
         raise invalid('"raw" must be an uploaded file (multipart/form-data): the raw data as JSON, JSONL or CSV.')
+    raw_source = saved_input(runner, source_job, "raw") if raw is None else None
     prompt = form.get("prompt")
     prompt_text = form.get("prompt_text")
     if isinstance(prompt, str):  # prompt 를 문자열 필드로 보냈으면 prompt_text 로 본다
@@ -118,6 +151,11 @@ async def create_job(request: Request) -> dict:
     spec = form.get("spec")
     if spec is not None and not isinstance(spec, UploadFile):
         raise invalid('"spec" must be an uploaded file (task_spec.json).')
+    spec_source = None
+    if parse_bool(form.get("reuse_spec")):
+        if source_job is None or spec is not None:
+            raise invalid('"reuse_spec" requires a source job and no uploaded spec.')
+        spec_source = saved_input(runner, source_job, "spec")
     allow_api = parse_bool(form.get("allow_api"))
     model_config = form.get("model_config")
     model_config = model_config.strip() if isinstance(model_config, str) else ""
@@ -125,7 +163,7 @@ async def create_job(request: Request) -> dict:
     name = name.strip() if isinstance(name, str) else ""
 
     has_prompt = isinstance(prompt, UploadFile) or (isinstance(prompt_text, str) and prompt_text.strip() != "")
-    if spec is None:
+    if spec is None and spec_source is None:
         if not has_prompt:
             raise invalid('Either "spec" (a task_spec.json file, no LLM call) or "prompt" (a file) / "prompt_text" is required.')
         if not allow_api and not settings.api_allowed:
@@ -151,23 +189,34 @@ async def create_job(request: Request) -> dict:
     job_id, directory = runner.allocate()
     input_dir = directory / INPUT_DIR
     try:
-        raw_name = save_upload(raw, input_dir, "raw.json")
+        raw_name = save_upload(raw, input_dir, "raw.json") if raw is not None else copy_input(raw_source, input_dir)
         if (input_dir / raw_name).stat().st_size == 0:
             raise invalid('"raw" is empty.')
         prompt_name: str | None = None
         if isinstance(prompt, UploadFile):
             prompt_name = save_upload(prompt, input_dir, "prompt.md")
         elif isinstance(prompt_text, str) and prompt_text.strip():
-            (input_dir / PROMPT_TEXT_FILE).write_text(prompt_text.strip() + "\n", encoding="utf-8")
-            prompt_name = PROMPT_TEXT_MARKER
+            prompt_path = unique_path(input_dir, PROMPT_TEXT_FILE)
+            prompt_path.write_text(prompt_text.strip() + "\n", encoding="utf-8")
+            prompt_name = PROMPT_TEXT_MARKER if prompt_path.name == PROMPT_TEXT_FILE else prompt_path.name
         spec_name: str | None = None
-        if isinstance(spec, UploadFile):
-            spec_name = save_upload(spec, input_dir, "task_spec.json")
+        if isinstance(spec, UploadFile) or spec_source is not None:
+            spec_name = save_upload(spec, input_dir, "task_spec.json") if spec is not None else copy_input(spec_source, input_dir)
             shutil.copyfile(input_dir / spec_name, directory / SPEC_FILE)
             try:
                 load_spec(directory / SPEC_FILE)
             except SpecError as error:
                 raise invalid("the task spec is not valid: " + "; ".join(error.messages)) from None
+        prompt_path = input_dir / (PROMPT_TEXT_FILE if prompt_name == PROMPT_TEXT_MARKER else prompt_name or "")
+        try:
+            text = prompt_path.read_text(encoding="utf-8").strip() if prompt_name else ""
+        except UnicodeError:
+            raise invalid("The prompt must be UTF-8 text.") from None
+        if planner.mode == "openrouter" and not text:
+            raise invalid("The prompt is empty.")
+        provenance = {"raw_sha256": file_hash(input_dir / raw_name),
+                      "prompt_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                      "source_job_id": source_id or None}
     except ApiError:
         runner.discard(job_id)
         raise
@@ -179,8 +228,9 @@ async def create_job(request: Request) -> dict:
             if isinstance(upload, UploadFile):
                 await upload.close()
 
-    job = Job(id=job_id, name=name or (raw.filename or raw_name),
-              input=JobInput(raw=raw_name, prompt=prompt_name, spec=spec_name), planner=planner)
+    job = Job(id=job_id, name=name or (raw.filename if raw is not None else None) or raw_name,
+              input=JobInput(raw=raw_name, prompt=prompt_name, spec=spec_name), planner=planner,
+              provenance=provenance)
     return {"job": runner.submit(job)}
 
 
@@ -195,6 +245,45 @@ async def get_job(request: Request, job_id: str) -> dict:
     if job is None:
         raise ApiError("NOT_FOUND", f"Job not found: {job_id}")
     return job
+
+
+@router.get("/jobs/{job_id}/inputs")
+async def get_job_inputs(request: Request, job_id: str) -> dict:
+    runner = _runner(request)
+    job = await get_job(request, job_id)
+    raw = saved_input(runner, job, "raw")
+    prompt = saved_input(runner, job, "prompt") if job["input"].get("prompt") else None
+    try:
+        text = prompt.read_text(encoding="utf-8").strip() if prompt else ""
+    except UnicodeError:
+        raise invalid("The saved prompt is not UTF-8 text.") from None
+    return {"source_job_id": job_id, "name": job["name"], "raw_name": raw.name,
+            "prompt_text": text, "model_config": job["planner"].get("model_config"),
+            "has_spec": bool(job["input"].get("spec"))}
+
+
+@router.put("/jobs/{job_id}/review")
+async def review_job(request: Request, job_id: str) -> dict:
+    await get_job(request, job_id)
+    try:
+        body = await request.json()
+    except ValueError:
+        raise invalid("Review must be a JSON object.") from None
+    if not isinstance(body, dict) or set(body) - {"decision", "notes", "checks"}:
+        raise invalid("Review accepts decision, notes and checks only.")
+    decision, notes, checks = body.get("decision", "unreviewed"), body.get("notes", ""), body.get("checks", {})
+    if decision not in ("unreviewed", "shortlisted", "rejected"):
+        raise invalid("Unknown review decision.")
+    if not isinstance(notes, str) or len(notes) > 10000:
+        raise invalid("Review notes must be text of at most 10000 characters.")
+    if not isinstance(checks, dict) or set(checks) - {"data", "instructions", "attention"}:
+        raise invalid("Unknown review check.")
+    if any(value not in ("unchecked", "pass", "fail") for value in checks.values()):
+        raise invalid("Review checks must be unchecked, pass or fail.")
+    review = {"decision": decision, "notes": notes,
+              "checks": {name: checks.get(name, "unchecked") for name in ("data", "instructions", "attention")},
+              "updated_at": now_iso()}
+    return _runner(request).update_review(job_id, review)
 
 
 @router.get("/jobs/{job_id}/files/{name}")

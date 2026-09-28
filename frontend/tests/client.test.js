@@ -162,6 +162,15 @@ describe('isApiError', () => {
 });
 
 describe('agent job API', () => {
+  it('이전 입력을 읽고 평가만 별도로 저장한다', async () => {
+    const calls = stubFetch(() => json(200, {}));
+    await agent.getJobInputs('job 1');
+    await agent.reviewJob('job 1', { decision: 'shortlisted', notes: 'Clear criteria.' });
+    assert.equal(calls[0].url, '/api/agent/jobs/job%201/inputs');
+    assert.equal(calls[1].init.method, 'PUT');
+    assert.equal(calls[1].url, '/api/agent/jobs/job%201/review');
+    assert.deepEqual(JSON.parse(calls[1].init.body), { decision: 'shortlisted', notes: 'Clear criteria.' });
+  });
   it('createJob(formData) 는 multipart 로 보내고 Content-Type 을 직접 넣지 않는다', async () => {
     const form = new FormData();
     form.append('name', 'job 1');

@@ -193,6 +193,16 @@ class JobRunner:
             job = self._jobs.get(job_id)
             return job.to_dict() if job else None
 
+    def update_review(self, job_id: str, review: dict) -> dict | None:
+        """실행 상태와 별도로 평가를 원자적으로 저장한다. 실행 중인 worker와 같은 lock을 쓴다."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            job.review = dict(review)
+            self._save(job)
+            return job.to_dict()
+
     def snapshots(self) -> list[dict]:
         with self._lock:
             jobs = sorted(self._jobs.values(), key=lambda j: (j.created_at, j.id), reverse=True)

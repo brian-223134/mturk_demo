@@ -76,6 +76,9 @@ class Job:
     files: list[str] = field(default_factory=list)
     error: str | None = None
 
+    provenance: dict = field(default_factory=dict)
+    review: dict = field(default_factory=dict)
+
     def step(self, name: str) -> Step:
         for step in self.steps:
             if step.name == name:
@@ -105,6 +108,8 @@ class Job:
             "usage": self.usage,
             "files": list(self.files),
             "error": self.error,
+            "provenance": dict(self.provenance),
+            "review": dict(self.review),
         }
 
     @classmethod
@@ -134,6 +139,8 @@ class Job:
             usage=data.get("usage"),
             files=[str(name) for name in data.get("files", [])],
             error=data.get("error"),
+            provenance=dict(data.get("provenance") or {}),
+            review=dict(data.get("review") or {}),
         )
 
 

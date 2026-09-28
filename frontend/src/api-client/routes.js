@@ -49,6 +49,8 @@ export const AGENT_ROUTES = {
   listJobs: { method: 'GET', path: '/agent/jobs', args: [] },
   getJob: { method: 'GET', path: '/agent/jobs/:id', args: ['id'] },
   getJobFile: { method: 'GET', path: '/agent/jobs/:id/files/:name', args: ['id', 'name'] },
+  getJobInputs: { method: 'GET', path: '/agent/jobs/:id/inputs', args: ['id'] },
+  reviewJob: { method: 'PUT', path: '/agent/jobs/:id/review', args: ['id', 'body'] },
 };
 
 const PARAM = /:([A-Za-z]+)/g;

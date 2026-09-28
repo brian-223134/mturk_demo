@@ -171,6 +171,12 @@ curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/
 
 ### Job 객체
 
+반복 실험에서는 `GET /api/agent/jobs/{id}/inputs`로 이전 실행의 prompt 본문, 원본 파일 이름, 모델 설정과 spec 유무를 읽습니다. `POST /api/agent/jobs`에 `source_job_id`를 넣고 raw 업로드를 생략하면 이전 raw의 사본으로 새 job을 만듭니다. Prompt는 새로 전달하며, 이전 spec은 `reuse_spec=true`를 명시했을 때만 복사합니다. Raw 파일을 새로 올리면 그 파일을 우선 사용합니다. API 호출 허용 조건은 처음 실행할 때와 같습니다.
+
+새 job의 `provenance`에는 raw 파일의 SHA-256, 양끝 공백을 제거한 prompt 본문의 SHA-256, 입력을 가져온 `source_job_id`가 기록됩니다. 과거 job에 이 정보가 없으면 빈 객체로 읽습니다.
+
+`PUT /api/agent/jobs/{id}/review`는 `{decision, notes, checks}`를 저장합니다. `decision`은 `unreviewed`, `shortlisted`, `rejected`이고, `checks`의 `data`, `instructions`, `attention`은 각각 `unchecked`, `pass`, `fail`입니다. Notes는 최대 10,000자입니다. 평가는 실행 상태나 구조 검증 결과를 바꾸지 않으며 재시작 후에도 남습니다.
+
 ```
 {"id": "job-YYYYMMDD-HHMMSS-<4 hex>", "name": "…", "status": "queued" | "running" | "succeeded" | "failed",
  "created_at": ISO 8601 UTC, "started_at": ISO 8601 | null, "finished_at": ISO 8601 | null,
