@@ -39,6 +39,7 @@ describe('API_ROUTES 는 routes.ts 의 표와 같다', () => {
 describe('AGENT_ROUTES', () => {
   it('agent job API와 실험 경로가 있다', () => {
     assert.deepEqual(AGENT_ROUTES, {
+      getExampleRaw: { method: 'GET', path: '/agent/example/raw.json', args: [] },
       listModels: { method: 'GET', path: '/agent/models', args: [] },
       createJob: { method: 'POST', path: '/agent/jobs', args: ['form'], encoding: 'multipart' },
       listJobs: { method: 'GET', path: '/agent/jobs', args: [] },

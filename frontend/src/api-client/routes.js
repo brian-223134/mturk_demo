@@ -44,6 +44,7 @@ export const API_ROUTES = {
 
 /** agent 파이프라인의 job API. backend 에만 있고 prototype 의 mock API 에는 없다. */
 export const AGENT_ROUTES = {
+  getExampleRaw: { method: 'GET', path: '/agent/example/raw.json', args: [] },
   listModels: { method: 'GET', path: '/agent/models', args: [] },
   createJob: { method: 'POST', path: '/agent/jobs', args: ['form'], encoding: 'multipart' },
   listJobs: { method: 'GET', path: '/agent/jobs', args: [] },

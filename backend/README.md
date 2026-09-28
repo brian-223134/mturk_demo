@@ -134,7 +134,7 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 
 | 메서드와 경로 | 하는 일 |
 |---|---|
-| `GET /api/agent/models` | 모델 설정 목록입니다. `{"models": [{"name", "model", "api", "provider_tag"}], "default": "<이름>", "api_allowed": bool}`. `models`는 `MODELS_DIR`의 `*.yaml`을 `agent.config.load_model_config`로 읽은 것이고(읽지 못한 파일은 건너뛰고 로그에 남깁니다), `default`는 `AGENT_MODEL`(환경변수 → `ENV_FILE`)이 가리키는 이름, `api_allowed`는 서버의 `AGENT_ALLOW_API`가 `1`인지입니다. |
+| `GET /api/agent/models` | 모델 설정 목록입니다. `{"models": [{"name", "model", "api", "provider_tag"}], "default": "<이름>", "api_allowed": bool, "prompt_candidates": [...]}`. `models`는 `MODELS_DIR`의 `*.yaml`을 `agent.config.load_model_config`로 읽은 것이고(읽지 못한 파일은 건너뛰고 로그에 남깁니다), `default`는 `AGENT_MODEL`(환경변수 → `ENV_FILE`)이 가리키는 이름, `api_allowed`는 서버의 `AGENT_ALLOW_API`가 `1`인지입니다. |
 | `POST /api/agent/jobs` | job을 접수합니다 (`multipart/form-data`). 응답은 202 `{"job": <Job>}`입니다. |
 | `GET /api/agent/jobs` | `{"jobs": [<Job>, …]}`. 최신순이며, 서버를 다시 켜기 전에 돌린 job도 `OUTPUT_DIR/jobs/`에서 읽어 함께 보입니다. |
 | `GET /api/agent/jobs/{id}` | `<Job>`. 없으면 404입니다. |
@@ -170,6 +170,8 @@ curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/
 ```
 
 ### Job 객체
+
+`GET /api/agent/models`의 `prompt_candidates`는 고정 예시와 분리한 requester prompt 4종(`id`, `name`, `description`, `prompt_text`)입니다. `GET /api/agent/example/raw.json`은 이 후보용 합성 raw 데이터를 내려줍니다. 이 두 조회는 LLM을 호출하지 않습니다. 후보와 비교 조건은 [prompt 실험 안내](../docs/prompt-experiments.md)에 설명합니다.
 
 반복 실험에서는 `GET /api/agent/jobs/{id}/inputs`로 이전 실행의 prompt 본문, 원본 파일 이름, 모델 설정과 spec 유무를 읽습니다. `POST /api/agent/jobs`에 `source_job_id`를 넣고 raw 업로드를 생략하면 이전 raw의 사본으로 새 job을 만듭니다. Prompt는 새로 전달하며, 이전 spec은 `reuse_spec=true`를 명시했을 때만 복사합니다. Raw 파일을 새로 올리면 그 파일을 우선 사용합니다. API 호출 허용 조건은 처음 실행할 때와 같습니다.
 

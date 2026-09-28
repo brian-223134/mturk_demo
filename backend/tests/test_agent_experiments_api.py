@@ -4,9 +4,28 @@ import json
 
 import pytest
 
-from helpers import example_uploads, wait_for_job
+from helpers import EXAMPLE_DIR, example_uploads, wait_for_job
 
 JOBS = "/api/agent/jobs"
+
+
+def test_candidates_keep_fixed_conditions_separate_from_planner_example(client):
+    body = client.get("/api/agent/models").json()
+    candidates = body["prompt_candidates"]
+    assert [c["id"] for c in candidates] == ["baseline", "data-explicit", "instructions", "combined"]
+    original = (EXAMPLE_DIR / "prompt.md").read_text()
+    common = []
+    for candidate in candidates:
+        prompt = candidate["prompt_text"]
+        assert prompt.startswith(original)
+        assert len([line for line in prompt.splitlines() if line.startswith("# ")]) == 9
+        common.append(prompt.split("## Fixed comparison conditions (all candidates)")[1].split("## Additional")[0].strip())
+    assert len(set(common)) == 1
+    assert len({c["prompt_text"] for c in candidates}) == 4
+    raw = client.get("/api/agent/example/raw.json")
+    assert raw.status_code == 200
+    assert raw.content == (EXAMPLE_DIR / "raw.json").read_bytes()
+    assert client.get("/api/agent/example/task_spec.json").status_code == 404
 
 
 def example(client):

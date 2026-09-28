@@ -3,10 +3,12 @@
     GET  /api/agent/models                 모델 설정 목록, 기본 설정 이름, 서버의 API 허용 여부
     POST /api/agent/jobs                   multipart/form-data → 202 {"job": Job}
     GET  /api/agent/jobs                   {"jobs": [Job, …]} 최신순
+    GET  /api/agent/jobs/{id}/inputs       이전 raw 참조와 prompt 본문
+    PUT  /api/agent/jobs/{id}/review       품질 평가 저장
     GET  /api/agent/jobs/{id}              Job
     GET  /api/agent/jobs/{id}/files/{name} 결과 파일 (job.files 에 있는 이름만)
 
-POST 의 필드: raw(파일, 필수), prompt(파일) 또는 prompt_text(문자열), spec(파일, task_spec.json), model_config(문자열),
+POST 의 필드: raw(파일, source_job_id로 재사용 가능), prompt(파일) 또는 prompt_text(문자열), spec(파일, task_spec.json), model_config(문자열),
 allow_api("true"/"false"), name(문자열). spec 이 있으면 LLM 없이(file planner) 돌고 prompt 는 선택이다. spec 이 없으면
 prompt 가 필수이고, 요청의 allow_api=true 와 서버의 AGENT_ALLOW_API=1 이 모두 있어야 한다 (둘 중 무엇이 빠졌는지 400 으로 알린다).
 """
@@ -25,6 +27,7 @@ from starlette.datastructures import UploadFile
 
 from agent.config import ConfigError, load_model_config, selected_model_name
 from agent.spec import SpecError, load_spec
+from agent.prompt_variants import EXAMPLE_RAW, prompt_candidates
 
 from app.agent_jobs.models import INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, Job, JobInput, PlannerInfo, now_iso
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
@@ -120,7 +123,14 @@ async def list_models(request: Request) -> dict:
             log.warning("model config %s skipped: %s", path.name, error)
             continue
         models.append({"name": config.name, "model": config.model, "api": config.api, "provider_tag": config.provider_tag})
-    return {"models": models, "default": selected_model_name(settings.env_file), "api_allowed": settings.api_allowed}
+    return {"models": models, "default": selected_model_name(settings.env_file), "api_allowed": settings.api_allowed,
+            "prompt_candidates": prompt_candidates()}
+
+
+@router.get("/example/raw.json")
+async def example_raw() -> FileResponse:
+    """공개된 합성 입력만 제공한다. 파일 경로는 요청에서 받지 않는다."""
+    return FileResponse(EXAMPLE_RAW, media_type="application/json", filename="raw.json")
 
 
 # ---- jobs -----------------------------------------------------------------------------------

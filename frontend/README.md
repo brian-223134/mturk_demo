@@ -122,6 +122,8 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 ### Prompt 반복 실험
 
+`Example prompt candidates`에서 기준형·데이터 명확화형·안내 강화형·결합형을 고릅니다. `Load prompt`는 본문만, `Load prompt + example data`는 합성 raw도 함께 채웁니다. 두 버튼 모두 기존 spec을 해제하며 API 호출은 Generate를 누를 때 수행합니다. [비교 조건과 평가 기준](../docs/prompt-experiments.md)을 참고합니다.
+
 Create의 Generate 패널은 prompt 본문, 후보 이름, 모델 선택과 이전 raw 참조를 브라우저에 보존합니다. Prompt 파일을 가져오면 본문을 편집창에 채웁니다. 아직 제출하지 않은 로컬 파일은 새로고침 뒤 다시 선택해야 하며, 제출한 raw는 서버에 남아 재사용할 수 있습니다. `Reuse inputs`는 이전 job의 raw와 prompt를 복원합니다. API 호출 허용과 이전 spec 재사용은 자동으로 켜지지 않습니다. Spec을 올리거나 재사용하면 prompt 변경이 결과에 반영되지 않는다는 안내가 표시됩니다.
 
 성공한 job의 `Preview & evaluate`는 템플릿을 저장하거나 마법사 입력을 바꾸지 않고 결과를 엽니다. Prompt, spec, 행별 annotation 화면을 보고 데이터·라벨, 안내문, attention에 대한 평가와 메모를 서버에 저장합니다. 이 평가는 구조 검증과 별개입니다.

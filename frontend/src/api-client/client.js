@@ -79,6 +79,7 @@ export function fileUrl(jobId, name) {
 
 /** agent job API. */
 export const agent = {
+  exampleRawUrl: `${BASE_URL}${AGENT_ROUTES.getExampleRaw.path}`,
   listModels: () => call('listModels'),
   listJobs: () => call('listJobs'),
   getJob: (id) => call('getJob', [id]),

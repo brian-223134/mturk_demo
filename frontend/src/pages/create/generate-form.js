@@ -30,7 +30,15 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
   const storageStatus = el('div', { className: 'muted small' });
   const submit = el('button', { type: 'submit', id: 'generate-submit', className: 'btn btn-primary' }, 'Generate');
   const reset = el('button', { type: 'button', className: 'btn', id: 'gen-clear' }, 'Clear inputs');
+  const candidates = models.prompt_candidates || [];
+  const candidate = el('select', { id: 'gen-candidate' }, candidates.map((c) => el('option', { value: c.id }, c.name)));
+  const candidateInfo = muted(candidates[0]?.description || '');
+  candidate.addEventListener('change', () => { candidateInfo.textContent = candidates.find((c) => c.id === candidate.value)?.description || ''; });
+  const loadCandidate = el('button', { type: 'button', className: 'btn btn-small', id: 'gen-load-candidate', onClick: () => applyCandidate(candidates.find((c) => c.id === candidate.value)) }, 'Load prompt');
+  const loadExample = el('button', { type: 'button', className: 'btn btn-small', id: 'gen-load-example' }, 'Load prompt + example data');
   const fields = el('fieldset', { className: 'generate-fields' },
+    candidates.length ? el('div', { className: 'field' }, el('label', { for: candidate.id }, 'Example prompt candidates'), candidate, candidateInfo,
+      el('div', { className: 'form-actions' }, loadCandidate, loadExample), muted('All four candidates use the same six-record example and HIT policy. Loading a candidate replaces the prompt and clears any task spec.')) : null,
     field('Candidate name', name, 'Use a distinct name for each prompt version.'),
     field('Raw data', raw, 'JSON, JSONL or CSV. A selected file replaces any reused raw data.'), rawStatus,
     field('Import prompt file', promptFile, 'Loads the file into the editable prompt below.'),
@@ -43,6 +51,25 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
     specStatus, el('div', { className: 'form-actions' }, submit, reset));
   const form = el('form', { className: 'form', id: 'generate-form' }, fields, storageStatus, errorSlot);
   root.replaceChildren(form);
+
+  function applyCandidate(value, rawFile = null) {
+    if (!value || busy || fields.disabled) return;
+    prompt.value = value.prompt_text; name.value = value.name;
+    spec.value = ''; reuseSpec.checked = false;
+    if (rawFile) { raw.value = ''; importedRaw = rawFile; source = null; }
+    errorSlot.replaceChildren(); refresh();
+  }
+  loadExample.addEventListener('click', async () => {
+    const value = candidates.find((c) => c.id === candidate.value);
+    fields.disabled = true;
+    try {
+      const response = await fetch(agent.exampleRawUrl);
+      if (!response.ok) throw new Error(`Example data: HTTP ${response.status}`);
+      const rawFile = new File([await response.blob()], 'raw.json', { type: 'application/json' });
+      if (!gone()) { fields.disabled = false; applyCandidate(value, rawFile); }
+    } catch (error) { if (!gone()) errorSlot.replaceChildren(errorNotice(error, 'Example')); }
+    finally { if (!gone()) fields.disabled = busy; }
+  });
 
   function persist() {
     draft = { name: name.value, prompt_text: prompt.value, model_config: model.value, source };
@@ -125,12 +152,6 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
       } catch (error) { if (!gone()) errorSlot.replaceChildren(errorNotice(error, 'Restore inputs')); }
       finally { if (!gone()) fields.disabled = false; }
     },
-    applyCandidate(candidate, rawFile = null) {
-      if (busy || fields.disabled) return;
-      prompt.value = candidate.prompt_text; name.value = candidate.name;
-      spec.value = ''; reuseSpec.checked = false;
-      if (rawFile) { raw.value = ''; importedRaw = rawFile; source = null; }
-      refresh();
-    },
+    applyCandidate,
   };
 }
