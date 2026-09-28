@@ -120,6 +120,14 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 ## 되는 것과 아직 없는 것
 
+### Prompt 반복 실험
+
+Create의 Generate 패널은 prompt 본문, 후보 이름, 모델 선택과 이전 raw 참조를 브라우저에 보존합니다. Prompt 파일을 가져오면 본문을 편집창에 채웁니다. 아직 제출하지 않은 로컬 파일은 새로고침 뒤 다시 선택해야 하며, 제출한 raw는 서버에 남아 재사용할 수 있습니다. `Reuse inputs`는 이전 job의 raw와 prompt를 복원합니다. API 호출 허용과 이전 spec 재사용은 자동으로 켜지지 않습니다. Spec을 올리거나 재사용하면 prompt 변경이 결과에 반영되지 않는다는 안내가 표시됩니다.
+
+성공한 job의 `Preview & evaluate`는 템플릿을 저장하거나 마법사 입력을 바꾸지 않고 결과를 엽니다. Prompt, spec, 행별 annotation 화면을 보고 데이터·라벨, 안내문, attention에 대한 평가와 메모를 서버에 저장합니다. 이 평가는 구조 검증과 별개입니다.
+
+성공한 job 2~3개를 선택하고 `Compare selected`를 누르면 처리량, 누락, 샘플링·attention 조건과 비용을 비교합니다. 공통 일반 항목이 있으면 record/item ID로 같은 그룹의 미리보기를 맞추며, raw·모델·처리 조건이 다르면 알립니다. `Export comparison JSON`은 prompt, spec, 요약, 저장한 평가를 함께 내려받습니다. 내보내기 전에 편집한 평가를 저장해야 합니다.
+
 backend가 경로 표의 27개 경로를 모두 구현하므로, 프로토타입에서 되던 콘솔 기능은 이 화면에서도 모두 됩니다. Create의 세 가지 템플릿 방식과 게시, Manage의 검수·재모집·만료·export·결과, Worker Pool의 pool 편집·차단·worker 상세입니다. `API_UPSTREAM`을 프로토타입의 mock API로 바꾸면 Generate 패널만 잠기고 나머지는 같습니다.
 
 아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, Review와 Results는 시작 데이터의 batch 세 개로 확인합니다. 프로토타입의 Mock tools(가짜 응답 생성, Reset to fixtures)는 mock 전용이라 backend에 없습니다. 템플릿이 `assets.crowd.aws`의 스크립트를 불러오는 점도 그대로입니다.

@@ -9,6 +9,8 @@ import { el } from '../../components/dom.js';
 import { EMPTY, formatDateTime, formatElapsed, formatNumber } from '../../components/format.js';
 import { errorNotice, loading, muted, notice } from '../../components/notice.js';
 import { failureNotice } from './common.js';
+import { mountGenerateForm } from './generate-form.js';
+import { openJobResults } from './job-results.js';
 
 const POLL_MS = 2000;
 const LOG_TAIL = 8;
@@ -28,6 +30,20 @@ export function hasResult(job) {
 export function mountGenerate(root, { signal, onUseResult }) {
   const generateBody = el('div', { id: 'generate-body' }, loading());
   const jobsBody = el('div', { id: 'job-list' }, loading());
+  const selected = new Set();
+  const compare = el('button', { type: 'button', className: 'btn btn-small', id: 'compare-jobs', disabled: true }, 'Compare selected (0)');
+  let formReady;
+  const actions = {
+    reuse: async (job) => (await formReady)?.reuse(job),
+    preview: (job) => openJobResults([job], upsertJob),
+    selected,
+    select: (job, checked) => { if (checked) selected.add(job.id); else selected.delete(job.id); updateCompare(); },
+  };
+  function updateCompare() {
+    compare.textContent = `Compare selected (${selected.size})`;
+    compare.disabled = selected.size < 2 || selected.size > 3;
+  }
+  compare.addEventListener('click', () => openJobResults(state.jobs.filter((job) => selected.has(job.id)), upsertJob));
   const refresh = el('button', { type: 'button', className: 'btn btn-small', id: 'refresh-jobs' }, 'Refresh');
 
   root.append(
@@ -37,7 +53,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
       muted('Upload the raw annotation data and a prompt that says what to judge. The pipeline profiles the data, plans a task spec (LLM, or your own task_spec.json), and produces hits.csv and template.html for a batch. When a job succeeds, "Use this result" fills the Template, Data and Settings steps.'),
       generateBody,
     ),
-    el('div', { className: 'jobs-panel', id: 'jobs-panel' }, el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Jobs'), refresh), jobsBody),
+    el('div', { className: 'jobs-panel', id: 'jobs-panel' }, el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Jobs'), el('span', { className: 'muted small' }, 'Select 2–3 successful runs'), compare, refresh), jobsBody),
   );
 
   // 폴링 상태. cards 는 job id → 카드 요소, timer 는 다음 폴링 예약
@@ -51,8 +67,9 @@ export function mountGenerate(root, { signal, onUseResult }) {
   const gone = () => state.stopped || signal.aborted;
 
   function upsertJob(job) {
+    if (gone()) return;
     state.jobs = [job, ...state.jobs.filter((j) => j.id !== job.id)];
-    const card = jobCard(job, onUseResult);
+    const card = jobCard(job, onUseResult, actions);
     const existing = state.cards.get(job.id);
     if (existing) existing.replaceWith(card);
     else {
@@ -99,13 +116,15 @@ export function mountGenerate(root, { signal, onUseResult }) {
     }
     if (gone()) return;
     state.jobs = result.jobs ?? [];
+    for (const id of selected) if (!state.jobs.some((job) => job.id === id && hasResult(job))) selected.delete(id);
+    updateCompare();
     state.cards.clear();
     if (state.jobs.length === 0) {
       jobsBody.replaceChildren(muted('No jobs yet. Submit the form above to start one.'));
     } else {
       const list = el('div', { className: 'job-list' });
       for (const job of state.jobs) {
-        const card = jobCard(job, onUseResult);
+        const card = jobCard(job, onUseResult, actions);
         state.cards.set(job.id, card);
         list.append(card);
       }
@@ -116,7 +135,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
 
   refresh.addEventListener('click', () => void loadJobs());
 
-  void renderGenerate(generateBody, jobsBody, upsertJob, loadJobs, gone);
+  formReady = renderGenerate(generateBody, jobsBody, upsertJob, loadJobs, gone);
   return stop;
 }
 
@@ -135,7 +154,6 @@ async function renderGenerate(body, jobsBody, upsertJob, loadJobs, gone) {
           'Generate from raw data is not available on this API server',
           `${error.message} — the agent job API (/api/agent/…) exists only in the FastAPI backend. If the frontend is pointed at the prototype mock API (API_UPSTREAM=http://api:8787), start it against the backend instead.`,
         ),
-        el('fieldset', { disabled: true, className: 'form form-disabled', id: 'generate-form-disabled' }, generateForm(null).form),
       );
       jobsBody.replaceChildren(muted('The job list needs the same API and is not available here.'));
       return;
@@ -146,102 +164,9 @@ async function renderGenerate(body, jobsBody, upsertJob, loadJobs, gone) {
   }
   if (gone()) return;
 
-  const { form, error: errorSlot, submit } = generateForm(models);
-  body.replaceChildren(form);
+  const controller = mountGenerateForm(body, models, { onCreated: upsertJob, gone });
   void loadJobs();
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    errorSlot.replaceChildren();
-    const data = new FormData();
-    const raw = form.elements.raw.files[0];
-    const promptFile = form.elements.prompt.files[0];
-    const promptText = form.elements.prompt_text.value.trim();
-    const spec = form.elements.spec.files[0];
-    if (!raw) {
-      errorSlot.append(notice('error', 'Raw data file is required'));
-      return;
-    }
-    if (!promptFile && !promptText && !spec) {
-      errorSlot.append(notice('error', 'Give a prompt (file or text) or a task_spec.json'));
-      return;
-    }
-    data.append('raw', raw);
-    if (promptFile) data.append('prompt', promptFile);
-    else if (promptText) data.append('prompt_text', promptText);
-    if (spec) data.append('spec', spec);
-    if (form.elements.model_config.value) data.append('model_config', form.elements.model_config.value);
-    data.append('allow_api', form.elements.allow_api.checked ? 'true' : 'false');
-    const name = form.elements.name.value.trim();
-    if (name) data.append('name', name);
-
-    submit.disabled = true;
-    submit.textContent = 'Submitting…';
-    try {
-      const result = await agent.createJob(data);
-      if (gone()) return;
-      upsertJob(result.job);
-      form.elements.raw.value = '';
-      form.elements.prompt.value = '';
-      form.elements.spec.value = '';
-      errorSlot.append(notice('success', `Job ${result.job.id} accepted`, 'Progress shows in the Jobs list below.'));
-    } catch (error) {
-      if (gone()) return;
-      errorSlot.append(errorNotice(error, 'Generate'));
-    } finally {
-      submit.disabled = false;
-      submit.textContent = 'Generate';
-    }
-  });
-}
-
-function formField(label, control, hint) {
-  return el('div', { className: 'field' }, el('label', { for: control.id }, label), control, hint ? el('div', { className: 'hint' }, hint) : null);
-}
-
-/** models 가 null 이면 (API 없음) 빈 select 로 잠긴 폼을 그린다. */
-function generateForm(models) {
-  const modelSelect = el('select', { id: 'gen-model', name: 'model_config' });
-  if (models) {
-    for (const m of models.models ?? []) {
-      const label = `${m.name} — ${m.model}${m.provider_tag ? ` (${m.provider_tag})` : ''}${m.api ? ` · ${m.api}` : ''}`;
-      modelSelect.append(el('option', { value: m.name, selected: m.name === models.default }, label));
-    }
-    if (models.default) modelSelect.value = models.default;
-  } else {
-    modelSelect.append(el('option', { value: '' }, '(not available)'));
-  }
-  const apiAllowed = Boolean(models?.api_allowed);
-  const allowApi = el('input', { type: 'checkbox', id: 'gen-allow-api', name: 'allow_api', disabled: !apiAllowed });
-  const errorSlot = el('div', { className: 'form-error', id: 'generate-error' });
-  const submit = el('button', { type: 'submit', className: 'btn btn-primary', id: 'generate-submit' }, 'Generate');
-
-  const form = el(
-    'form',
-    { className: 'form', id: 'generate-form', enctype: 'multipart/form-data' },
-    el(
-      'div',
-      { className: 'form-grid' },
-      formField('Name', el('input', { type: 'text', id: 'gen-name', name: 'name', placeholder: 'e.g. groundedness pilot' }), 'Optional. Defaults to the raw file name. The template saved by "Use this result" gets this name.'),
-      formField('Raw data', el('input', { type: 'file', id: 'gen-raw', name: 'raw', accept: '.json,.jsonl,.csv,application/json,text/csv' }), 'JSON, JSONL or CSV. Required.'),
-      formField('Prompt file', el('input', { type: 'file', id: 'gen-prompt', name: 'prompt', accept: '.md,.txt,text/markdown,text/plain' }), 'prompt.md: annotation goal, data, unit, question and options, HIT composition …'),
-      formField('Task spec (optional)', el('input', { type: 'file', id: 'gen-spec', name: 'spec', accept: '.json,application/json' }), 'A hand-written task_spec.json skips the LLM planner.'),
-    ),
-    formField('Prompt text', el('textarea', { id: 'gen-prompt-text', name: 'prompt_text', rows: '6', placeholder: 'Or paste the prompt here. Ignored when a prompt file is chosen.' })),
-    el(
-      'div',
-      { className: 'form-grid' },
-      formField('Model', modelSelect, models ? `Model configs from environment/models/. Default: ${models.default ?? EMPTY}.` : null),
-      formField(
-        'OpenRouter',
-        el('label', { className: 'checkbox' }, allowApi, ' Allow API calls (uses credits)'),
-        apiAllowed ? 'Allowed on this server (AGENT_ALLOW_API=1). Without it the planner only saves the request.' : 'Disabled on this server (AGENT_ALLOW_API=0): the planner saves the request without calling the API.',
-      ),
-    ),
-    el('div', { className: 'form-actions' }, submit),
-    errorSlot,
-  );
-  return { form, error: errorSlot, submit };
+  return controller;
 }
 
 // ── Job 카드 ─────────────────────────────────────────────────────────────────
@@ -267,7 +192,9 @@ function summaryBlock(summary) {
     ['HITs', summary.hits],
     ['Items per HIT', summary.items_per_hit],
     ['Attention items', summary.attention_items],
-    ['Targets', summary.targets],
+    ['Targets incl. attention', summary.targets],
+    ['Missing reference labels', summary.hints_missing],
+    ['Skipped empty items', summary.skipped_no_targets],
     ['Rows over 64KB', summary.rows_over_64kb],
     ['Columns', Array.isArray(summary.columns) ? summary.columns.length : null],
   ].filter(([, v]) => v !== null && v !== undefined);
@@ -331,13 +258,13 @@ function useResultBlock(job, onUseResult) {
   );
 }
 
-function jobCard(job, onUseResult) {
+function jobCard(job, onUseResult, actions) {
   const steps = Array.isArray(job.steps) && job.steps.length > 0 ? job.steps : STEP_NAMES.map((name) => ({ name, status: 'pending' }));
   const planner = job.planner ?? {};
   const plannerText =
     planner.mode === 'file'
       ? 'Planner: task_spec.json (no LLM)'
-      : `Planner: ${planner.mode ?? EMPTY} · ${planner.model_config ?? EMPTY} · ${planner.allow_api ? 'API allowed' : 'API not allowed (request saved only)'}`;
+      : `Planner: ${planner.mode ?? EMPTY} · ${planner.model_config ?? EMPTY} · ${planner.allow_api ? 'API allowed' : 'API not allowed'}`;
   const inputs = job.input ? ['raw', 'prompt', 'spec'].filter((k) => job.input[k]).map((k) => `${k}: ${job.input[k]}`).join(' · ') : '';
   const log = Array.isArray(job.log) ? job.log : [];
   const tail = log.slice(-LOG_TAIL);
@@ -358,6 +285,12 @@ function jobCard(job, onUseResult) {
     el('div', { className: 'steps' }, steps.map(stepChip)),
     el('div', { className: 'muted small' }, plannerText, inputs ? ` — ${inputs}` : ''),
     job.error ? notice('error', 'Job failed', job.error) : null,
+    el('div', { className: 'form-actions job-actions' },
+      el('button', { type: 'button', className: 'btn btn-small reuse-inputs', onClick: () => void actions.reuse(job) }, 'Reuse inputs'),
+      hasResult(job) ? el('button', { type: 'button', className: 'btn btn-small preview-result', onClick: () => actions.preview(job) }, 'Preview & evaluate') : null,
+      hasResult(job) ? el('label', { className: 'checkbox' }, el('input', { type: 'checkbox', className: 'compare-job', checked: actions.selected.has(job.id), onChange: (event) => actions.select(job, event.target.checked) }), ' Compare') : null,
+      tag(job.review?.decision || 'unreviewed', job.review?.decision === 'shortlisted' ? 'green' : 'default'),
+    ),
     summaryBlock(job.summary),
     validationBlock(job.validation),
     usageBlock(job.usage),

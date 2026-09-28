@@ -532,3 +532,21 @@
     width: 100%;
   }
 }
+
+/* Prompt experiments */
+.generate-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 14px; }
+.generate-fields textarea { width: 100%; resize: vertical; }
+.generate-fields details > summary { cursor: pointer; margin-bottom: 10px; }
+.job-actions { flex-wrap: wrap; }
+.experiment-grid { display: grid; gap: 20px; align-items: start; }
+.experiment-candidate { min-width: 0; border: 1px solid var(--border, #dbe0e8); padding: 14px; border-radius: 8px; }
+.experiment-candidate h4 { overflow-wrap: anywhere; }
+.experiment-candidate select, .experiment-candidate textarea { width: 100%; }
+.experiment-spec { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.experiment-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+.experiment-table th, .experiment-table td { text-align: left; vertical-align: top; padding: 8px; border: 1px solid var(--border, #dbe0e8); overflow-wrap: anywhere; max-width: 360px; }
+.experiment-table th { background: #f6f8fb; }
+.job-evaluation { display: grid; gap: 10px; margin-top: 20px; }
+.evaluation-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.evaluation-checks .field { flex: 1; min-width: 130px; }
+@media (max-width: 1000px) { .experiment-grid { grid-template-columns: 1fr !important; } }
