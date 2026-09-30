@@ -5,9 +5,14 @@
     validate_bundle(out_dir)     {"ok", "errors", "warnings", "stats"}를 돌려주고 validation.json으로 저장한다
     run_validate(out_dir)        validate_bundle + 짧은 보고를 stdout에 찍는다
 
-errors는 게시할 수 없는 문제(placeholder와 컬럼 불일치, JSON이 아닌 셀, 항목 수 불일치, reference 값 오류 …),
-warnings는 참고(64KB를 넘는 행 …)다. 답 이름 시뮬레이션은 preprocess.answer_name을 그대로 써서 템플릿의 이름 규칙,
-CSV의 reference 키, 콘솔의 attention 접두어가 서로 맞는지 확인한다.
+errors는 게시할 수 없는 문제(placeholder와 컬럼 불일치, JSON이 아닌 셀, 항목 수 불일치, reference·attention 값 오류 …),
+warnings는 참고(64KB를 넘는 행, preprocess가 건너뛴 레코드(summary.json의 skipped_records) …)다. 답 이름 시뮬레이션은
+spec.answer_slots와 preprocess.answer_name을 그대로 써서 템플릿의 이름 규칙, CSV의 reference 키, attention 컬럼의 키가
+서로 맞는지 확인한다.
+
+placeholder는 정확히 hit_id와 spec의 필드들이다 (attention 표시는 CSV에만 있다). reference 컬럼에는 일반 항목의 답만,
+attention 컬럼에는 기대 값이 있는 attention 항목의 답만 있어야 하고, 자유 서술(text) 답은 reference에 들어가지 않는다.
+자유 서술 답의 접미어로 끝나는 다른 답 이름이 있으면 콘솔이 둘을 가르지 못하므로 오류다.
 """
 
 from __future__ import annotations
@@ -21,15 +26,18 @@ from typing import Any
 
 csv.field_size_limit(sys.maxsize)
 
-from agent.preprocess import ATTENTION_ID, ATTENTION_PREFIX, ROW_BYTES_LIMIT, answer_name, csv_columns, row_bytes
-from agent.spec import SpecError, TaskSpec, load_spec
+from agent.preprocess import (ATTENTION_ID, GENERAL_PREFIX, ROW_BYTES_LIMIT, answer_name, csv_columns, has_attention_column,
+                              row_bytes)
+from agent.spec import QuestionSpec, SpecError, TaskSpec, answer_slots, load_spec
 
 PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 SPEC_FILE = "task_spec.json"
 TEMPLATE_FILE = "template.html"
 HITS_FILE = "hits.csv"
+SUMMARY_FILE = "summary.json"
 VALIDATION_FILE = "validation.json"
-REQUIRED_MARKERS = ("crowd-form", "input_answers", "summary-tabs")
+REQUIRED_MARKERS = ("crowd-form", "input_answers", "summary-tabs", "TASK_ANSWER_SCHEMA")
+OLD_ATTENTION_PREFIX = "attention_"   # 옛 attention 답 이름 접두어. 템플릿에 남아 있으면 attention 탭이 드러난다
 MAX_REPORTED = 20
 
 
@@ -105,14 +113,16 @@ def _validate(out_dir: Path, report: _Report) -> dict:
 
     template = template_path.read_text(encoding="utf-8")
     placeholders = extract_placeholders(template)
-    expected_placeholders = ["hit_id", "attention", *spec.item.fields]
+    expected_placeholders = ["hit_id", *spec.item.fields]
     report.stats["placeholders"] = placeholders
     if set(placeholders) != set(expected_placeholders):
         report.error(f"{TEMPLATE_FILE}: placeholders {sorted(placeholders)} differ from the expected "
-                     f"{sorted(expected_placeholders)} (hit_id, attention and the spec fields)")
+                     f"{sorted(expected_placeholders)} (hit_id and the spec fields)")
     for marker in REQUIRED_MARKERS:
         if marker not in template:
             report.error(f"{TEMPLATE_FILE}: {marker!r} not found")
+    if OLD_ATTENTION_PREFIX in template:
+        report.error(f"{TEMPLATE_FILE}: contains {OLD_ATTENTION_PREFIX!r}; attention tabs must not be recognisable in the page")
 
     columns, rows = _read_csv(hits_path, report)
     if columns is None:
@@ -136,7 +146,24 @@ def _validate(out_dir: Path, report: _Report) -> dict:
 
     _check_rows(spec, columns, rows, report)
     _check_render(template, rows[0], report)
+    _check_summary(out_dir / SUMMARY_FILE, report)
     return report.result()
+
+
+def _check_summary(path: Path, report: _Report) -> None:
+    """preprocess가 건너뛴 레코드가 있으면 경고한다 (summary.json의 skipped_records). 파일이 없으면 넘어간다."""
+    try:
+        summary = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    skipped = summary.get("skipped_records") if isinstance(summary, dict) else None
+    count = skipped.get("count", 0) if isinstance(skipped, dict) else 0
+    report.stats["skipped_records"] = count if isinstance(count, int) else 0
+    if not isinstance(count, int) or count < 1:
+        return
+    examples = [entry for entry in skipped.get("examples", []) if isinstance(entry, dict)]
+    example = f" (e.g. record {examples[0].get('record_id')!r}: {examples[0].get('reason')})" if examples else ""
+    report.warning(f"{SUMMARY_FILE}: {count} record(s) were skipped because their data does not fit the spec{example}")
 
 
 def _read_csv(path: Path, report: _Report) -> tuple[list[str] | None, list[dict[str, str]]]:
@@ -162,21 +189,23 @@ def _read_csv(path: Path, report: _Report) -> tuple[list[str] | None, list[dict[
     return columns, rows
 
 
+def _value_word(question: QuestionSpec) -> str:
+    return "a scale value" if question.type == "likert" else "an option value"
+
+
 def _check_rows(spec: TaskSpec, columns: list[str], rows: list[dict[str, str]], report: _Report) -> None:
     attention = spec.hit.attention
     per_hit = attention.per_hit if attention is not None else 0
-    expected_value = attention.expected_value if attention is not None else None
-    option_values = set(spec.option_values)
-    if expected_value is not None and expected_value not in option_values:
-        report.error(f"{SPEC_FILE}: attention expected_value {expected_value!r} is not an option value")
-    target = spec.target_field.name
+    expected_by_question = dict(attention.expected) if attention is not None else {}
+    text_suffixes = spec.free_text_suffixes
+    target = spec.target_field.name if spec.target_field is not None else None
     reference_column = spec.output.reference_column
     reason_column = spec.output.reason_column
-    suffix = spec.item.question.answer_suffix
+    attention_column = spec.output.attention_column if has_attention_column(spec) else None
     field_names = [name for name in spec.item.fields if name in columns]
     # 없는 컬럼은 _validate가 이미 오류로 적었다. 있는 컬럼만 행 단위로 검사한다
     have_ids = all(name in columns for name in ("record_ids", "item_ids", "attention"))
-    have_target = target in columns
+    have_target = target is None or target in columns
 
     sizes: list[int] = []
     over_limit: list[str] = []
@@ -184,6 +213,8 @@ def _check_rows(spec: TaskSpec, columns: list[str], rows: list[dict[str, str]], 
     items_total = 0
     attention_total = 0
     targets_total = 0
+    answers_total = 0
+    attention_answers = 0
     reference_values: dict[str, int] = {}
     hints_missing = 0
     row_ok = 0
@@ -243,23 +274,34 @@ def _check_rows(spec: TaskSpec, columns: list[str], rows: list[dict[str, str]], 
             if flag == 0 and (cells["record_ids"][index] == ATTENTION_ID or cells["item_ids"][index] == ATTENTION_ID):
                 report.error(f"{where}: item {index} is marked {ATTENTION_ID!r} but attention is 0", key="attention ids")
 
-        target_lists = cells[target]
+        # 답 이름 시뮬레이션: 템플릿과 같은 규칙(answer_slots + answer_name)으로 이 행의 답 이름을 만든다
         names: list[str] = []
+        question_of: dict[str, QuestionSpec] = {}
         attention_names: set[str] = set()
+        expected_names: dict[str, str] = {}
+        row_targets = 0
         target_ok = True
-        for index, targets in enumerate(target_lists):
-            if not isinstance(targets, list) or not targets or not all(isinstance(t, str) for t in targets):
-                report.error(f"{where}: {target}[{index}] must be a non-empty list of strings", key="targets")
-                target_ok = False
-                continue
-            for j in range(len(targets)):
-                name = answer_name(flags[index] == 1, index, j + 1, suffix)
+        for index in range(count):
+            n_targets = 0
+            if target is not None:
+                targets = cells[target][index]
+                if not isinstance(targets, list) or not targets or not all(isinstance(t, str) for t in targets):
+                    report.error(f"{where}: {target}[{index}] must be a non-empty list of strings", key="targets")
+                    target_ok = False
+                    continue
+                n_targets = len(targets)
+            row_targets += n_targets
+            for question, target_no in answer_slots(spec, n_targets):
+                name = answer_name(index, target_no, question.suffix)
                 names.append(name)
+                question_of[name] = question
                 if flags[index] == 1:
                     attention_names.add(name)
+                    if question.id in expected_by_question:
+                        expected_names[name] = expected_by_question[question.id]
         if not target_ok:
             continue
-        for index, flag in enumerate(flags):
+        for index in range(count):
             for name in ("record_ids", "item_ids"):
                 if not isinstance(cells[name][index], str):
                     report.error(f"{where}: {name}[{index}] must be a string", key="id type")
@@ -270,41 +312,72 @@ def _check_rows(spec: TaskSpec, columns: list[str], rows: list[dict[str, str]], 
                 if not (isinstance(value, str) or (isinstance(value, list) and all(isinstance(v, str) for v in value))):
                     report.error(f"{where}: {name}[{index}] must be a string or a list of strings", key="context type")
                     break
-
-        if any((name.startswith(ATTENTION_PREFIX)) != (name in attention_names) for name in names):
-            report.error(f"{where}: attention answer names must start with {ATTENTION_PREFIX!r} and others must not", key="attention prefix")
+        if len(set(names)) != len(names):
+            report.error(f"{where}: duplicate answer names", key="answer names")
+        if any(not name.startswith(GENERAL_PREFIX) for name in names):
+            report.error(f"{where}: every answer name must start with {GENERAL_PREFIX!r}", key="answer names")
+        for name in names:
+            if question_of[name].type == "text":
+                continue
+            clash = next((suffix for suffix in text_suffixes if name.endswith(suffix)), None)
+            if clash is not None:
+                report.error(f"{where}: answer name {name!r} ends with the free-text suffix {clash!r}", key="free-text suffix")
 
         reference = cells.get(reference_column)
         if not isinstance(reference, dict):
             report.error(f"{where}: {reference_column} must be a JSON object {{answer name: option value}}", key="reference type")
         else:
-            unknown = [key for key in reference if key not in names]
+            unknown = [key for key in reference if key not in question_of]
             if unknown:
                 report.error(f"{where}: {reference_column} has key(s) that are not answer names: {', '.join(unknown[:5])}", key="reference keys")
+            leaked = [key for key in reference if key in attention_names]
+            if leaked:
+                report.error(f"{where}: {reference_column} has attention answer(s) {', '.join(leaked[:5])}; expected values "
+                             f"belong in the attention column", key="attention in reference")
             for key, value in reference.items():
-                if not isinstance(value, str) or value not in option_values:
-                    report.error(f"{where}: {reference_column}[{key!r}] = {value!r} is not an option value", key="reference value")
-                elif key in names:
+                question = question_of.get(key)
+                if question is None or key in attention_names:
+                    continue
+                if question.type == "text":
+                    report.error(f"{where}: {reference_column}[{key!r}] is a free-text answer (text has no reference)", key="reference text")
+                elif not isinstance(value, str) or value not in question.values:
+                    report.error(f"{where}: {reference_column}[{key!r}] = {value!r} is not {_value_word(question)} of "
+                                 f"question {question.id!r}", key="reference value")
+                else:
                     reference_values[value] = reference_values.get(value, 0) + 1
-            for name in sorted(attention_names):
-                if name not in reference:
-                    report.error(f"{where}: {reference_column} lacks the attention answer {name}", key="attention reference")
-                elif reference[name] != expected_value:
-                    report.error(f"{where}: {reference_column}[{name!r}] = {reference[name]!r}, expected {expected_value!r}", key="attention reference")
-            hints_missing += sum(1 for name in names if name not in reference and name not in attention_names)
+            hints_missing += sum(1 for name in names
+                                 if name not in attention_names and question_of[name].type != "text" and name not in reference)
         if reason_column is not None:
             reasons = cells.get(reason_column)
             if not isinstance(reasons, dict):
                 report.error(f"{where}: {reason_column} must be a JSON object {{answer name: reason}}", key="reason type")
             else:
-                unknown = [key for key in reasons if key not in names]
+                unknown = [key for key in reasons if key not in question_of or key in attention_names]
                 if unknown:
-                    report.error(f"{where}: {reason_column} has key(s) that are not answer names: {', '.join(unknown[:5])}", key="reason keys")
+                    report.error(f"{where}: {reason_column} has key(s) that are not answer names of normal items: "
+                                 f"{', '.join(unknown[:5])}", key="reason keys")
+        if attention_column is not None:
+            expected = cells.get(attention_column)
+            if not isinstance(expected, dict):
+                report.error(f"{where}: {attention_column} must be a JSON object {{answer name: expected value}}", key="attention type")
+            else:
+                for name, value in expected_names.items():
+                    if name not in expected:
+                        report.error(f"{where}: {attention_column} lacks the attention answer {name}", key="attention expected")
+                    elif expected[name] != value:
+                        report.error(f"{where}: {attention_column}[{name!r}] = {expected[name]!r}, expected {value!r}", key="attention expected")
+                    else:
+                        attention_answers += 1
+                extra = [key for key in expected if key not in expected_names]
+                if extra:
+                    report.error(f"{where}: {attention_column} has key(s) that are not attention answers with an expected "
+                                 f"value: {', '.join(extra[:5])}", key="attention keys")
 
         row_ok += 1
         items_total += count
         attention_total += sum(flags)
-        targets_total += len(names)
+        targets_total += row_targets
+        answers_total += len(names)
 
     if over_limit:
         report.warning(f"{HITS_FILE}: {len(over_limit)} row(s) exceed {ROW_BYTES_LIMIT // 1024} KB (MTurk rejects them): "
@@ -316,8 +389,11 @@ def _check_rows(spec: TaskSpec, columns: list[str], rows: list[dict[str, str]], 
         "items": items_total,
         "attention_items": attention_total,
         "targets": targets_total,
+        "answers": answers_total,
+        "attention_answers": attention_answers,
         "reference_values": dict(sorted(reference_values.items())),
         "hints_missing": hints_missing,
+        "free_text_suffixes": list(text_suffixes),
         "row_bytes": {
             "min": ordered[0] if ordered else 0,
             "median": (ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) // 2) if ordered else 0,
@@ -349,7 +425,7 @@ def run_validate(out_dir: Path) -> dict:
     print(f"validate {Path(out_dir)}: {'ok' if result['ok'] else 'FAILED'}")
     if "rows" in stats:
         print(f"  rows {stats.get('rows')}, items {stats.get('items', 0)}, attention items {stats.get('attention_items', 0)}, "
-              f"targets {stats.get('targets', 0)}, hints missing {stats.get('hints_missing', 0)}")
+              f"targets {stats.get('targets', 0)}, answers {stats.get('answers', 0)}, hints missing {stats.get('hints_missing', 0)}")
     if "row_bytes" in stats:
         size = stats["row_bytes"]
         print(f"  row bytes min {size['min']}, median {size['median']}, max {size['max']}; over 64KB: {stats.get('rows_over_64kb', 0)}")

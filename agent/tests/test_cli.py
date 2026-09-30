@@ -365,7 +365,7 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(body["model"], "test/model")
         self.assertEqual(body["max_tokens"], 8000)
         self.assertEqual(body["response_format"], {"type": "json_object"})
-        self.assertEqual([m["role"] for m in body["messages"]], ["system", "user", "assistant", "user"])
+        self.assertEqual([m["role"] for m in body["messages"]], ["system", "user", "assistant", "user", "assistant", "user"])
         self.assertIn("groundedness", body["messages"][-1]["content"])
         self.assertIn(f"Output folder: {self.out}\n", stdout)
         self.assertFalse((self.out / "task_spec.json").exists())

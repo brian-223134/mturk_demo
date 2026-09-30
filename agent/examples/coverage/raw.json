@@ -1,0 +1,300 @@
+[
+  {
+    "id": "q01",
+    "question": "Why do leaves change colour in autumn, and why do some trees turn red?",
+    "subquestions": {
+      "Sub-question 1": "Why do leaves lose their green colour in autumn?",
+      "Sub-question 2": "Why do some trees turn red instead of yellow?"
+    },
+    "answer": {
+      "system_a": {
+        "Statement 1": "Shorter days and cooler nights make trees stop producing chlorophyll.",
+        "Statement 2": "As the green chlorophyll breaks down, yellow and orange pigments that were there all summer become visible.",
+        "Statement 3": "Many trees drop their leaves to save water during winter."
+      },
+      "system_b": {
+        "Statement 1": "Leaves turn yellow because chlorophyll fades in autumn.",
+        "Statement 2": "Red colours come from anthocyanin pigments that some trees make in autumn from sugars trapped in the leaf.",
+        "Statement 3": "Bright sunny days and cool nights make the red colours stronger."
+      }
+    },
+    "labels": {
+      "system_a": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1",
+              "Statement 2"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": []
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Not covered"
+        }
+      },
+      "system_b": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": [
+              "Statement 2",
+              "Statement 3"
+            ]
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Covered"
+        }
+      }
+    }
+  },
+  {
+    "id": "q02",
+    "question": "What causes ocean tides, and why are there two high tides a day?",
+    "subquestions": {
+      "Sub-question 1": "What causes ocean tides?",
+      "Sub-question 2": "Why are there usually two high tides each day?",
+      "Sub-question 3": "Why are some tides much higher than others?"
+    },
+    "answer": {
+      "system_a": {
+        "Statement 1": "Tides are caused mainly by the gravitational pull of the Moon on the oceans.",
+        "Statement 2": "The Sun's gravity also affects tides, but less strongly than the Moon.",
+        "Statement 3": "The Earth rotates through two bulges of water, one facing the Moon and one on the opposite side, so most coasts get two high tides a day.",
+        "Statement 4": "Tide tables are published by coastal authorities every year."
+      },
+      "system_b": {
+        "Statement 1": "The Moon's gravity pulls on the oceans and creates tides.",
+        "Statement 2": "Spring tides happen when the Sun and Moon line up and their pulls add together."
+      }
+    },
+    "labels": {
+      "system_a": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1",
+              "Statement 2"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": [
+              "Statement 3"
+            ]
+          },
+          "Sub-question 3": {
+            "selected": [
+              "Statement 2"
+            ]
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Covered",
+          "Sub-question 3": "Not covered"
+        }
+      },
+      "system_b": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": []
+          },
+          "Sub-question 3": {
+            "selected": [
+              "Statement 2"
+            ]
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Not covered",
+          "Sub-question 3": "Covered"
+        }
+      }
+    }
+  },
+  {
+    "id": "q03",
+    "question": "How does yeast make bread rise, and why does bread need to be kneaded?",
+    "subquestions": {
+      "Sub-question 1": "How does yeast make bread dough rise?",
+      "Sub-question 2": "Why is bread dough kneaded?"
+    },
+    "answer": {
+      "system_a": {
+        "Statement 1": "Yeast feeds on sugars in the flour and releases carbon dioxide gas.",
+        "Statement 2": "The gas forms bubbles that are trapped in the dough, which makes it expand.",
+        "Statement 3": "Kneading develops gluten, a stretchy network of proteins that holds the gas bubbles in."
+      },
+      "system_b": {
+        "Statement 1": "Yeast is a living fungus.",
+        "Statement 2": "Bread has been baked for thousands of years."
+      }
+    },
+    "labels": {
+      "system_a": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1",
+              "Statement 2"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": [
+              "Statement 3"
+            ]
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Covered"
+        }
+      },
+      "system_b": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": []
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Not covered",
+          "Sub-question 2": "Not covered"
+        }
+      }
+    }
+  },
+  {
+    "id": "q04",
+    "question": "How do vaccines protect people from disease, and why are booster doses needed?",
+    "subquestions": {
+      "Sub-question 1": "How does a vaccine train the immune system?",
+      "Sub-question 2": "Why are booster doses sometimes needed?"
+    },
+    "answer": {
+      "system_a": {
+        "Statement 1": "A vaccine shows the immune system a harmless piece or weakened form of a germ.",
+        "Statement 2": "The immune system makes antibodies and memory cells that recognise the germ later.",
+        "Statement 3": "Some vaccines are given as a spray into the nose instead of an injection."
+      },
+      "system_b": {
+        "Statement 1": "Vaccines contain a harmless part of a germ that teaches the body to recognise it.",
+        "Statement 2": "Immune memory can fade over the years, so a booster dose reminds the immune system and raises protection again.",
+        "Statement 3": "Boosters are also used when a germ changes over time."
+      }
+    },
+    "labels": {
+      "system_a": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1",
+              "Statement 2"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": []
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Not covered"
+        }
+      },
+      "system_b": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": [
+              "Statement 2",
+              "Statement 3"
+            ]
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Not covered",
+          "Sub-question 2": "Covered"
+        }
+      }
+    }
+  },
+  {
+    "id": "q05",
+    "question": "Why is the sky blue during the day but red or orange at sunset?",
+    "subquestions": {
+      "Sub-question 1": "Why is the daytime sky blue?",
+      "Sub-question 2": "Why does the sky look red or orange at sunset?"
+    },
+    "answer": {
+      "system_a": {
+        "Statement 1": "Sunlight is scattered by the molecules in the air, and blue light is scattered much more than red light.",
+        "Statement 2": "At sunset, sunlight passes through far more air before it reaches us.",
+        "Statement 3": "Most of the blue light is scattered away on that long path, so mainly red and orange light is left."
+      },
+      "system_b": {
+        "Statement 1": "The sky is blue because air scatters blue light more than other colours.",
+        "Statement 2": "Clouds look white because their water droplets scatter all colours equally."
+      }
+    },
+    "labels": {
+      "system_a": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": [
+              "Statement 2",
+              "Statement 3"
+            ]
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Covered"
+        }
+      },
+      "system_b": {
+        "relevance": {
+          "Sub-question 1": {
+            "selected": [
+              "Statement 1"
+            ]
+          },
+          "Sub-question 2": {
+            "selected": []
+          }
+        },
+        "coverage": {
+          "Sub-question 1": "Covered",
+          "Sub-question 2": "Not covered"
+        }
+      }
+    }
+  }
+]

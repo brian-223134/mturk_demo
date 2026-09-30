@@ -37,17 +37,17 @@
 | `planner/` | spec을 만드는 방법입니다. `file_planner.py`는 손으로 쓴 파일을 읽고, `openrouter.py`는 LLM에게 묻고, `prompts.py`는 그 프롬프트를 조립하며, `base.py`의 `run_plan`이 결과를 검증해 저장합니다. | 데이터 자동 분석·전처리 |
 | `preprocess.py` | spec대로 항목을 만들고 attention 항목을 끼워 HIT로 묶은 뒤 `hits.csv`와 요약을 씁니다. | 데이터 자동 분석·전처리 |
 | `sample.py` | 실제 데이터의 일부를 뽑아 익명화한 표본을 만듭니다. | 데이터 자동 분석·전처리 |
-| `render.py` | spec의 필드, 질문, 선택지, 안내문에서 MTurk crowd-form 템플릿 `template.html`을 만듭니다. | annotation HTML 자동 생성 |
+| `render.py` | spec의 필드, 문항(한 개 고르기, 여러 개 체크, 척도, 자유 서술), 안내문에서 MTurk crowd-form 템플릿 `template.html`을 만듭니다. | annotation HTML 자동 생성 |
 | `validate.py` | 출력 폴더의 spec, CSV, 템플릿이 콘솔에 올릴 수 있는 상태인지 검사해 `validation.json`을 씁니다. | annotation HTML 자동 생성 |
 | `cli.py`, `__main__.py` | `python3 -m agent`의 하위 명령과 옵션입니다. | 실행 |
 | `config.py` | `environment/models/*.yaml`의 모델 설정과 `.env` 파일을 읽습니다. | 실행 |
 | `Dockerfile`, `requirements.txt` | agent 실행용 이미지와, 그 안에만 설치하는 PyYAML입니다. | 실행 |
-| `examples/` | 합성 데이터, prompt(markdown), spec으로 된 예시입니다. | 예시 |
-| `tests/` | 단위 테스트와 익명화한 표본 fixture입니다. | 테스트 |
+| `examples/` | 합성 데이터, prompt(markdown), spec으로 된 예시 두 개(`groundedness`, `coverage`)입니다. | 예시 |
+| `tests/` | 단위 테스트와 익명화한 표본 fixture, 그 표본으로 외부 도구의 예시 6종을 표현한 spec입니다. | 테스트 |
 
 ## 원칙: LLM은 spec만 채우고, 나머지는 코드가 합니다
 
-LLM이 하는 일은 `task_spec.json` 하나를 쓰는 것뿐입니다. 어느 필드를 보여 줄지, 무엇을 판정할지, 어떤 선택지를 줄지, LLM 라벨(대조 기준)이 어디에 있는지, attention check를 어떻게 만들지를 spec에 적으면, 정제·렌더·검증은 spec만 보고 결정적으로 동작합니다.
+LLM이 하는 일은 `task_spec.json` 하나를 쓰는 것뿐입니다. 어느 필드를 보여 줄지, 무엇을 어떤 문항으로 물을지, LLM 라벨(대조 기준)이 어디에 있는지, attention check를 어떻게 만들지를 spec에 적으면, 정제·렌더·검증은 spec만 보고 결정적으로 동작합니다.
 
 이렇게 나눈 이유는 두 가지입니다.
 
@@ -55,6 +55,21 @@ LLM이 하는 일은 `task_spec.json` 하나를 쓰는 것뿐입니다. 어느 �
 - **크레딧 없이 실행**: spec을 손으로 쓰거나 이전에 만든 것을 다시 쓰면 LLM 호출 없이 전 과정을 돌릴 수 있습니다. 테스트와 예시도 모두 LLM 없이 동작합니다.
 
 spec의 형식은 [spec_reference.md](spec_reference.md)에 영어로 설명되어 있습니다. 이 문서는 LLM에게 보내는 프롬프트에 그대로 들어가므로, 사람과 LLM이 같은 설명을 읽습니다.
+
+## 문항과 답 이름
+
+spec의 형식은 `spec_version: 2`입니다. 탭(항목) 하나에는 문맥 필드들과, 하나씩 판정할 목록(target 필드)이 최대 하나 있습니다. 탭마다 묻는 문항은 `item.questions`에 순서대로 적으며, 문항마다 종류와 범위를 정합니다.
+
+| 종류 | worker가 하는 일 | 저장되는 값 |
+|---|---|---|
+| `choice` | 선택지 중 하나를 고릅니다. | 고른 선택지의 값 |
+| `multi_select` | 문항 아래의 target 목록에서 해당하는 것을 모두 체크하거나 "해당 없음" 칸을 체크합니다. | target마다 체크했으면 첫 선택지 값, 아니면 둘째 선택지 값 |
+| `likert` | 척도의 숫자 하나를 고릅니다. | `"1"`…`"5"` 같은 정수 문자열 |
+| `text` | 짧은 글을 씁니다. 다른 답에 따라 필수가 되게(`required_when`) 할 수 있습니다. | 앞뒤 공백을 지운 글. 비워 둔 선택 문항은 답에서 빠집니다. |
+
+범위가 `target`인 문항은 target마다 한 번, `item`인 문항은 탭마다 한 번 묻습니다. 답 이름은 각각 `general_{탭}_{target 번호}_{문항 id}`와 `general_{탭}_{문항 id}`입니다. attention 탭도 같은 `general_` 이름을 쓰므로 worker의 화면과 페이지 소스에서는 attention 탭을 구별할 수 없습니다. attention 탭의 기대 답은 `hits.csv`의 attention 컬럼(기본 `attention_expected`)에만 들어갑니다.
+
+기존 라벨이 선택된 key의 목록(예: `selected_facts: ["Atomic fact1"]`)이면 문항의 hint에 `contains: "{target_key}"`를 적어 target마다 "목록에 있다/없다"를 대조 기준으로 씁니다. 옛 형식(`spec_version: 1`, 문항 하나)의 spec도 그대로 읽으며, 답 이름은 예전처럼 `general_{탭}_{target 번호}{answer_suffix}`이고 attention 탭만 `general_`로 바뀝니다. LLM에게는 새 형식만 쓰게 합니다.
 
 ## 실행하기
 
@@ -128,12 +143,12 @@ python3 -m agent test
 | `plan_request.json` | OpenRouter에 보낸 요청입니다 (`--dry-run`이면 보내지 않고 이 파일만 만듭니다). 어떤 모델 설정을 썼는지(`model_config`), 보낼 주소(`endpoint`), 요청 본문(`body`)이 들어 있습니다. 프롬프트를 확인하는 용도이며 키는 들어 있지 않습니다. 검증에 실패해 다시 물으면 `plan_request_2.json`이 더 생깁니다. |
 | `plan_response.json` | OpenRouter가 돌려준 응답 원문입니다. 다시 물었을 때의 응답은 `plan_response_2.json`입니다. |
 | `task_spec.json` | 작업 명세입니다. 어떤 planner를 썼든 검증을 통과한 뒤 같은 형태로 저장됩니다. LLM이 만든 spec에는 planner가 자기 선택을 설명한 `planner_notes`가 들어 있습니다. |
-| `items.jsonl` | 항목(탭 하나) 단위의 중간 결과입니다. 레코드 ID, 필드 값, 판정 대상, 대조 기준, 답 이름이 한 줄에 하나씩 있습니다. |
-| `hits.csv` | HIT 단위 CSV입니다. 콘솔의 `Data` 단계에 올립니다. 모든 셀은 JSON이며 템플릿이 그대로 읽습니다. |
-| `summary.json` | 레코드·항목·HIT 수, attention 항목 수, 대조 기준 값의 분포, 행 크기 같은 요약입니다. |
-| `settings.json` | 콘솔 `Settings`에 넣을 값입니다. 제목, 설명, 키워드, attention 규칙, 대조 기준 컬럼, 답 이름 규칙이 들어 있습니다. |
-| `template.html` | MTurk crowd-form 템플릿입니다. 콘솔의 `Template` 단계에 올립니다. |
-| `validation.json` | 검증 결과입니다. `ok`, `errors`(게시 불가), `warnings`(참고), `stats`가 있습니다. |
+| `items.jsonl` | 항목(탭 하나) 단위의 중간 결과입니다. 레코드 ID, 필드 값, 판정 대상, 그리고 답 칸마다 답 이름·문항·대조 기준·이유·attention 기대 값이 한 줄에 하나씩 있습니다. |
+| `hits.csv` | HIT 단위 CSV입니다. 콘솔의 `Data` 단계에 올립니다. 컬럼은 `hit_id, record_ids, item_ids, attention`, spec의 필드들, 대조 기준 컬럼(기본 `llm_label`), 이유 컬럼(있을 때), attention 컬럼(기본 `attention_expected`, attention이 있을 때) 순서입니다. 모든 셀은 JSON입니다. 대조 기준 컬럼에는 일반 탭의 답만, attention 컬럼에는 attention 탭의 기대 답만 `{답 이름: 값}`으로 들어갑니다. |
+| `summary.json` | 레코드·항목·HIT 수, attention 항목 수, target과 답 칸 수, 대조 기준 값의 분포(문항별 분포는 `questions`), 행 크기 같은 요약입니다. 경로가 풀리지 않거나 형이 맞지 않아 건너뛴 레코드는 `skipped_records`에 개수와 예(최대 10개, 레코드 ID와 이유)로 적힙니다. |
+| `settings.json` | 콘솔 `Settings`에 넣을 값입니다. 제목, 설명, 키워드, attention 규칙(`{"column": "attention_expected", "minCorrectRatio": 1}`), 대조 기준 컬럼, 자유 서술 답의 이름 접미어(`freeTextSuffixes`), 문항 목록, 답 이름 규칙이 들어 있습니다. |
+| `template.html` | MTurk crowd-form 템플릿입니다. 콘솔의 `Template` 단계에 올립니다. `${hit_id}`와 spec의 필드만 placeholder로 쓰고, 탭을 다 그린 뒤 답 칸 목록을 `window.TASK_ANSWER_SCHEMA`에 둡니다. Submit을 누르면 hidden `input_answers`에 `[{name, value}]` 배열을 넣어 제출합니다. |
+| `validation.json` | 검증 결과입니다. `ok`, `errors`(게시 불가), `warnings`(참고), `stats`가 있습니다. 건너뛴 레코드가 있으면 경고로 알립니다. |
 
 ## 콘솔에 올리기
 
@@ -141,19 +156,19 @@ python3 -m agent test
 
 1. `Template` 단계에서 `Upload or paste HTML`을 고르고 `template.html`을 올린 뒤 저장합니다. 템플릿이 쓰는 `${컬럼}` 목록이 표시됩니다.
 2. `Data` 단계에서 `hits.csv`를 올립니다. 템플릿의 컬럼이 모두 있는지 콘솔이 검사합니다.
-3. `Settings` 단계에서 `settings.json`의 값을 옮겨 적습니다. 제목·설명·키워드를 넣고, `Attention check`를 켜서 이름 접두어에 `attention_`, `Expected value`에 `settings.json`의 `attentionRule.expectedValue`를 입력합니다. `Review reference`에서는 `settings.json`의 `reference.column`에 적힌 컬럼(기본 `llm_label`)을 고릅니다. 그러면 Manage의 `Answers` 열에 worker의 답과 LLM 라벨이 나란히 보입니다.
+3. `Settings` 단계에서 `settings.json`의 값을 옮겨 적습니다. 제목·설명·키워드를 넣고, `Attention check`를 켠 뒤 `Expected answers column` 방식을 골라 `settings.json`의 `attentionRule.column`에 적힌 컬럼(기본 `attention_expected`)을 고릅니다. 자유 서술 문항이 있으면 `Free-text answers`에 `freeTextSuffixes`의 접미어(예: `_missing_info`)를 쉼표로 구분해 적습니다. `Review reference`에서는 `reference.column`에 적힌 컬럼(기본 `llm_label`)을 고릅니다. 그러면 Manage의 `Answers` 열에 worker의 답과 LLM 라벨이 나란히 보입니다.
 4. `Preview & Cost`에서 한 HIT를 열어 보고 `Publish`로 게시합니다.
 
 ## prompt 쓰기
 
-requester의 prompt는 markdown 파일(`prompt.md`)로 쓰고 `--prompt @경로`로 넘깁니다. 파일의 본문은 그대로 모델의 사용자 메시지에 들어가므로, `#` 제목으로 절을 나누고 목록으로 조건을 적어 두면 모델이 빠뜨리지 않고 따릅니다. `examples/groundedness/prompt.md`가 그 형식의 예시이며, 절은 다음과 같습니다.
+requester의 prompt는 markdown 파일(`prompt.md`)로 쓰고 `--prompt @경로`로 넘깁니다. 파일의 본문은 그대로 모델의 사용자 메시지에 들어가므로, `#` 제목으로 절을 나누고 목록으로 조건을 적어 두면 모델이 빠뜨리지 않고 따릅니다. `examples/groundedness/prompt.md`와 `examples/coverage/prompt.md`가 그 형식의 예시이며, 절은 다음과 같습니다.
 
 | 절 | 적는 내용 |
 |---|---|
 | `# Annotation goal` | 무엇을 판정하는 작업인지 한 문단으로 적습니다. |
 | `# Data` | 레코드 하나가 무엇인지와, 문맥·판정 대상·기존 라벨이 있는 경로를 적습니다. |
 | `# Unit of annotation (one tab)` | 탭 하나에 무엇을 보여 주고 답을 몇 개 받는지 적습니다. |
-| `# Question and options` | 질문 문구와 선택지의 라벨·값을 적습니다. |
+| `# Questions and options` | 문항마다 문구, 답하는 방식, 선택지의 라벨·값을 적습니다 (아래 표). |
 | `# HIT composition` | HIT 하나에 들어가는 탭 수, 묶는 단위, attention 탭을 만드는 방법을 적습니다. |
 | `# Reference labels` | 기존 라벨의 값을 선택지 값에 어떻게 대응시키고 이유를 남길지 적습니다. |
 | `# Worker instructions (must cover)` | 안내문에 꼭 들어가야 할 기준과 규칙을 적습니다. |
@@ -161,6 +176,18 @@ requester의 prompt는 markdown 파일(`prompt.md`)로 쓰고 `--prompt @경로`
 | `# Deliverable` | 답이 spec JSON이라는 것과, worker가 보는 문구는 영어라는 것 같은 출력 조건을 적습니다. |
 
 모든 절이 필수는 아닙니다. prompt가 말하지 않은 것은 모델이 [spec_reference.md](spec_reference.md)의 지침대로 정합니다.
+
+문항의 종류는 prompt의 표현으로 정해지므로, 원하는 답하는 방식을 문장으로 분명히 적어 둡니다.
+
+| prompt에 적는 말 | 모델이 고르는 문항 |
+|---|---|
+| "statement마다 Supported / Contradicted / Not mentioned 중 하나" | target마다 묻는 `choice` |
+| "passage가 지지하는 statement를 모두 체크" | `multi_select` (체크한 값과 체크하지 않은 값, "해당 없음" 문구도 적어 둡니다) |
+| "두 passage 중 어느 쪽이 더 잘 답하나", "sub-question이 다 답해졌나" | 탭마다 묻는 `choice` (두 passage를 나란히 보이려면 "인접한 두 passage를 한 탭에"라고 적습니다) |
+| "1점부터 5점까지 평가" | `likert` (양 끝의 문구도 적어 둡니다) |
+| "No를 고른 경우에만 빠진 정보를 한 문장으로" | 조건부로 필수인 `text` |
+
+기존 라벨이 선택된 key의 목록이면 그 모양(예: `["Atomic fact1", "Atomic fact3"]`)을 `# Reference labels`에 적어 두면 모델이 `contains` hint를 씁니다.
 
 ## OpenRouter로 spec 만들기
 
@@ -171,7 +198,7 @@ requester의 prompt는 markdown 파일(`prompt.md`)로 쓰고 `--prompt @경로`
 - **요청 확인**: `--dry-run`을 붙이면 API를 부르지 않고 `plan_request.json`만 저장한 뒤 정상 종료합니다. 프롬프트에 무엇이 들어가는지 먼저 확인할 때 씁니다.
 - **크레딧 안전장치**: 실제 호출은 크레딧을 쓰므로 `--allow-api`를 붙이거나 환경변수 `AGENT_ALLOW_API=1`을 줄 때만 일어납니다. 둘 다 없으면 요청을 보내지 않고 `API call not allowed` 오류로 끝납니다. 테스트는 네트워크를 전혀 쓰지 않습니다.
 - **요청과 응답 기록**: 보낸 요청은 `plan_request.json`으로, 돌아온 응답 원문은 `plan_response.json`으로 출력 폴더에 저장됩니다. 검증에 실패해 다시 물으면 `plan_request_2.json`과 `plan_response_2.json`이 더 생깁니다.
-- **프롬프트 구성**: 시스템 메시지(역할, spec 형식 설명서, 출력 규칙) 뒤에 예시 대화 한 쌍이 들어갑니다. 예시는 합성 예시 `examples/groundedness/`의 profile과 `prompt.md`를 사용자 메시지로, 그 `task_spec.json`을 모델의 답으로 넣은 것이라, 모델이 spec의 모양을 보고 씁니다. 실제 작업의 profile과 prompt는 그 뒤의 마지막 사용자 메시지입니다. 설명서 끝의 예시 spec 절은 같은 내용이라 프롬프트에서는 뺍니다.
+- **프롬프트 구성**: 시스템 메시지(역할, spec 형식 설명서, 출력 규칙) 뒤에 예시 대화 두 쌍이 들어갑니다. 예시는 합성 예시 `examples/groundedness/`(target마다 묻는 `choice` 하나)와 `examples/coverage/`(`multi_select`와 `contains` hint, 탭마다 묻는 `choice`, 조건부 `text`)의 profile과 `prompt.md`를 사용자 메시지로, 그 `task_spec.json`을 모델의 답으로 넣은 것이라, 모델이 spec의 모양을 보고 씁니다. 실제 작업의 profile과 prompt는 그 뒤의 마지막 사용자 메시지입니다. 설명서 끝의 예시 spec 절은 첫 예시와 같은 내용이라 프롬프트에서는 뺍니다.
 - **비용**: 모델 설정의 `params`에 `usage: {include: true}`가 있어, OpenRouter가 응답의 `usage`에 실제 청구액(`cost`, USD)을 넣어 줍니다. 실행이 끝나면 `Usage: prompt 12000, completion 3000, cost $0.0034`처럼 표시되며, 다시 물었을 때는 합계입니다.
 - **planner의 설명**: LLM은 spec의 `planner_notes`에 어떤 경로를 문맥·판정 대상·대조 기준으로 골랐고 왜 그랬는지, 어떤 이상치를 고려했는지를 영어 다섯 문장 이내로 적습니다. 파이프라인은 이 값을 저장만 하고 쓰지 않으므로, spec을 검토하는 사람이 판단 근거를 보는 용도입니다.
 - **기본 모델**: 기본 설정 `environment/models/default.yaml`은 값싼 테스트용으로 고른 open-weight 모델을 가리킵니다. 어떤 모델인지는 그 파일에 적혀 있고, 같은 폴더에 다른 모델의 설정을 두고 골라 쓸 수 있습니다.
@@ -240,8 +267,10 @@ YAML 파일을 읽는 PyYAML은 컨테이너 안에만 설치되어 있습니다
     "model": "…",
     "messages": [
       {"role": "system", "content": "…(역할, spec 형식 설명서, 출력 규칙)"},
-      {"role": "user", "content": "…(예시의 profile과 prompt)"},
-      {"role": "assistant", "content": "…(예시의 spec)"},
+      {"role": "user", "content": "…(첫 예시의 profile과 prompt)"},
+      {"role": "assistant", "content": "…(첫 예시의 spec)"},
+      {"role": "user", "content": "…(둘째 예시의 profile과 prompt)"},
+      {"role": "assistant", "content": "…(둘째 예시의 spec)"},
       {"role": "user", "content": "…(실제 작업의 profile과 prompt)"}
     ],
     "temperature": 0,
@@ -259,13 +288,14 @@ docker compose run --rm agent plan --profile output/<task>/profile.json --prompt
 
 ## 예시로 해 보기
 
-`examples/groundedness/`에는 합성 데이터(`raw.json`), prompt(`prompt.md`), 그 데이터용 spec(`task_spec.json`)이 있습니다. 실제 데이터는 아니며, 형식만 실제 작업과 같습니다. 다음 명령은 LLM 없이 전 과정을 실행합니다.
+`examples/groundedness/`와 `examples/coverage/`에는 각각 합성 데이터(`raw.json`), prompt(`prompt.md`), 그 데이터용 spec(`task_spec.json`)이 있습니다. 실제 데이터는 아니며, 형식만 실제 작업과 같습니다. groundedness는 passage 하나와 statement마다의 지지 여부를 묻고, coverage는 sub-question 하나에 대해 관련 statement 체크, 완전성 판정, 빠진 정보 서술을 한 탭에서 묻습니다. 다음 명령은 LLM 없이 전 과정을 실행합니다.
 
 ```bash
 python3 -m agent run agent/examples/groundedness/raw.json --prompt @agent/examples/groundedness/prompt.md --spec agent/examples/groundedness/task_spec.json
+python3 -m agent run agent/examples/coverage/raw.json --prompt @agent/examples/coverage/prompt.md --spec agent/examples/coverage/task_spec.json --out output/coverage
 ```
 
-`output/raw/`에 위 출력 파일들이 생기고, `template.html`과 `hits.csv`를 콘솔의 Create 탭에 올려 볼 수 있습니다.
+`output/raw/`와 `output/coverage/`에 위 출력 파일들이 생기고, `template.html`과 `hits.csv`를 콘솔의 Create 탭에 올려 볼 수 있습니다.
 
 ## 실제 데이터의 일부로 테스트하기 (`sample`)
 
@@ -285,7 +315,7 @@ python3 -m agent sample <원본> --out agent/tests/fixtures/sample.json --n 6 --
 
 익명화는 구조를 그대로 두고 이름과 본문만 바꿉니다. 그대로 두는 것은 구조(리스트 길이, 중첩), 숫자·bool·null, snake_case 키, `Chunk 3`, `Atomic fact1`, `Core subquery1`, `general_0_1`, `selected_facts` 같은 구조용 라벨, 그리고 `Yes`/`No`처럼 짧고(24자 이하) 표본 전체에서 5번 이상, 2개 이상의 레코드에 나오는 라벨 값입니다. 바꾸는 것은 그 밖의 키(모델이나 retriever 이름 등)로, 처음 나온 순서대로 `key_1`, `key_2`, …가 되며 같은 원래 키는 어디에 나오든 같은 이름이 됩니다. 공백이 없는 짧은 값(ID 등)은 `token_` 뒤에 hex 6자리가 붙은 형태로, 나머지 문자열은 같은 길이의 lorem ipsum으로 바뀌고 원문이 `?`로 끝나면 결과도 `?`로 끝납니다.
 
-표본을 다시 만들면 키 이름이 바뀔 수 있으므로, `tests/fixtures/sample_spec.json`의 경로를 새 `key_n` 이름에 맞게 다시 고쳐야 합니다. `tests/test_sample_pipeline.py`는 이 표본과 spec으로 전 과정(preprocess, render, validate)을 돌리고, 표본에 `<이름>_test_123` 같은 데이터셋 항목 ID가 남아 있지 않은지와 키가 모두 익명인지도 검사합니다.
+표본을 다시 만들면 키 이름이 바뀔 수 있으므로, `tests/fixtures/sample_spec.json`과 `tests/fixtures/external_tasks/*.json`의 경로를 새 `key_n` 이름에 맞게 다시 고쳐야 합니다. `tests/test_sample_pipeline.py`는 이 표본과 옛 형식의 spec으로 전 과정(preprocess, render, validate)을 돌리고, 표본에 `<이름>_test_123` 같은 데이터셋 항목 ID가 남아 있지 않은지와 키가 모두 익명인지도 검사합니다. `tests/test_external_tasks.py`는 같은 표본으로 외부 도구의 예시 6종(completeness, groundedness, retrieval coverage, gt info coverage, pairwise, threeway)을 새 형식의 spec으로 돌리고, 대조 기준이 원본 라벨에서 따로 계산한 값과 같은지 확인합니다.
 
 익명화하지 않은 로컬 데이터로도 같은 테스트를 돌릴 수 있습니다. 환경변수 `AGENT_LOCAL_SAMPLE_DIR`에 `raw.json`과 `task_spec.json`이 있는 폴더를 주면 그 폴더로 전 과정을 한 번 더 돌리고, 없으면 그 테스트는 건너뜁니다.
 
@@ -295,4 +325,13 @@ AGENT_LOCAL_SAMPLE_DIR=<폴더> python3 -m agent test
 
 ## spec을 손으로 쓰기
 
-LLM 없이 새 작업을 만들려면 `examples/groundedness/task_spec.json`을 복사해 고치는 것이 가장 빠릅니다. 각 키의 의미, 경로 언어, 변수, 답 이름 규칙, attention 전략은 [spec_reference.md](spec_reference.md)에 있습니다. 고친 spec은 `plan --spec FILE --raw RAW`로 실제 레코드에 대해 검사할 수 있습니다.
+LLM 없이 새 작업을 만들려면 `examples/groundedness/task_spec.json`(문항 하나)이나 `examples/coverage/task_spec.json`(문항 여러 개)을 복사해 고치는 것이 가장 빠릅니다. 문항 종류별 예는 `tests/fixtures/external_tasks/`에도 있습니다. 각 키의 의미, 경로 언어, 변수, 문항 종류, 답 이름 규칙, attention 전략은 [spec_reference.md](spec_reference.md)에 있습니다. 고친 spec은 `plan --spec FILE --raw RAW`로 실제 레코드에 대해 검사할 수 있으며, 경로가 풀리지 않으면 실제 레코드에 있는 가장 가까운 경로를 `(did you mean '…'?)`로 알려 주고 최상위 키가 틀렸으면 레코드의 최상위 키를 보여 줍니다.
+
+이 검사는 경로가 풀리는지만 보지 않고, 앞쪽 레코드 20개로 내용도 확인합니다. 다음 경우는 오류이며, LLM이 만든 spec이면 이 메시지를 붙여 다시 묻습니다.
+
+- `contains`의 글이 라벨 목록의 원소와 한 번도 맞지 않는 경우입니다. 목록에 든 값의 예와, 그 값과 맞는 변수(예: `{target_key}`)를 알려 줍니다.
+- 라벨 경로와 target·문맥 경로가 같은 부모의 서로 다른 키(다른 retriever나 model)를 가리키는 경우입니다. 예를 들어 target은 한 model의 fact인데 라벨은 다른 model의 fact에 대한 것일 때입니다.
+- worker가 읽는 문구(제목, 키워드, 안내문, 문항, 선택지)에 데이터의 내부 이름이 나오는 경우입니다. spec의 경로가 쓰는 키 가운데 숫자가 든 키(`Chunk 3` 같은 번호 라벨은 제외)와 그 형제 키를 찾습니다.
+- `contains` hint의 라벨 맵은 있는데 일부 항목의 키가 없고 `missing`이 null인 경우입니다. 없는 키가 "해당 없음"이면 `missing`에 부정 값을 넣으라고 알려 줍니다.
+
+첫 레코드 몇 개는 엄격하게 검사하지만, 전처리는 그 뒤의 레코드 중 경로가 풀리지 않거나 형이 맞지 않는 것을 건너뛰고 `summary.json`의 `skipped_records`에 적습니다. 쓰는 레코드의 절반을 넘게 건너뛰면 spec이 데이터와 맞지 않는 것으로 보고 오류를 냅니다.

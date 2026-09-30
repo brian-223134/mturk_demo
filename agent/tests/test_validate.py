@@ -1,4 +1,4 @@
-"""validate 모듈: 예시 묶음 통과, 컬럼 누락·reference 오류·큰 행·렌더 검사."""
+"""validate 모듈: 예시 묶음 통과, 컬럼 누락·reference 오류·attention 컬럼 오류·큰 행·렌더 검사, 문항 여러 개."""
 
 import csv
 import io
@@ -15,12 +15,13 @@ from agent import preprocess, render, spec, validate
 csv.field_size_limit(sys.maxsize)
 
 EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "groundedness"
+COVERAGE_DIR = EXAMPLE_DIR.parent / "coverage"
 
 
-def build_bundle(out: Path) -> None:
-    parsed = spec.load_spec(EXAMPLE_DIR / "task_spec.json")
-    shutil.copy(EXAMPLE_DIR / "task_spec.json", out / "task_spec.json")
-    preprocess.run_preprocess(parsed, EXAMPLE_DIR / "raw.json", out)
+def build_bundle(out: Path, example: Path = EXAMPLE_DIR) -> None:
+    parsed = spec.load_spec(example / "task_spec.json")
+    shutil.copy(example / "task_spec.json", out / "task_spec.json")
+    preprocess.run_preprocess(parsed, example / "raw.json", out)
     render.run_render(parsed, out)
 
 
@@ -60,11 +61,13 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(result["warnings"], [])
         self.assertTrue(result["ok"])
         stats = result["stats"]
-        self.assertEqual(stats["placeholders"], ["hit_id", "attention", "question", "passage", "facts"])
-        self.assertEqual(stats["unused_columns"], ["record_ids", "item_ids", "llm_label", "llm_reason"])
+        self.assertEqual(stats["placeholders"], ["hit_id", "question", "passage", "facts"])
+        self.assertEqual(stats["unused_columns"], ["record_ids", "item_ids", "attention", "llm_label", "llm_reason", "attention_expected"])
         self.assertEqual((stats["rows"], stats["rows_ok"], stats["items"], stats["attention_items"], stats["targets"]), (6, 6, 30, 6, 58))
+        self.assertEqual((stats["answers"], stats["attention_answers"]), (58, 10))
         self.assertEqual(stats["hints_missing"], 0)
-        self.assertEqual(sum(stats["reference_values"].values()), 58)
+        self.assertEqual(stats["free_text_suffixes"], [])
+        self.assertEqual(sum(stats["reference_values"].values()), 48)
         self.assertEqual(stats["rows_over_64kb"], 0)
         saved = json.loads((out / "validation.json").read_text(encoding="utf-8"))
         self.assertEqual(saved, result)
@@ -78,7 +81,8 @@ class ValidateTest(unittest.TestCase):
         text = buffer.getvalue()
         self.assertIn(": ok", text)
         self.assertIn("rows 6, items 30", text)
-        self.assertIn("placeholders: hit_id, attention, question, passage, facts", text)
+        self.assertIn("answers 58", text)
+        self.assertIn("placeholders: hit_id, question, passage, facts", text)
 
     def test_missing_files(self):
         out = self.bundle()
@@ -108,19 +112,54 @@ class ValidateTest(unittest.TestCase):
         out = self.bundle()
         columns, rows = read_rows(out / "hits.csv")
         reference = json.loads(rows[0]["llm_label"])
-        attention_name = next(name for name in reference if name.startswith("attention_"))
-        general_name = next(name for name in reference if name.startswith("general_"))
-        reference[attention_name] = "grounded"
+        attention_name = next(iter(json.loads(rows[0]["attention_expected"])))
+        general_name = next(iter(reference))
+        reference[attention_name] = "not_grounded"
         reference[general_name] = "maybe"
-        reference["general_9_9"] = "grounded"
+        reference["general_9_9_support"] = "grounded"
         rows[0]["llm_label"] = preprocess.json_cell(reference)
         write_rows(out / "hits.csv", columns, rows)
         result = validate.validate_bundle(out)
         self.assertFalse(result["ok"])
         errors = "\n".join(result["errors"])
-        self.assertIn(f"llm_label['{attention_name}'] = 'grounded', expected 'not_grounded'", errors)
-        self.assertIn(f"llm_label['{general_name}'] = 'maybe' is not an option value", errors)
-        self.assertIn("key(s) that are not answer names: general_9_9", errors)
+        self.assertIn(f"llm_label has attention answer(s) {attention_name}; expected values belong in the attention column", errors)
+        self.assertIn(f"llm_label['{general_name}'] = 'maybe' is not an option value of question 'support'", errors)
+        self.assertIn("key(s) that are not answer names: general_9_9_support", errors)
+
+    def test_corrupted_attention_column_is_an_error(self):
+        out = self.bundle()
+        columns, rows = read_rows(out / "hits.csv")
+        expected = json.loads(rows[0]["attention_expected"])
+        first, *rest = list(expected)
+        expected[first] = "grounded"
+        reference_name = next(iter(json.loads(rows[0]["llm_label"])))
+        expected[reference_name] = "not_grounded"
+        rows[0]["attention_expected"] = preprocess.json_cell(expected)
+        second = json.loads(rows[1]["attention_expected"])
+        dropped = next(iter(second))
+        del second[dropped]
+        rows[1]["attention_expected"] = preprocess.json_cell(second)
+        rows[2]["attention_expected"] = "[]"
+        write_rows(out / "hits.csv", columns, rows)
+        errors = "\n".join(validate.validate_bundle(out)["errors"])
+        self.assertIn(f"line 2: attention_expected['{first}'] = 'grounded', expected 'not_grounded'", errors)
+        self.assertIn(f"line 2: attention_expected has key(s) that are not attention answers with an expected value: {reference_name}", errors)
+        self.assertIn(f"line 3: attention_expected lacks the attention answer {dropped}", errors)
+        self.assertIn("line 4: attention_expected must be a JSON object", errors)
+
+    def test_template_must_hide_attention(self):
+        out = self.bundle()
+        path = out / "template.html"
+        html = path.read_text(encoding="utf-8")
+        path.write_text(html.replace("return 'general_' + i", "return (ATT ? 'attention_' : 'general_') + i")
+                        .replace("window.TASK_ANSWER_SCHEMA", "window.SCHEMA"), encoding="utf-8")
+        errors = "\n".join(validate.validate_bundle(out)["errors"])
+        self.assertIn("template.html: contains 'attention_'", errors)
+        self.assertIn("template.html: 'TASK_ANSWER_SCHEMA' not found", errors)
+        # 옛 템플릿처럼 ${attention}을 쓰면 placeholder가 맞지 않는다
+        path.write_text(html.replace("var FIELDS = {};", "var FIELDS = {};\nvar ATT = ${attention};"), encoding="utf-8")
+        errors = "\n".join(validate.validate_bundle(out)["errors"])
+        self.assertIn("differ from the expected ['facts', 'hit_id', 'passage', 'question'] (hit_id and the spec fields)", errors)
 
     def test_item_count_mismatch_and_bad_json(self):
         out = self.bundle()
@@ -168,6 +207,30 @@ class ValidateTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertTrue(any("differ from the expected" in e for e in result["errors"]))
         self.assertTrue(any("placeholder column(s) missing: extra" in e for e in result["errors"]))
+
+    def test_multi_question_bundle(self):
+        out = Path(tempfile.mkdtemp(dir=self.tmp.name))
+        build_bundle(out, COVERAGE_DIR)
+        result = validate.validate_bundle(out)
+        self.assertEqual((result["errors"], result["warnings"]), ([], []))
+        stats = result["stats"]
+        self.assertEqual(stats["placeholders"], ["hit_id", "question", "subquestion", "statements"])
+        self.assertEqual(stats["free_text_suffixes"], ["_missing"])
+        summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+        for key in ("targets", "answers", "attention_answers", "hints_missing", "reference_values", "row_bytes"):
+            self.assertEqual(stats[key], summary[key], key)
+        # 자유 서술 답을 reference에 넣으면 오류다
+        columns, rows = read_rows(out / "hits.csv")
+        reference = json.loads(rows[0]["llm_label"])
+        flags = json.loads(rows[0]["attention"])
+        normal = flags.index(0)
+        reference[f"general_{normal}_missing"] = "covered"
+        reference[f"general_{normal}_coverage"] = "relevant"
+        rows[0]["llm_label"] = preprocess.json_cell(reference)
+        write_rows(out / "hits.csv", columns, rows)
+        errors = "\n".join(validate.validate_bundle(out)["errors"])
+        self.assertIn(f"llm_label['general_{normal}_missing'] is a free-text answer", errors)
+        self.assertIn(f"llm_label['general_{normal}_coverage'] = 'relevant' is not an option value of question 'coverage'", errors)
 
     def test_helpers(self):
         html = "a ${x} b ${y} ${x} ${1bad} ${z_1}"

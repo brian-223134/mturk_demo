@@ -27,10 +27,11 @@ from agent.planner import FilePlanner, OpenRouterPlanner, PlannerError, build_me
 from agent.spec import SpecError, spec_to_dict, validate_against_records, parse_spec
 
 EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "groundedness"
+COVERAGE_DIR = EXAMPLE_DIR.parent / "coverage"
 REPO_ROOT = EXAMPLE_DIR.parent.parent.parent
 ENV_KEYS = (openrouter.KEY_VARIABLE, config.MODEL_VARIABLE, openrouter.ALLOW_VARIABLE)
 TEST_PARAMS = {"temperature": 0, "max_tokens": 8000, "response_format": {"type": "json_object"}}
-FEW_SHOT = ["system", "user", "assistant", "user"]          # 시스템, 예시 작업, 예시 spec, 실제 작업
+FEW_SHOT = ["system", "user", "assistant", "user", "assistant", "user"]   # 시스템, (예시 작업, 예시 spec) × 2, 실제 작업
 RETRY = FEW_SHOT + ["assistant", "user"]                    # + 직전 답, 수정 요청
 
 
@@ -965,7 +966,7 @@ class EnvTest(unittest.TestCase):
 
 
 class PromptsTest(ExampleCase):
-    """메시지 순서 [system, user(예시), assistant(예시 spec), user(실제)], 예시 캐시, 참고 문서의 예시 절 제외, 재시도 쌍."""
+    """메시지 순서 [system, (user(예시), assistant(예시 spec)) × 2, user(실제)], 예시 캐시, 참고 문서의 예시 절 제외, 재시도 쌍."""
 
     def test_messages(self):
         messages = build_messages(self.profile, self.prompt)
@@ -974,8 +975,12 @@ class PromptsTest(ExampleCase):
         self.assertIn(prompts.ROLE.splitlines()[0], system)
         self.assertIn("# Task spec reference", system)
         self.assertIn("spec_version", system)
+        self.assertIn('Write "spec_version": 2', system)
+        self.assertIn("## 3. Keys", system)
+        self.assertIn("### `item.questions`", system)
+        self.assertIn("multi_select", system)
         self.assertIn("no markdown code fences", system)
-        self.assertIn("example exchange", system)
+        self.assertIn("two example exchanges", system)
         # 참고 문서의 마지막 절(예시 spec)은 시스템 프롬프트에 없다. 파일과 spec_reference() 에는 그대로 있다
         self.assertNotIn("## 10. Complete example", system)
         self.assertNotIn('"passage-fact-support"', system)
@@ -1012,6 +1017,29 @@ class PromptsTest(ExampleCase):
         # assistant 답은 예시 spec 파일의 원문 그대로다
         self.assertEqual(example_assistant["content"], (EXAMPLE_DIR / "task_spec.json").read_text(encoding="utf-8"))
         self.assertEqual(json.loads(example_assistant["content"]), self.spec)
+        self.assertEqual(json.loads(example_assistant["content"])["spec_version"], 2)
+
+    def test_second_example_turns(self):
+        messages = build_messages(self.profile, self.prompt)
+        example_user, example_assistant = messages[3], messages[4]
+        self.assertEqual((example_user["role"], example_assistant["role"]), ("user", "assistant"))
+        self.assertIn((COVERAGE_DIR / "prompt.md").read_text(encoding="utf-8").strip(), example_user["content"])
+        profile_json = example_user["content"].split("## What the requester wants")[0].split("\n", 1)[1]
+        example_profile = json.loads(profile_json)
+        self.assertLessEqual(profile_module._json_len(example_profile), prompts.EXAMPLE_PROFILE_MAX_CHARS)
+        paths = {entry["path"] for entry in example_profile["paths"]}
+        for path in ("$.id", "$.question", "$.subquestions", "$.answer.system_a", "$.labels.system_a.relevance.{key}.selected",
+                     "$.labels.system_a.coverage.{key}"):
+            self.assertIn(path, paths)
+        self.assertEqual(example_assistant["content"], (COVERAGE_DIR / "task_spec.json").read_text(encoding="utf-8"))
+        example_spec = parse_spec(json.loads(example_assistant["content"]))
+        self.assertEqual([q.type for q in example_spec.item.questions], ["multi_select", "choice", "text"])
+        self.assertEqual(prompts.EXAMPLE_DIRS, (EXAMPLE_DIR, COVERAGE_DIR))
+        # 두 예시 모두 자기 원본으로 실측 검증을 통과한다
+        for directory in prompts.EXAMPLE_DIRS:
+            _, records = source.load_records(directory / "raw.json")
+            loaded = parse_spec(json.loads((directory / "task_spec.json").read_text(encoding="utf-8")))
+            self.assertEqual(validate_against_records(loaded, records), [], directory.name)
 
     def test_example_is_built_once_and_copied(self):
         first = prompts.example_messages()
@@ -1037,14 +1065,15 @@ class PromptsTest(ExampleCase):
         self.assertEqual(json.loads(messages[-2]["content"]), previous)
         self.assertIn("$.task: required", messages[-1]["content"])
         self.assertIn("$.item: required", messages[-1]["content"])
-        self.assertEqual(len(build_messages(self.profile, self.prompt, errors=[])), 4)
+        self.assertEqual(len(build_messages(self.profile, self.prompt, errors=[])), 6)
 
     def test_system_and_example_size_stays_reasonable(self):
-        """시스템 + 예시 두 턴은 모든 호출에 붙는 고정 비용이다 (지금 약 4만 자, 1만 토큰쯤). 5만 자 안에 둔다."""
+        """시스템 + 예시 네 턴은 모든 호출에 붙는 고정 비용이다 (지금 약 6.6만 자, 1.6만 토큰쯤). 7.5만 자 안에 둔다."""
         messages = build_messages(self.profile, self.prompt)
-        fixed = sum(len(m["content"]) for m in messages[:3])
-        self.assertLess(fixed, 50000, fixed)
+        fixed = sum(len(m["content"]) for m in messages[:5])
+        self.assertLess(fixed, 75000, fixed)
         self.assertLess(len(messages[1]["content"]), 16000)
+        self.assertLess(len(messages[3]["content"]), 16000)
 
     def test_profile_max_chars_is_passed_through(self):
         prompts.example_messages()  # 예시는 프로세스마다 한 번만 만든다. 미리 만들어 두어 spy 에 잡히지 않게 한다

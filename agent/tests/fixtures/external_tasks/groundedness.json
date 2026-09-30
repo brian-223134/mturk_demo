@@ -1,0 +1,134 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "passage-statement-support",
+    "title": "Which statements does the passage support?",
+    "description": "Read one passage and tick every statement that it fully supports.",
+    "keywords": [
+      "reading",
+      "fact checking",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "chunk",
+        "path": "$.retrieved_chunk.key_2",
+        "limit": 10,
+        "group_size": null
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.query",
+        "label": "Question",
+        "role": "context",
+        "style": "text"
+      },
+      "passage": {
+        "path": "{chunk}",
+        "label": "Passage",
+        "role": "context",
+        "style": "passage"
+      },
+      "statements": {
+        "path": "$.atomic_facts.key_2.key_19[*]",
+        "label": "Statement",
+        "role": "target",
+        "style": "text"
+      }
+    },
+    "questions": [
+      {
+        "id": "supported",
+        "text": "Which of the following statements are **fully supported** by the passage?",
+        "type": "multi_select",
+        "scope": "target",
+        "options": [
+          {
+            "value": "supported",
+            "label": "Supported"
+          },
+          {
+            "value": "not_supported",
+            "label": "Not supported"
+          }
+        ],
+        "none_label": "None of the above",
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.relevance_check.key_2.key_19.chunk_fact_relevance['Chunk {chunk_no}'].selected_facts",
+          "reason_path": null,
+          "contains": "{target_key}",
+          "map": {
+            "true": "supported",
+            "false": "not_supported"
+          },
+          "missing": "not_supported"
+        }
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 10,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "supported": "not_supported"
+      },
+      "max_targets": 3,
+      "mismatch": {
+        "swap_fields": [
+          "question",
+          "passage"
+        ],
+        "distance": 3
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "Read a passage and tick every statement that it **supports**.",
+    "background": "We want to know which short statements each retrieved passage can confirm on its own.",
+    "criteria": [
+      {
+        "label": "Supported",
+        "text": "The passage states the statement or it follows directly. Every part of the statement must be confirmed."
+      }
+    ],
+    "steps": [
+      "Read the question, then the passage.",
+      "Tick every supported statement, or **None of the above**."
+    ],
+    "notes": [
+      "Do not use outside knowledge."
+    ],
+    "tip": "If this passage were the only thing you had read, could you confirm the statement?",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": null,
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "Passages absent from the sparse chunk_fact_relevance map support nothing, so missing maps to not_supported."
+}

@@ -1,5 +1,5 @@
 {
-  "spec_version": 1,
+  "spec_version": 2,
   "task": {
     "id": "passage-fact-support",
     "title": "Judge whether each statement is supported by a passage",
@@ -22,7 +22,8 @@
       {
         "var": "passage",
         "path": "$.passages.retriever_a",
-        "limit": 4
+        "limit": 4,
+        "group_size": null
       }
     ],
     "fields": {
@@ -45,29 +46,39 @@
         "style": "text"
       }
     },
-    "question": {
-      "text": "Is this statement supported by the passage?",
-      "options": [
-        {
-          "value": "grounded",
-          "label": "Supported"
-        },
-        {
-          "value": "not_grounded",
-          "label": "Not supported"
+    "questions": [
+      {
+        "id": "support",
+        "text": "Is this statement supported by the passage?",
+        "type": "choice",
+        "scope": "target",
+        "options": [
+          {
+            "value": "grounded",
+            "label": "Supported"
+          },
+          {
+            "value": "not_grounded",
+            "label": "Not supported"
+          }
+        ],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.labels.retriever_a.model_a.passage_fact_support['Passage {passage_no}']['Fact {target_no}'][0]",
+          "reason_path": "$.labels.retriever_a.model_a.passage_fact_support['Passage {passage_no}']['Fact {target_no}'][1]",
+          "contains": null,
+          "map": {
+            "Yes": "grounded",
+            "No": "not_grounded"
+          },
+          "missing": null
         }
-      ],
-      "answer_suffix": ""
-    },
-    "hint": {
-      "label_path": "$.labels.retriever_a.model_a.passage_fact_support['Passage {passage_no}']['Fact {target_no}'][0]",
-      "reason_path": "$.labels.retriever_a.model_a.passage_fact_support['Passage {passage_no}']['Fact {target_no}'][1]",
-      "map": {
-        "Yes": "grounded",
-        "No": "not_grounded"
-      },
-      "missing": null
-    },
+      }
+    ],
     "skip_if_no_targets": true
   },
   "hit": {
@@ -78,7 +89,9 @@
       "position": "random",
       "seed": 42,
       "strategy": "mismatch",
-      "expected_value": "not_grounded",
+      "expected": {
+        "support": "not_grounded"
+      },
       "max_targets": 2,
       "mismatch": {
         "swap_fields": [
@@ -122,7 +135,8 @@
   },
   "output": {
     "reference_column": "llm_label",
-    "reason_column": "llm_reason"
+    "reason_column": "llm_reason",
+    "attention_column": "attention_expected"
   },
   "planner_notes": "Each record has one question, a passage list per retriever and a map of short statements per model; following the prompt, one item is one passage of passages.retriever_a shown with all statements of facts.model_a, so support is judged passage by passage. The labels under labels.retriever_a.model_a.passage_fact_support are keyed 'Passage {n}' and 'Fact {n}', which line up with passage_no and target_no, and their Yes/No values map to the two options. The subqueries field is a string in one record, but no path uses it."
 }

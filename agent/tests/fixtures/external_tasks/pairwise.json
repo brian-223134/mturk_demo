@@ -1,0 +1,144 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "passage-pair-comparison",
+    "title": "Which passage answers the question better?",
+    "description": "Compare two retrieved passages and choose the one that answers the question better.",
+    "keywords": [
+      "reading",
+      "comparison",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "pair",
+        "path": "$.retrieved_chunk.key_2",
+        "limit": 10,
+        "group_size": 2
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.query",
+        "label": "Question",
+        "role": "context",
+        "style": "text"
+      },
+      "subquestions": {
+        "path": "$.decomposed_query[*]",
+        "label": "Sub-questions",
+        "role": "context",
+        "style": "list"
+      },
+      "passage_a": {
+        "path": "{pair}[0]",
+        "label": "Passage A",
+        "role": "context",
+        "style": "passage"
+      },
+      "passage_b": {
+        "path": "{pair}[1]",
+        "label": "Passage B",
+        "role": "context",
+        "style": "passage"
+      }
+    },
+    "questions": [
+      {
+        "id": "better",
+        "text": "Which passage answers the question **better**?",
+        "type": "choice",
+        "scope": "item",
+        "options": [
+          {
+            "value": "a",
+            "label": "Passage A"
+          },
+          {
+            "value": "b",
+            "label": "Passage B"
+          },
+          {
+            "value": "both",
+            "label": "Both equally well"
+          },
+          {
+            "value": "neither",
+            "label": "Neither answers it"
+          }
+        ],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": null
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 5,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "better": "neither"
+      },
+      "max_targets": null,
+      "mismatch": {
+        "swap_fields": [
+          "passage_a",
+          "passage_b"
+        ],
+        "distance": 3
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "Compare **two retrieved passages** and choose the one that better answers the question.",
+    "background": "A search system retrieved several passages for each question.",
+    "criteria": [
+      {
+        "label": "Better",
+        "text": "Contains more of the information needed to answer, more directly and completely."
+      },
+      {
+        "label": "Neither",
+        "text": "Neither passage contains the asked fact, even if both mention the topic."
+      }
+    ],
+    "steps": [
+      "Read the question and the sub-questions.",
+      "Read both passages fully.",
+      "Pick A, B, both equally, or neither."
+    ],
+    "notes": [
+      "Judge only what the passages say."
+    ],
+    "tip": "Do not rely on your own knowledge of the answer.",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": null,
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "Consecutive retrieved passages are paired with group_size 2; no existing label compares passages."
+}

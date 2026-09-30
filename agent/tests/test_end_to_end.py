@@ -28,6 +28,8 @@ class EndToEndTest(unittest.TestCase):
             self.assertEqual(result["warnings"], [])
             self.assertEqual(result["stats"]["rows"], summary["hits"])
             self.assertEqual(result["stats"]["targets"], summary["targets"])
+            self.assertEqual(result["stats"]["answers"], summary["answers"])
+            self.assertEqual(result["stats"]["hints_missing"], summary["hints_missing"])
             self.assertEqual(result["stats"]["row_bytes"], summary["row_bytes"])
             self.assertEqual(result["stats"]["reference_values"], summary["reference_values"])
 
@@ -37,7 +39,7 @@ class EndToEndTest(unittest.TestCase):
             rendered = validate.substitute_row(template.read_text(encoding="utf-8"), rows[0])
             self.assertEqual(validate.extract_placeholders(rendered), [])
             self.assertIn('var HIT_ID = "hit-0001";', rendered)
-            self.assertIn("var ATTENTION = [", rendered)
+            self.assertNotIn("ATTENTION", rendered)
             self.assertIn('FIELDS["facts"] = [[', rendered)
             self.assertEqual(rendered.count("</script"), 2)
             self.assertEqual(json.loads(rows[0]["hit_id"]), "hit-0001")
@@ -45,6 +47,7 @@ class EndToEndTest(unittest.TestCase):
             settings = json.loads((out / "settings.json").read_text(encoding="utf-8"))
             self.assertEqual(settings["reference"]["column"], parsed.output.reference_column)
             self.assertIn(settings["reference"]["column"], rows[0])
+            self.assertIn(settings["attentionRule"]["column"], rows[0])
 
 
 if __name__ == "__main__":

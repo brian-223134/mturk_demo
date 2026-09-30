@@ -1,0 +1,194 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "subquestion-coverage",
+    "title": "Which statements answer a sub-question, and is it fully answered?",
+    "description": "Read a question, one of its sub-questions and a short answer split into statements. Tick the statements that help answer the sub-question and say whether they answer it fully.",
+    "keywords": [
+      "reading",
+      "question answering",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.id",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "sub",
+        "path": "$.subquestions",
+        "limit": null,
+        "group_size": null
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.question",
+        "label": "Original question",
+        "role": "context",
+        "style": "text"
+      },
+      "subquestion": {
+        "path": "{sub}",
+        "label": "Sub-question",
+        "role": "context",
+        "style": "text"
+      },
+      "statements": {
+        "path": "$.answer.system_a[*]",
+        "label": "Statement",
+        "role": "target",
+        "style": "text"
+      }
+    },
+    "questions": [
+      {
+        "id": "relevant",
+        "text": "Which statements help answer the **sub-question**? Tick every statement that gives part or all of its answer.",
+        "type": "multi_select",
+        "scope": "target",
+        "options": [
+          {
+            "value": "relevant",
+            "label": "Relevant"
+          },
+          {
+            "value": "not_relevant",
+            "label": "Not relevant"
+          }
+        ],
+        "none_label": "None of the statements helps answer it",
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.labels.system_a.relevance['{sub_key}'].selected",
+          "reason_path": null,
+          "contains": "{target_key}",
+          "map": {
+            "true": "relevant",
+            "false": "not_relevant"
+          },
+          "missing": null
+        }
+      },
+      {
+        "id": "coverage",
+        "text": "Taken together, do the statements **fully answer** the sub-question?",
+        "type": "choice",
+        "scope": "item",
+        "options": [
+          {
+            "value": "covered",
+            "label": "Fully answered"
+          },
+          {
+            "value": "not_covered",
+            "label": "Not fully answered"
+          }
+        ],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.labels.system_a.coverage['{sub_key}']",
+          "reason_path": null,
+          "contains": null,
+          "map": {
+            "Covered": "covered",
+            "Not covered": "not_covered"
+          },
+          "missing": null
+        }
+      },
+      {
+        "id": "missing",
+        "text": "What information is missing? Write one short sentence.",
+        "type": "text",
+        "scope": "item",
+        "options": [],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 10,
+        "required": true,
+        "required_when": {
+          "question": "coverage",
+          "value": "not_covered"
+        },
+        "hint": null
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 3,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "relevant": "not_relevant",
+        "coverage": "not_covered"
+      },
+      "max_targets": 2,
+      "mismatch": {
+        "swap_fields": [
+          "question",
+          "subquestion"
+        ],
+        "distance": 2
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "For one **sub-question**, tick the statements that help answer it, then say whether the statements answer it **fully**.",
+    "background": "A question was split into smaller sub-questions, and an automatic system answered the whole question with a few short statements. We want to know which statements answer each sub-question and whether any part of the sub-question is left unanswered.",
+    "criteria": [
+      {
+        "label": "Relevant",
+        "text": "The statement gives part or all of the answer to this sub-question. Background facts that do not answer it are not relevant."
+      },
+      {
+        "label": "Fully answered",
+        "text": "The ticked statements together answer every part of the sub-question."
+      },
+      {
+        "label": "Not fully answered",
+        "text": "An important part of the answer is missing, or no statement answers the sub-question. Then write in one sentence what is missing."
+      }
+    ],
+    "steps": [
+      "Read the original question and the sub-question.",
+      "Read every statement and tick each one that helps answer the sub-question. If none does, tick **None of the statements helps answer it**.",
+      "Decide whether the ticked statements answer the sub-question fully.",
+      "If you chose **Not fully answered**, write what information is missing."
+    ],
+    "notes": [
+      "Judge only whether a statement answers the sub-question, not whether it is true.",
+      "A statement can help answer a sub-question even if it uses different words.",
+      "The same statements appear with every sub-question of the question; judge each sub-question on its own."
+    ],
+    "tip": "Ask yourself: if this were the only text I had, would I know the answer to the sub-question?",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": null,
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "One item is one entry of the subquestions map, shown with the original question and all statements of answer.system_a, the answer the prompt asks about. The relevance labels list the selected statement keys per sub-question, so the multi_select hint checks whether that list contains the statement key; the coverage labels are keyed by the same sub-question keys and map Covered/Not covered onto the two options. The missing-information text is required only when a worker chooses Not fully answered, and the attention item swaps in the question and sub-question of another record so that no statement is relevant."
+}

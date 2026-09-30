@@ -1,0 +1,134 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "passage-subquestion-coverage",
+    "title": "Which sub-questions does the passage answer?",
+    "description": "Read one passage and tick every sub-question that it answers.",
+    "keywords": [
+      "reading",
+      "search",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "chunk",
+        "path": "$.retrieved_chunk.key_2",
+        "limit": 10,
+        "group_size": null
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.query",
+        "label": "Original question",
+        "role": "context",
+        "style": "text"
+      },
+      "passage": {
+        "path": "{chunk}",
+        "label": "Passage",
+        "role": "context",
+        "style": "passage"
+      },
+      "subquestions": {
+        "path": "$.decomposed_query[*]",
+        "label": "Sub-question",
+        "role": "target",
+        "style": "text"
+      }
+    },
+    "questions": [
+      {
+        "id": "answers",
+        "text": "Which sub-questions does this passage **answer**?",
+        "type": "multi_select",
+        "scope": "target",
+        "options": [
+          {
+            "value": "answered",
+            "label": "Answered"
+          },
+          {
+            "value": "not_answered",
+            "label": "Not answered"
+          }
+        ],
+        "none_label": "None of the sub-questions is answered",
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.relevance_check.key_2.key_19.query_chunk_coverage['Chunk {chunk_no}']",
+          "reason_path": null,
+          "contains": "{target_key}",
+          "map": {
+            "true": "answered",
+            "false": "not_answered"
+          },
+          "missing": "not_answered"
+        }
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 10,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "answers": "not_answered"
+      },
+      "max_targets": 2,
+      "mismatch": {
+        "swap_fields": [
+          "question",
+          "passage"
+        ],
+        "distance": 3
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "Read a **retrieved passage** and tick every **sub-question** it answers.",
+    "background": "A question was split into sub-questions and a search system retrieved passages for it.",
+    "criteria": [
+      {
+        "label": "Answered",
+        "text": "The passage contains the information needed to answer the sub-question. Mentioning the topic is not enough."
+      }
+    ],
+    "steps": [
+      "Read the sub-questions, then the passage.",
+      "Tick every answered sub-question, or **None of the sub-questions is answered**."
+    ],
+    "notes": [
+      "Do not use outside knowledge."
+    ],
+    "tip": "Could you write the answer to the sub-question using only this passage?",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": null,
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "query_chunk_coverage lists the answered sub-question keys per chunk; target_key is the sub-question key."
+}

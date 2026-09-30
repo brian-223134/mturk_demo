@@ -1,0 +1,145 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "passage-statement-relation",
+    "title": "Does the passage support, contradict or not mention each statement?",
+    "description": "For each statement, decide whether the passage supports it, contradicts it, or does not mention it.",
+    "keywords": [
+      "reading",
+      "fact checking",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "chunk",
+        "path": "$.retrieved_chunk.key_2",
+        "limit": 10,
+        "group_size": null
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.query",
+        "label": "Question",
+        "role": "context",
+        "style": "text"
+      },
+      "passage": {
+        "path": "{chunk}",
+        "label": "Passage",
+        "role": "context",
+        "style": "passage"
+      },
+      "statements": {
+        "path": "$.atomic_facts.key_2.key_19[*]",
+        "label": "Statement",
+        "role": "target",
+        "style": "text"
+      }
+    },
+    "questions": [
+      {
+        "id": "relation",
+        "text": "How does the passage relate to this statement?",
+        "type": "choice",
+        "scope": "target",
+        "options": [
+          {
+            "value": "supported",
+            "label": "Supported"
+          },
+          {
+            "value": "contradicted",
+            "label": "Contradicted"
+          },
+          {
+            "value": "not_mentioned",
+            "label": "Not mentioned"
+          }
+        ],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.relevance_check_reasoning.key_2.key_19.chunk_fact_relevance['Chunk {chunk_no}']['{target_key}'][0]",
+          "reason_path": "$.relevance_check_reasoning.key_2.key_19.chunk_fact_relevance['Chunk {chunk_no}']['{target_key}'][1]",
+          "contains": null,
+          "map": {
+            "Yes": "supported"
+          },
+          "missing": null
+        }
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 10,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "relation": "not_mentioned"
+      },
+      "max_targets": 2,
+      "mismatch": {
+        "swap_fields": [
+          "question",
+          "passage"
+        ],
+        "distance": 3
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "For each **statement**, decide whether the passage **supports** it, **contradicts** it, or does **not mention** it.",
+    "background": "We measure how faithfully an answer follows its evidence, including evidence that says the opposite.",
+    "criteria": [
+      {
+        "label": "Supported",
+        "text": "The passage states the claim or it follows directly."
+      },
+      {
+        "label": "Contradicted",
+        "text": "The passage states something incompatible with the claim."
+      },
+      {
+        "label": "Not mentioned",
+        "text": "The passage gives no information either way."
+      }
+    ],
+    "steps": [
+      "Read the passage once fully.",
+      "For every statement choose exactly one of the three."
+    ],
+    "notes": [
+      "Use only the passage, not outside knowledge."
+    ],
+    "tip": "A statement about a different entity than the passage is usually Not mentioned, not Contradicted.",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": "llm_reason",
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "The existing binary label only tells Supported apart, so Yes maps to supported and No gives no reference."
+}

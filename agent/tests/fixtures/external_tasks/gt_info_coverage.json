@@ -1,0 +1,148 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "passage-key-information",
+    "title": "Does the passage contain the key information?",
+    "description": "Compare a retrieved passage with reference passages and say whether it contains the key information.",
+    "keywords": [
+      "reading",
+      "search",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": {
+      "path": "$.gt_chunk[3]",
+      "exists": false
+    },
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "chunk",
+        "path": "$.retrieved_chunk.key_2",
+        "limit": 10,
+        "group_size": null
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.query",
+        "label": "Question",
+        "role": "context",
+        "style": "text"
+      },
+      "reference": {
+        "path": "$.gt_chunk",
+        "label": "Reference information",
+        "role": "context",
+        "style": "list"
+      },
+      "passage": {
+        "path": "{chunk}",
+        "label": "Retrieved passage",
+        "role": "context",
+        "style": "passage"
+      }
+    },
+    "questions": [
+      {
+        "id": "has_info",
+        "text": "Does this passage contain the **key information** from the reference?",
+        "type": "choice",
+        "scope": "item",
+        "options": [
+          {
+            "value": "yes",
+            "label": "Yes"
+          },
+          {
+            "value": "no",
+            "label": "No"
+          }
+        ],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": null
+      },
+      {
+        "id": "missing_info",
+        "text": "What specific information is missing? Write a short sentence.",
+        "type": "text",
+        "scope": "item",
+        "options": [],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 10,
+        "required": true,
+        "required_when": {
+          "question": "has_info",
+          "value": "no"
+        },
+        "hint": null
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 5,
+    "group_by": "record",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "has_info": "no"
+      },
+      "max_targets": null,
+      "mismatch": {
+        "swap_fields": [
+          "passage"
+        ],
+        "distance": 3
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "Check whether a retrieved passage includes the **key information** of the reference passages.",
+    "background": "The reference passages contain the correct answer to the question.",
+    "criteria": [
+      {
+        "label": "Yes",
+        "text": "The passage states or clearly implies the key facts needed to answer the question."
+      },
+      {
+        "label": "No",
+        "text": "The passage misses the key facts, even if it is about the right topic."
+      }
+    ],
+    "steps": [
+      "Read the question and the reference information.",
+      "Read the retrieved passage.",
+      "Choose Yes or No; if No, describe what is missing."
+    ],
+    "notes": [
+      "Focus on the facts needed to answer the question."
+    ],
+    "tip": "A passage about the right topic can still miss the specific detail asked for.",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": null,
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "Records with more than three reference passages are filtered out to keep rows small; there is no existing label for this task."
+}

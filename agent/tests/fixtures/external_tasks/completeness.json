@@ -1,0 +1,175 @@
+{
+  "spec_version": 2,
+  "task": {
+    "id": "subquestion-completeness",
+    "title": "Which statements answer the sub-question, and is it fully answered?",
+    "description": "For one sub-question, tick the statements that are relevant to it and say whether they answer it fully.",
+    "keywords": [
+      "reading",
+      "question answering",
+      "english"
+    ]
+  },
+  "source": {
+    "format": null,
+    "record_id": "$.qid",
+    "filter": null,
+    "sample": null,
+    "limit": null
+  },
+  "item": {
+    "iterate": [
+      {
+        "var": "sub",
+        "path": "$.decomposed_query",
+        "limit": null,
+        "group_size": null
+      }
+    ],
+    "fields": {
+      "question": {
+        "path": "$.query",
+        "label": "Original question",
+        "role": "context",
+        "style": "text"
+      },
+      "subquestion": {
+        "path": "{sub}",
+        "label": "Sub-question",
+        "role": "context",
+        "style": "text"
+      },
+      "statements": {
+        "path": "$.atomic_facts.key_2.key_19[*]",
+        "label": "Statement",
+        "role": "target",
+        "style": "text"
+      }
+    },
+    "questions": [
+      {
+        "id": "relevant",
+        "text": "Which statements are **relevant** to this sub-question (give part or all of its answer)?",
+        "type": "multi_select",
+        "scope": "target",
+        "options": [
+          {
+            "value": "relevant",
+            "label": "Relevant"
+          },
+          {
+            "value": "not_relevant",
+            "label": "Not relevant"
+          }
+        ],
+        "none_label": "None of the statements is relevant",
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.relevance_check.key_2.key_19.query_fact_relevance['{sub_key}'].selected_facts",
+          "reason_path": null,
+          "contains": "{target_key}",
+          "map": {
+            "true": "relevant",
+            "false": "not_relevant"
+          },
+          "missing": null
+        }
+      },
+      {
+        "id": "coverage",
+        "text": "Taken together, do the statements **fully answer** this sub-question?",
+        "type": "choice",
+        "scope": "item",
+        "options": [
+          {
+            "value": "covered",
+            "label": "Covered"
+          },
+          {
+            "value": "not_covered",
+            "label": "Not covered"
+          }
+        ],
+        "none_label": null,
+        "scale": null,
+        "min_chars": 0,
+        "required": true,
+        "required_when": null,
+        "hint": {
+          "label_path": "$.relevance_check.key_2.key_19.query_fact_coverage['{sub_key}']",
+          "reason_path": null,
+          "contains": null,
+          "map": {
+            "Covered": "covered",
+            "Not covered": "not_covered"
+          },
+          "missing": null
+        }
+      }
+    ],
+    "skip_if_no_targets": true
+  },
+  "hit": {
+    "items_per_hit": 4,
+    "group_by": "sequential",
+    "attention": {
+      "per_hit": 1,
+      "position": "random",
+      "seed": 42,
+      "strategy": "mismatch",
+      "expected": {
+        "relevant": "not_relevant",
+        "coverage": "not_covered"
+      },
+      "max_targets": 2,
+      "mismatch": {
+        "swap_fields": [
+          "question",
+          "subquestion"
+        ],
+        "distance": 2
+      },
+      "instruction": null
+    }
+  },
+  "instructions": {
+    "summary": "For one **sub-question**, tick the statements that are relevant to it and decide whether they **fully answer** it.",
+    "background": "A question was split into sub-questions, and an answer to the question was split into short statements. We measure whether the answer is complete (every sub-question answered) and concise (no statements that answer nothing).",
+    "criteria": [
+      {
+        "label": "Relevant",
+        "text": "The statement gives part or all of the answer to this sub-question. Background that does not answer it is not relevant."
+      },
+      {
+        "label": "Covered",
+        "text": "The relevant statements together fully answer the sub-question."
+      },
+      {
+        "label": "Not covered",
+        "text": "A key piece of the answer is missing, or no statement is relevant."
+      }
+    ],
+    "steps": [
+      "Read the original question and the sub-question.",
+      "Tick every relevant statement, or **None of the statements is relevant**.",
+      "Choose Covered or Not covered."
+    ],
+    "notes": [
+      "Judge from the statements only; do not check whether they are true."
+    ],
+    "tip": "A sub-question can be Not covered even if some statements are relevant.",
+    "notices": {
+      "attention": true,
+      "research": true
+    }
+  },
+  "output": {
+    "reference_column": "llm_label",
+    "reason_column": null,
+    "attention_column": "attention_expected"
+  },
+  "planner_notes": "One item is one entry of decomposed_query shown with all statements of the answer; relevance labels are lists of selected statement keys, so the hint checks membership of target_key."
+}

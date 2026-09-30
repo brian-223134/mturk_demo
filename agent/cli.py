@@ -194,6 +194,9 @@ def describe_summary(summary: dict) -> str:
     for key, label in (("items", "items"), ("hits", "HITs"), ("attention_items", "attention items")):
         if isinstance(summary.get(key), int):
             parts.append(f"{summary[key]} {label}")
+    skipped = summary.get("skipped_records")
+    if isinstance(skipped, dict) and isinstance(skipped.get("count"), int) and skipped["count"] > 0:
+        parts.append(f"{skipped['count']} records skipped")
     return ", ".join(parts) or "done"
 
 
