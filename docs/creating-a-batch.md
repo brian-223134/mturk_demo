@@ -124,6 +124,12 @@ CSV를 올립니다. 한 행이 HIT 하나가 됩니다.
 
 스위치를 비활성화한 채 게시하면 Review에 attention 결과가 표시되지 않고 `Select attention-failed`도 쓸 수 없습니다. 게시한 뒤에는 규칙을 바꿀 수 없습니다.
 
+production 콘솔(http://localhost:3000)에서는 `How attention answers are found`로 방식을 고릅니다.
+
+- `Answer-name prefix + one expected value`는 위의 표와 같은 방식입니다.
+- `Expected answers column`은 CSV 컬럼 하나를 고르는 방식입니다. 각 행의 그 셀에는 `{답 이름: 기대 값}`이 들어 있고, 그 키에 해당하는 답이 그 HIT의 attention 문항입니다. 답 이름만으로는 attention 탭을 알아볼 수 없으므로, 원본 데이터에서 만든 과제(`agent/`의 결과)는 이 방식을 씁니다.
+- `Free-text answers`에는 자유 서술 답의 이름 접미어(예: `_missing_info`)를 쉼표로 구분해 적습니다. 이름이 이 접미어로 끝나는 답은 Review에 글 그대로 표시되고, κ, majority, 일치율, 대조 기준 계산에서는 빠집니다.
+
 ### `Review reference`
 
 Review 표의 `Answers` 열에서 worker의 답 아래에 나란히 보여 줄 대조 기준입니다. MTurk Requester 웹사이트의 `Input.GroundTruth`와 같은 역할입니다.

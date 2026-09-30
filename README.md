@@ -238,6 +238,7 @@ Production 백엔드(FastAPI)는 같은 경로를 구현하며, 화면은 부르
 
 annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로부터, Create 탭에 올릴 `hits.csv`와 `template.html`을 자동으로 만드는 파이프라인입니다.
 원본을 분석해 구조와 이상치를 정리하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 CSV와 MTurk 템플릿을 만들어 검증합니다. 명세는 LLM(OpenRouter)이 채우거나 손으로 쓴 파일을 그대로 쓸 수 있으며, LLM 호출은 명시적으로 허용할 때만 일어납니다.
+탭 하나에 문항을 여러 개 둘 수 있고, 문항은 단일 선택, 체크박스 다중 선택, 척도(likert), 자유 서술 네 가지입니다. attention 탭은 worker 화면에서 다른 탭과 구별되지 않습니다.
 
 ```bash
 docker compose run --rm agent run <원본> --prompt @<prompt 파일> --spec <spec 파일> --out <출력 폴더>

@@ -63,9 +63,13 @@ Prompt·후보 이름·모델·이전 raw 참조는 localStorage에 보존합니
 ```text
 system: ROLE + spec_reference.md + OUTPUT_RULES
 user: 고정 groundedness 예시 profile + 예시 prompt.md
-assistant: 고정 예시 task_spec.json
+assistant: 고정 groundedness 예시 task_spec.json
+user: 고정 coverage 예시 profile + 예시 prompt.md
+assistant: 고정 coverage 예시 task_spec.json
 user: 이번 raw의 profile + requester prompt
 ```
+
+2026-09-30에 spec이 v2(문항 여러 개, 위젯 4종)로 바뀌면서 두 번째 고정 예시 `coverage`가 추가되었습니다. 아래 2026-09-28 결과는 예시가 groundedness 하나였고 v1 spec을 쓰던 때의 기록입니다. 후보 prompt의 attention 조건도 v2 키에 맞춰 `expected_value="not_grounded"`에서 `expected={"<id of the statement question>": "not_grounded"}`로 바뀌었으며, 비교 조건 자체는 같습니다.
 
 예시 데이터는 이미 few-shot에 포함되어 있습니다. 이번 비교는 mock 동작과 안내문 개선을 확인하는 개발 실험이며 독립 데이터에 대한 일반화 평가가 아닙니다. 각 조합을 한 번 실행한 결과만으로 반복 안정성이나 최적 모델을 확정하지 않습니다.
 
