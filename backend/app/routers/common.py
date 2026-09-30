@@ -9,12 +9,12 @@ from __future__ import annotations
 import json
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import Request, Response
 
 from app.db import Database, Store
-from app.domain.attention import DEFAULT_ATTENTION_PREFIX
+from app.domain.answer_kinds import AnswerKinds, answer_kinds, reads_hit_input
 from app.domain.cost import format_cents, js_round, parse_float, unit_cost_cents, uses_masters
 from app.domain.js import js_string, to_fixed
 from app.domain.list_query import parse_list_query
@@ -119,10 +119,17 @@ def unique_slug_id(prefix: str, base: str, taken: set[str]) -> str:
 # ---- batch 와 HIT 의 공통 계산 ---------------------------------------------------------------
 
 
-def attention_prefix_of(batch: dict | None) -> str:
-    rule = (batch or {}).get("attentionRule") or {}
-    prefix = rule.get("namePrefix")
-    return prefix if isinstance(prefix, str) else DEFAULT_ATTENTION_PREFIX
+def answer_kinds_by_hit(store: Store, batch: dict, hits: list[dict] | None = None) -> Callable[[str], AnswerKinds]:
+    """HIT id → 그 HIT 의 답 분류 (attention, 자유 서술, 라벨). attention 이 컬럼 방식일 때만 HIT 의 입력을 읽는다.
+    호출한 쪽이 이미 읽은 HIT 문서가 있으면 hits 로 넘긴다."""
+    if not reads_hit_input(batch):
+        kinds = answer_kinds(batch)
+        return lambda hit_id: kinds
+    if hits is None:
+        hits = store.hit_docs_of_batch(batch["id"])
+    by_hit = {hit["HITId"]: answer_kinds(batch, hit.get("input")) for hit in hits}
+    fallback = answer_kinds(batch)
+    return lambda hit_id: by_hit.get(hit_id, fallback)
 
 
 def hit_unit_cost(batch: dict, hit_max_assignments: int) -> float | int:

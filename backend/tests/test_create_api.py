@@ -182,6 +182,42 @@ def test_create_batch_validation_messages(client: TestClient) -> None:
     assert client.get("/api/account").json()["AvailableBalance"] == "500.00"
 
 
+def test_create_batch_attention_rule_shapes_and_free_text(client: TestClient) -> None:
+    """attentionRule 은 null, 접두어 방식, 기대 답 컬럼 방식 중 하나다. 저장할 때 모르는 키는 버리고 minCorrectRatio 는 없으면 1 이다.
+    freeTextSuffixes 는 문자열 배열로 저장되며(중복 제거), 없으면 [] 다."""
+    request = {**sample_batch_request(client), "inputColumns": ["item_id", "passage", "attention_expected"]}
+    column = client.post("/api/batches", json={**request, "attentionRule": {"column": "attention_expected", "note": "x"},
+                                               "freeTextSuffixes": ["_missing_info", "_note", "_missing_info"]}).json()
+    assert column["attentionRule"] == {"column": "attention_expected", "minCorrectRatio": 1}
+    assert column["freeTextSuffixes"] == ["_missing_info", "_note"]
+    prefix = client.post("/api/batches", json={**request, "attentionRule": {"namePrefix": "check_", "expectedValue": "", "minCorrectRatio": 0.5}}).json()
+    assert prefix["attentionRule"] == {"namePrefix": "check_", "expectedValue": "", "minCorrectRatio": 0.5} and prefix["freeTextSuffixes"] == []
+
+
+def test_create_batch_attention_rule_and_free_text_validation(client: TestClient) -> None:
+    request = sample_batch_request(client)
+
+    def attempt(**changes) -> tuple[int, str, str]:
+        return error_of(client.post("/api/batches", json={**request, **changes}))
+
+    assert attempt(attentionRule="attention_") == (400, "INVALID_REQUEST", '"attentionRule" must be a JSON object.')
+    assert attempt(attentionRule={"column": "no_such_column"}) == (400, "INVALID_REQUEST", 'Attention column "no_such_column" is not one of the CSV columns.')
+    assert attempt(attentionRule={"column": ""}) == (400, "INVALID_REQUEST", '"attentionRule.column" must be a column name.')
+    assert attempt(attentionRule={"column": "passage", "namePrefix": "attention_"}) == (
+        400, "INVALID_REQUEST", '"attentionRule" must have either "column" or "namePrefix", not both.')
+    assert attempt(attentionRule={"namePrefix": "", "expectedValue": "x"}) == (400, "INVALID_REQUEST", '"attentionRule.namePrefix" must be a non-empty string.')
+    assert attempt(attentionRule={"expectedValue": "x"}) == (400, "INVALID_REQUEST", '"attentionRule.namePrefix" must be a non-empty string.')
+    assert attempt(attentionRule={"namePrefix": "attention_"}) == (400, "INVALID_REQUEST", '"attentionRule.expectedValue" must be a string.')
+    for ratio in (1.5, -0.1, "1", True, None):
+        assert attempt(attentionRule={"column": "passage", "minCorrectRatio": ratio}) == (
+            400, "INVALID_REQUEST", '"attentionRule.minCorrectRatio" must be a number from 0 to 1.'), ratio
+    assert attempt(freeTextSuffixes="_note") == (400, "INVALID_REQUEST", '"freeTextSuffixes" must be an array of strings.')
+    assert attempt(freeTextSuffixes=["_note", 1]) == (400, "INVALID_REQUEST", '"freeTextSuffixes" must be an array of strings.')
+    assert attempt(freeTextSuffixes=["_note", ""]) == (400, "INVALID_REQUEST", '"freeTextSuffixes" cannot contain an empty string.')
+    assert len(client.get("/api/batches").json()) == 3          # 아무것도 만들지 않았다
+    assert client.get("/api/account").json()["AvailableBalance"] == "500.00"
+
+
 def test_create_batch_big_rows(client: TestClient) -> None:
     """server.test.ts: 셀 하나가 100KB 인 행 20개도 게시되고 getHit 은 전체를 돌려준다."""
     template = client.post("/api/templates", json={"name": "Big", "html": "<html><head></head><body>x</body></html>"}).json()

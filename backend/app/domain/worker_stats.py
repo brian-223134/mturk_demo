@@ -10,6 +10,8 @@ workerStats.test.ts 의 기대값:
                    4 문항 예시: W1 0.5, W2 1 (다른 표가 동률인 문항은 제외)
                    attention 문항은 세지 않는다. 반려된 응답은 비교 기준에 들어가지 않지만 평가 대상은 된다
                    같은 rowIndex 라도 batch 가 다르면 다른 문항이다
+라벨이 아닌 답(attention, 자유 서술)은 record 마다 excluded 로 받는다 (app/domain/answer_kinds.py 의 AnswerKinds.is_excluded,
+또는 attention 접두어 문자열).
 """
 
 from __future__ import annotations
@@ -17,9 +19,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.domain.agreement import majority_of_tally
-from app.domain.attention import is_attention_name
 from app.domain.js import js_number
 from app.domain.progress import reject_rate
+from app.domain.reference import Excluded, excluded_by
 
 EMPTY_STATS = {
     "total": 0, "approved": 0, "rejected": 0, "pending": 0,
@@ -33,7 +35,7 @@ class WorkerStatsRecord:
     assignment: dict
     batch_id: str
     row_index: int
-    attention_prefix: str   # 실제 문항과 attention 문항을 가르는 prefix
+    excluded: Excluded   # 라벨이 아닌 답: 이름 → 뺄지, 또는 attention 접두어
 
 
 def median(values: list[float]) -> float | int | None:
@@ -45,7 +47,8 @@ def median(values: list[float]) -> float | int | None:
 
 
 def _real_answers(record: WorkerStatsRecord) -> list[dict]:
-    return [a for a in record.assignment.get("answers", []) if not is_attention_name(str(a.get("name", "")), record.attention_prefix)]
+    skip = excluded_by(record.excluded)
+    return [a for a in record.assignment.get("answers", []) if not skip(str(a.get("name", "")))]
 
 
 def compute_worker_stats(records: list[WorkerStatsRecord]) -> dict[str, dict]:

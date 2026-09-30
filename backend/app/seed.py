@@ -4,7 +4,8 @@
     read_seed_files(data_dir)   data/ 기준 상대 경로 → 내용 (.json 은 파싱된 값, .html 은 문자열)
     assemble_state(files)       templates, batches, hits, assignments, pools, worker_meta, account 를 만든다
 
-템플릿의 placeholders 와 assignment 의 attention 은 파일에 없으므로 여기서 계산한다 (HTML 과 batch 의 attentionRule 로).
+템플릿의 placeholders 와 assignment 의 attention 은 파일에 없으므로 여기서 계산한다 (HTML 과 batch 의 attentionRule, 그리고
+컬럼 방식 rule 이면 그 HIT 의 입력으로).
 파일끼리 맞지 않으면 SeedError 로 어느 파일의 무엇이 잘못됐는지 알린다.
 """
 
@@ -98,7 +99,7 @@ def assemble_state(files: dict[str, Any]) -> SeedState:
                             f'"id" is {json.dumps(batch_file.get("id"))} but the folder is "{folder}"')
         state.batches.append({**batch_file, "templateHtml": _require_html(files, f"{directory}/template.html")})
 
-        hit_ids_here: set[str] = set()
+        inputs_here: dict[str, dict] = {}
         for hit in _require_list(files, f"{directory}/hits.json"):
             if hit.get("batchId") != folder:
                 raise SeedError(f"{directory}/hits.json",
@@ -106,11 +107,11 @@ def assemble_state(files: dict[str, Any]) -> SeedState:
             if hit["HITId"] in seen_hits:
                 raise SeedError(f"{directory}/hits.json", f"duplicate HITId {hit['HITId']}")
             seen_hits.add(hit["HITId"])
-            hit_ids_here.add(hit["HITId"])
+            inputs_here[hit["HITId"]] = hit.get("input") or {}
             state.hits.append(hit)
 
         for assignment in _require_list(files, f"{directory}/assignments.json"):
-            if assignment.get("HITId") not in hit_ids_here:
+            if assignment.get("HITId") not in inputs_here:
                 raise SeedError(f"{directory}/assignments.json",
                                 f"assignment {assignment.get('AssignmentId')} points to unknown HIT {assignment.get('HITId')}")
             if assignment["AssignmentId"] in seen_assignments:
@@ -118,7 +119,7 @@ def assemble_state(files: dict[str, Any]) -> SeedState:
             seen_assignments.add(assignment["AssignmentId"])
             state.assignments.append({
                 **assignment,
-                "attention": judge_attention(assignment.get("answers", []), batch_file.get("attentionRule")),
+                "attention": judge_attention(assignment.get("answers", []), batch_file.get("attentionRule"), inputs_here[assignment["HITId"]]),
             })
 
     if "pools.json" in files:

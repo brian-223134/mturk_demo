@@ -14,14 +14,14 @@ from fastapi import Request, Response
 
 from app.db import Store
 from app.domain.agreement import Vote, collect_items, summarize_results
-from app.domain.attention import is_attention_name
+from app.domain.answer_kinds import AnswerKinds, reads_hit_input
 from app.domain.export_formats import build_labels_json, build_mturk_csv
 from app.domain.js import is_js_integer, js_len, js_number_of, js_slice, js_string, js_truthy, locale_key, slug
 from app.domain.list_query import apply_list_query
 from app.domain.progress import AssignmentCounts, count_by_status, hit_progress, is_expired, parse_time, plan_top_up
 from app.domain.reference import agreement_with_reference, majority_reference, map_reference_to_answers, parse_reference_cell
 from app.errors import invalid, not_found
-from app.routers.common import (adjust_balance, after_seconds, attention_prefix_of, body_field, db_of, ensure_balance, find_batch,
+from app.routers.common import (adjust_balance, after_seconds, answer_kinds_by_hit, body_field, db_of, ensure_balance, find_batch,
                                 hit_unit_cost, iso, list_query_of, no_content, now, read_body, string_array, sync_hit)
 
 REJECTION_OVERRIDE_DAYS = 30   # MTurk: 반려 번복은 30일 이내
@@ -58,15 +58,16 @@ def _resync_hits(store: Store, hit_ids: list[str], at) -> None:
 
 
 def _approved_votes(store: Store, batch: dict) -> list[Vote]:
-    """Approved 응답의 일반 문항(attention 제외) 표. 저장 순서."""
+    """Approved 응답의 라벨 표 (attention 과 자유 서술 제외). 저장 순서."""
     row_index_of = {hit.id: hit.row_index for hit in store.hits_of_batch(batch["id"])}
-    prefix = attention_prefix_of(batch)
+    kinds_of = answer_kinds_by_hit(store, batch)
     votes: list[Vote] = []
     for assignment in store.assignments_of_batch(batch["id"]):
         if assignment.get("AssignmentStatus") != "Approved":
             continue
+        kinds = kinds_of(assignment["HITId"])
         for answer in assignment.get("answers", []):
-            if is_attention_name(str(answer.get("name", "")), prefix):
+            if kinds.is_excluded(str(answer.get("name", ""))):
                 continue
             votes.append(Vote(row_index_of[assignment["HITId"]], answer["name"], answer["value"], assignment["WorkerId"]))
     return votes
@@ -129,46 +130,53 @@ def _worker_search_filter(assignment: dict, value: object) -> bool:
 
 
 async def list_assignments(request: Request, batchId: str) -> dict:
-    """AssignmentListItem 목록: rowIndex, reference(문항 → 대조 기준 값), agreement(일반 문항의 일치율)."""
+    """AssignmentListItem 목록: rowIndex, reference(문항 → 대조 기준 값), agreement(라벨의 일치율),
+    attentionNames 와 freeTextNames(이 assignment 의 답 중 attention 답, 자유 서술 답의 이름. 답의 순서대로)."""
     query = list_query_of(request)
     with db_of(request).transaction() as store:
         batch = find_batch(store, batchId)
-        prefix = attention_prefix_of(batch)
         reference = batch.get("reference") or {}
         column = reference.get("column") if reference.get("source") == "column" else None
-        hits = store.hit_docs_of_batch(batchId) if column is not None else None
+        hits = store.hit_docs_of_batch(batchId) if column is not None or reads_hit_input(batch) else None
         if hits is not None:
             row_index_of = {hit["HITId"]: hit["rowIndex"] for hit in hits}
-            cell_of = {hit["HITId"]: parse_reference_cell(_cell_text((hit.get("input") or {}).get(column))) for hit in hits}
         else:
             row_index_of = {hit.id: hit.row_index for hit in store.hits_of_batch(batchId)}
-            cell_of = {}
+        cell_of = {} if column is None else {
+            hit["HITId"]: parse_reference_cell(_cell_text((hit.get("input") or {}).get(column))) for hit in hits}
+        kinds_of = answer_kinds_by_hit(store, batch, hits)
         in_batch = store.assignments_of_batch(batchId)
     by_hit: dict[str, list[dict]] = {}
     for assignment in in_batch:
         by_hit.setdefault(assignment["HITId"], []).append(assignment)
-    rule = batch.get("attentionRule")
 
-    def reference_of(assignment: dict) -> dict[str, str]:
+    def reference_of(assignment: dict, kinds: AnswerKinds) -> dict[str, str]:
         answers = assignment.get("answers", [])
         if column is not None:
-            values = map_reference_to_answers(cell_of[assignment["HITId"]], answers, prefix)
+            values = map_reference_to_answers(cell_of[assignment["HITId"]], answers, kinds.is_excluded)
         else:
             # 비교 기준에는 반려된 응답을 넣지 않는다 (worker 지표와 같은 기준)
             values = majority_reference([
                 other.get("answers", []) for other in by_hit.get(assignment["HITId"], [])
                 if other["AssignmentId"] != assignment["AssignmentId"] and other.get("AssignmentStatus") != "Rejected"])
-        if rule:   # attention 문항의 기준은 batch 에 적은 정답이다
-            for answer in answers:
-                if is_attention_name(str(answer.get("name", "")), prefix):
-                    values[answer["name"]] = rule.get("expectedValue")
+        for name in [name for name in values if kinds.is_free_text(name)]:
+            del values[name]   # 자유 서술 답에는 대조 기준이 없다
+        for answer in answers:   # attention 문항의 기준은 batch 에 적은 정답이다 (접두어 방식의 expectedValue, 컬럼 방식의 셀)
+            expected = kinds.expected_value(str(answer.get("name", "")))
+            if expected is not None:
+                values[answer["name"]] = expected
         return values
 
     items = []
     for assignment in in_batch:
-        reference_values = reference_of(assignment)
+        kinds = kinds_of(assignment["HITId"])
+        answers = assignment.get("answers", [])
+        names = [str(answer.get("name", "")) for answer in answers]
+        reference_values = reference_of(assignment, kinds)
         items.append({**assignment, "rowIndex": row_index_of[assignment["HITId"]], "reference": reference_values,
-                      "agreement": agreement_with_reference(assignment.get("answers", []), reference_values, prefix)})
+                      "agreement": agreement_with_reference(answers, reference_values, kinds.is_excluded),
+                      "attentionNames": [name for name in names if kinds.is_attention(name)],
+                      "freeTextNames": [name for name in names if kinds.is_free_text(name)]})
     # 기본 순서. 같은 HIT 의 응답이 붙어 나오고, 정렬은 안정적이라 한 필드로 정렬해도 이 순서가 tiebreak 가 된다
     items.sort(key=lambda a: (a["rowIndex"], locale_key(js_string(a["WorkerId"])), locale_key(js_string(a["SubmitTime"]))))
     return apply_list_query(items, query, {

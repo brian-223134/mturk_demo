@@ -2,8 +2,9 @@
 deleteTemplate, createBatch, listPools 와 같은 검증(같은 문구, 같은 순서)과 같은 결과다.
 
 게시할 때 서버가 다시 검사하는 것 (docs/creating-a-batch.md): 템플릿이 요구하는 컬럼, Title, MaxAssignments, 기간, 자동 승인 30일
-상한, 최소 보상, pool 이 실제로 있는지, 대조 기준 컬럼이 CSV 에 있는지, 잔액. 검증이 끝나면 행마다 HIT 를 만들고(게시 시점의
-templateHtml 사본, answerSchema, inputColumns, initialMaxAssignments), 견적 총액을 잔액에서 미리 뺀다.
+상한, 최소 보상, pool 이 실제로 있는지, 대조 기준 컬럼이 CSV 에 있는지, attention 규칙의 모양(기대 답 컬럼이 CSV 에 있는지),
+자유 서술 접미어, 잔액. 검증이 끝나면 행마다 HIT 를 만들고(게시 시점의 templateHtml 사본, answerSchema, inputColumns,
+initialMaxAssignments), 견적 총액을 잔액에서 미리 뺀다.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Any, Callable
 
 from fastapi import Request, Response
 
+from app.domain.attention import attention_column_of
 from app.domain.cost import estimate_cost, reward_to_cents, uses_masters
 from app.domain.js import is_finite_number, is_js_integer, slug
 from app.domain.template import extract_placeholders
@@ -84,6 +86,46 @@ def review_reference(value: Any, input_columns: list[str]) -> dict:
     return {"source": "column", "column": column}
 
 
+def attention_rule(value: Any, input_columns: list[str]) -> dict | None:
+    """attention 규칙 (app/domain/attention.py). 없으면 None. 두 모양 중 하나이고, 저장할 때 모르는 키는 버린다.
+
+    - 접두어 방식 {namePrefix, expectedValue, minCorrectRatio}: namePrefix 는 비지 않은 문자열, expectedValue 는 문자열
+    - 컬럼 방식 {column, minCorrectRatio}: column 은 입력 컬럼 중 하나
+    minCorrectRatio 는 0~1 의 숫자이고 없으면 1 이다.
+    """
+    if value is None:
+        return None
+    object_body(value, "attentionRule")
+    ratio = value.get("minCorrectRatio", 1)
+    if not is_finite_number(ratio) or not 0 <= ratio <= 1:
+        raise invalid('"attentionRule.minCorrectRatio" must be a number from 0 to 1.')
+    if "column" in value:
+        if "namePrefix" in value:
+            raise invalid('"attentionRule" must have either "column" or "namePrefix", not both.')
+        column = attention_column_of(value)
+        if column is None:
+            raise invalid('"attentionRule.column" must be a column name.')
+        if column not in input_columns:
+            raise invalid(f'Attention column "{column}" is not one of the CSV columns.')
+        return {"column": column, "minCorrectRatio": ratio}
+    prefix, expected = value.get("namePrefix"), value.get("expectedValue")
+    if not isinstance(prefix, str) or not prefix:
+        raise invalid('"attentionRule.namePrefix" must be a non-empty string.')
+    if not isinstance(expected, str):
+        raise invalid('"attentionRule.expectedValue" must be a string.')
+    return {"namePrefix": prefix, "expectedValue": expected, "minCorrectRatio": ratio}
+
+
+def free_text_suffixes(value: Any) -> list[str]:
+    """자유 서술 답의 이름 접미어 (app/domain/answer_kinds.py). 없으면 []. 빈 문자열은 모든 이름에 맞으므로 받지 않는다."""
+    if value is None:
+        return []
+    string_array(value, "freeTextSuffixes")
+    if any(suffix == "" for suffix in value):
+        raise invalid('"freeTextSuffixes" cannot contain an empty string.')
+    return list(dict.fromkeys(value))
+
+
 def _qualification_type_ids(requirements: Any) -> list[str]:
     """settings.QualificationRequirements?.map((r) => r?.QualificationTypeId) 가 문자열 배열인지."""
     if requirements is None:
@@ -103,6 +145,8 @@ async def create_batch(request: Request) -> dict:
     required_pool_ids = string_array(body.get("requiredPoolIds"), "requiredPoolIds")
     excluded_pool_ids = string_array(body.get("excludedPoolIds"), "excludedPoolIds")
     reference = review_reference(body.get("reference"), input_columns)
+    rule = attention_rule(body.get("attentionRule"), input_columns)
+    suffixes = free_text_suffixes(body.get("freeTextSuffixes"))
     _qualification_type_ids(settings.get("QualificationRequirements"))
     name = trimmed_string(body.get("name"))
     if not name:
@@ -162,7 +206,8 @@ async def create_batch(request: Request) -> dict:
             "templateHtml": template["html"],
             "inputColumns": list(input_columns),
             "settings": {**settings, "Reward": f"{reward_cents / 100:.2f}"},
-            "attentionRule": body.get("attentionRule"),
+            "attentionRule": rule,
+            "freeTextSuffixes": suffixes,
             "reference": reference,
             "requiredPoolIds": list(required_pool_ids),
             "excludedPoolIds": list(excluded_pool_ids),

@@ -14,15 +14,18 @@ reference.test.ts 의 기대값:
     map_reference_to_answers("grounded", [general_1, attention_1]) == {"general_1": "grounded"}                     (일반 문항이 하나일 때)
     majority_reference([[q1 a, q2 a, q3 a], [q1 a, q2 b], [q1 b, q2 b]]) == {"q1": "a", "q2": "b", "q3": "a"}
     agreement_with_reference(…) : attention 제외, 기준이 있는 문항만, 대소문자와 공백 무시. 비교할 문항이 없으면 None
+
+라벨이 아닌 답(attention, 자유 서술)은 excluded 로 받는다. 이름 → 뺄지를 답하는 함수(app/domain/answer_kinds.py 의
+AnswerKinds.is_excluded)이고, 문자열이면 attention 접두어로 본다 (프로토타입과 같은 옛 호출). attention.py 가 이 모듈의
+셀 읽기를 쓰므로 여기서는 attention.py 를 import 하지 않는다.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Callable
 
-from app.domain.attention import is_attention_name
 from app.domain.js import is_js_number, js_number, js_string
 from app.domain.agreement import majority_of_tally
 
@@ -30,6 +33,16 @@ PYTHON_WORDS = {"True": "true", "False": "false", "None": "null"}
 PYTHON_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "'": "'", '"': '"', "\\": "\\"}
 _PYTHON_WORD_RE = re.compile(r"\b(True|False|None)\b", re.ASCII)
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
+
+
+Excluded = str | Callable[[str], bool]
+
+
+def excluded_by(excluded: Excluded) -> Callable[[str], bool]:
+    """뺄 답의 판별 함수. 문자열이면 그 접두어로 시작하는 이름이다 (attention.is_attention_name 과 같은 규칙)."""
+    if isinstance(excluded, str):
+        return lambda name: name.startswith(excluded)
+    return excluded
 
 
 def normalize_label(value: str) -> str:
@@ -113,19 +126,20 @@ def as_label(value: Any) -> str | None:
     return None
 
 
-def map_reference_to_answers(parsed: Any, answers: list[dict], attention_prefix: str) -> dict[str, str]:
-    """파싱된 값을 이 assignment 의 문항 이름에 대응시킨다.
+def map_reference_to_answers(parsed: Any, answers: list[dict], excluded: Excluded) -> dict[str, str]:
+    """파싱된 값을 이 assignment 의 문항 이름에 대응시킨다. excluded 는 라벨이 아닌 답(attention, 자유 서술)이다.
 
     - object: 문항 이름과 같은 키, 없으면 `name.startswith(key + '_')` 인 키 중 가장 긴 것. 값은 string|number|boolean 만
-    - array: 위치로. 길이가 답 수와 같으면 모든 답에, attention 을 뺀 답 수와 같으면 attention 을 뺀 답에. 둘 다 아니면 없음
-    - 그 외 스칼라: attention 을 뺀 답이 정확히 하나일 때 그 답에
+    - array: 위치로. 길이가 답 수와 같으면 모든 답에, excluded 를 뺀 답 수와 같으면 뺀 답에. 둘 다 아니면 없음
+    - 그 외 스칼라: excluded 를 뺀 답이 정확히 하나일 때 그 답에
     """
     reference: dict[str, str] = {}
     if parsed is None:
         return reference
+    skip = excluded_by(excluded)
 
     if isinstance(parsed, list):
-        general = [a for a in answers if not is_attention_name(a["name"], attention_prefix)]
+        general = [a for a in answers if not skip(a["name"])]
         targets = answers if len(parsed) == len(answers) else general if len(parsed) == len(general) else []
         for index, answer in enumerate(targets):
             label = as_label(parsed[index])
@@ -149,7 +163,7 @@ def map_reference_to_answers(parsed: Any, answers: list[dict], attention_prefix:
         return reference
 
     label = as_label(parsed)
-    general = [a for a in answers if not is_attention_name(a["name"], attention_prefix)]
+    general = [a for a in answers if not skip(a["name"])]
     if label is not None and len(general) == 1:
         reference[general[0]["name"]] = label
     return reference
@@ -170,11 +184,12 @@ def majority_reference(others: list[list[dict]]) -> dict[str, str]:
     return reference
 
 
-def agreement_with_reference(answers: list[dict], reference: dict[str, str], attention_prefix: str) -> float | int | None:
-    """attention 문항을 빼고 reference 가 있는 문항만 비교한 일치 비율. 비교할 문항이 없으면 None."""
+def agreement_with_reference(answers: list[dict], reference: dict[str, str], excluded: Excluded) -> float | int | None:
+    """excluded(attention, 자유 서술)를 빼고 reference 가 있는 문항만 비교한 일치 비율. 비교할 문항이 없으면 None."""
+    skip = excluded_by(excluded)
     compared = agreed = 0
     for answer in answers:
-        if is_attention_name(answer["name"], attention_prefix):
+        if skip(answer["name"]):
             continue
         expected = reference.get(answer["name"])
         if expected is None:

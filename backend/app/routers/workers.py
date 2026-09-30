@@ -13,19 +13,26 @@ from typing import Callable
 from fastapi import Request, Response
 
 from app.db import Store
+from app.domain.answer_kinds import answer_kinds
 from app.domain.js import js_number_of, js_string, locale_key, slug
 from app.domain.list_query import apply_list_query
 from app.domain.progress import count_by_status
 from app.domain.worker_stats import EMPTY_STATS, WorkerStatsRecord, compute_worker_stats
 from app.errors import invalid, not_found
-from app.routers.common import (attention_prefix_of, body_field, db_of, find_pool, list_query_of, no_content, object_body,
+from app.routers.common import (answer_kinds_by_hit, body_field, db_of, find_pool, list_query_of, no_content, object_body,
                                 read_body, string_array, unique_slug_id)
 
 
 def build_workers(store: Store) -> list[dict]:
     """Worker 목록 (WorkerId, stats, poolIds, blocked, note)."""
-    prefixes = {batch["id"]: attention_prefix_of(batch) for batch in store.list_batches()}
-    records = [WorkerStatsRecord(assignment, batch_id, row_index, prefixes.get(batch_id, attention_prefix_of(None)))
+    kinds_of = {batch["id"]: answer_kinds_by_hit(store, batch) for batch in store.list_batches()}
+    fallback = answer_kinds(None)
+
+    def excluded(assignment: dict, batch_id: str):
+        kinds = kinds_of[batch_id](assignment["HITId"]) if batch_id in kinds_of else fallback
+        return kinds.is_excluded   # attention 과 자유 서술 답은 majority 일치율에 넣지 않는다
+
+    records = [WorkerStatsRecord(assignment, batch_id, row_index, excluded(assignment, batch_id))
                for assignment, batch_id, row_index in store.assignment_records()]
     stats = compute_worker_stats(records)
     pools = store.list_pools()
