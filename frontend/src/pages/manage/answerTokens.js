@@ -91,3 +91,13 @@ export function tokenWidthOf(tokens) {
   for (const token of tokens.values()) longest = Math.max(longest, token.length);
   return Math.min(longest, 12) + 1;
 }
+
+/** Review 의 Answers 열에 보이는 자유 서술 답의 최대 글자 수 */
+export const FREE_TEXT_PREVIEW = 24;
+
+/** 자유 서술 답을 짧게: 줄바꿈과 연속 공백을 하나로 줄이고 max 글자에서 자른다 (전문은 title 로 본다). */
+export function freeTextPreview(value, max = FREE_TEXT_PREVIEW) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (text === '') return EMPTY_TOKEN;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}

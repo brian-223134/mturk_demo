@@ -7,6 +7,13 @@ import { parseReferenceCell } from './reference.js';
 
 export const DEFAULT_ATTENTION_PREFIX = 'attention_';
 
+/**
+ * attention 답을 찾는 방식. batch.attentionRule 의 두 모양과 같다.
+ *  - prefix: 이름이 접두어로 시작하는 답이 attention 이고 기대 값은 하나 → { namePrefix, expectedValue, minCorrectRatio }
+ *  - column: 행마다 CSV 컬럼의 셀이 { 답 이름: 기대 값 } → { column, minCorrectRatio }. agent 의 새 출력은 이 방식이다
+ */
+export const ATTENTION_MODES = ['prefix', 'column'];
+
 // MTurk 의 시스템 Qualification ID. Settings 폼의 세 조건이 이 ID 로 변환된다.
 export const QUALIFICATION_APPROVAL_RATE = '000000000000000000L0';
 export const QUALIFICATION_APPROVED_HITS = '00000000000000000040';
@@ -38,9 +45,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   excludedPoolIds: [],
 
   attentionEnabled: false,
+  attentionMode: 'prefix', // ATTENTION_MODES
   attentionPrefix: DEFAULT_ATTENTION_PREFIX,
   attentionExpected: '',
+  attentionColumn: null, // column 방식에서 기대 답이 든 CSV 컬럼
   attentionMinRatio: 1,
+
+  /** 자유 서술 답의 이름 접미어. 이 접미어로 끝나는 답은 κ, majority, 일치율, 대조 기준에서 빠진다 */
+  freeTextSuffixes: [],
 
   /** Review 의 대조 기준으로 쓸 CSV 컬럼. null 이면 같은 HIT 의 다른 worker 들 majority */
   referenceColumn: null,
@@ -48,7 +60,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 /** 기본값의 깊은 복사 (배열을 공유하지 않게). */
 export function defaultSettings() {
-  return { ...DEFAULT_SETTINGS, countries: [...DEFAULT_SETTINGS.countries], requiredPoolIds: [], excludedPoolIds: [] };
+  return { ...DEFAULT_SETTINGS, countries: [...DEFAULT_SETTINGS.countries], requiredPoolIds: [], excludedPoolIds: [], freeTextSuffixes: [] };
 }
 
 const MINUTE = 60;
@@ -90,7 +102,14 @@ export function toHitSettings(values) {
 
 export function toAttentionRule(values) {
   if (!values.attentionEnabled) return null;
+  if (values.attentionMode === 'column') return { column: values.attentionColumn ?? '', minCorrectRatio: values.attentionMinRatio };
   return { namePrefix: values.attentionPrefix, expectedValue: values.attentionExpected, minCorrectRatio: values.attentionMinRatio };
+}
+
+/** 자유 서술 접미어 입력을 목록으로 맞춘다. 문자열이면 쉼표와 공백으로 나눈다. 빈 값과 중복은 뺀다. */
+export function normalizeSuffixes(suffixes) {
+  const list = Array.isArray(suffixes) ? suffixes : String(suffixes ?? '').split(/[\s,]+/);
+  return [...new Set(list.filter((suffix) => typeof suffix === 'string').map((suffix) => suffix.trim()).filter(Boolean))];
 }
 
 /** 컬럼을 고르지 않았으면(null 또는 빈 문자열) majority. GT 나 LLM 라벨이 없는 CSV 가 흔하므로 이것이 기본이다. */
@@ -116,6 +135,22 @@ export function describeReferenceCell(cell) {
   const text = String(parsed);
   const shown = text.length > REFERENCE_VALUE_PREVIEW ? `${text.slice(0, REFERENCE_VALUE_PREVIEW)}…` : text;
   return { type: 'info', message: `Row 1 reads as a single value "${shown}" (used when the task has exactly one answer besides attention items).` };
+}
+
+const ATTENTION_CELL_PREVIEW = 3;
+
+/** column 방식 attention 에서 고른 컬럼의 첫 행 셀이 기대 답으로 읽히는지 한 줄로 { type, message }. */
+export function describeAttentionCell(cell) {
+  const parsed = parseReferenceCell(cell);
+  if (parsed === undefined) return { type: 'warning', message: 'Row 1 is empty, so that HIT has no attention check.' };
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { type: 'warning', message: 'Row 1 is not an object of {answer name: expected value}, so that HIT has no attention check.' };
+  }
+  const entries = Object.entries(parsed);
+  if (entries.length === 0) return { type: 'warning', message: 'Row 1 lists no answers, so that HIT has no attention check.' };
+  const shown = entries.slice(0, ATTENTION_CELL_PREVIEW).map(([name, value]) => `${name} = ${typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}`);
+  const more = entries.length > ATTENTION_CELL_PREVIEW ? `, and ${entries.length - ATTENTION_CELL_PREVIEW} more` : '';
+  return { type: 'info', message: `Row 1 expects ${entries.length} attention answer(s): ${shown.join(', ')}${more}.` };
 }
 
 /** 견적. 저장된 draft 의 값이 깨져 있어도(예: Reward 가 빈 문자열) 화면이 죽지 않게 null 을 돌려준다. */
@@ -198,8 +233,14 @@ export function validateSettings(values, { columns = [], pools = [] } = {}) {
   }
 
   if (values.attentionEnabled) {
-    if (!values.attentionPrefix || values.attentionPrefix.trim() === '') errors.attentionPrefix = 'Enter the prefix.';
-    if (!values.attentionExpected || values.attentionExpected.trim() === '') errors.attentionExpected = 'Enter the expected value, e.g. not_grounded.';
+    if (values.attentionMode === 'column') {
+      const attentionColumn = values.attentionColumn;
+      if (!attentionColumn) errors.attentionColumn = 'Choose the CSV column that holds the expected answers.';
+      else if (!columns.includes(attentionColumn)) errors.attentionColumn = `Column "${attentionColumn}" is not in the uploaded CSV. Choose another column.`;
+    } else {
+      if (!values.attentionPrefix || values.attentionPrefix.trim() === '') errors.attentionPrefix = 'Enter the prefix.';
+      if (!values.attentionExpected || values.attentionExpected.trim() === '') errors.attentionExpected = 'Enter the expected value, e.g. not_grounded.';
+    }
     if (!isNumber(values.attentionMinRatio) || values.attentionMinRatio < 0 || values.attentionMinRatio > 1) errors.attentionMinRatio = 'Enter a value from 0 to 1.';
   }
 
@@ -213,7 +254,9 @@ export function validateSettings(values, { columns = [], pools = [] } = {}) {
 /**
  * agent job 의 settings.json 을 폼 값에 얹는다. 있는 키만 바꾼다 (agent/README.md "출력 파일"의 settings.json).
  *  - Title, Description, Keywords: 그대로
- *  - attentionRule { namePrefix, expectedValue, minCorrectRatio }: 있으면 스위치를 켠다. null 이면 끈다
+ *  - attentionRule: 있으면 스위치를 켠다. null 이면 끈다. { column, minCorrectRatio } 면 column 방식으로 그 컬럼을 고르고
+ *    (CSV 에 없으면 Next 의 검사가 알린다), { namePrefix, expectedValue, minCorrectRatio } 면 prefix 방식이다
+ *  - freeTextSuffixes: 자유 서술 답의 이름 접미어 목록
  *  - reference.column 또는 referenceColumn: CSV(columns)에 있는 컬럼일 때만 고른다
  *  - Reward, MaxAssignments, AssignmentDurationInSeconds, LifetimeInSeconds, AutoApprovalDelayInSeconds: 있으면 폼 단위로 바꿔 넣는다
  */
@@ -226,12 +269,19 @@ export function applyJobSettings(values, json, columns = []) {
   if (json.attentionRule && typeof json.attentionRule === 'object') {
     const rule = json.attentionRule;
     next.attentionEnabled = true;
-    if (typeof rule.namePrefix === 'string' && rule.namePrefix !== '') next.attentionPrefix = rule.namePrefix;
-    if (rule.expectedValue !== undefined && rule.expectedValue !== null) next.attentionExpected = String(rule.expectedValue);
+    if (typeof rule.column === 'string' && rule.column !== '') {
+      next.attentionMode = 'column';
+      next.attentionColumn = rule.column;
+    } else {
+      next.attentionMode = 'prefix';
+      if (typeof rule.namePrefix === 'string' && rule.namePrefix !== '') next.attentionPrefix = rule.namePrefix;
+      if (rule.expectedValue !== undefined && rule.expectedValue !== null) next.attentionExpected = String(rule.expectedValue);
+    }
     if (isNumber(rule.minCorrectRatio)) next.attentionMinRatio = rule.minCorrectRatio;
   } else if (json.attentionRule === null) {
     next.attentionEnabled = false;
   }
+  if (Array.isArray(json.freeTextSuffixes)) next.freeTextSuffixes = normalizeSuffixes(json.freeTextSuffixes);
   const column = json.reference && json.reference.source === 'column' ? json.reference.column : json.referenceColumn;
   if (typeof column === 'string' && column !== '') next.referenceColumn = columns.includes(column) ? column : null;
 
@@ -245,8 +295,9 @@ export function applyJobSettings(values, json, columns = []) {
   return next;
 }
 
-/** POST /api/batches 의 body (CreateBatchRequest). answerSchema 는 비어 있으면 넣지 않는다. */
+/** POST /api/batches 의 body (CreateBatchRequest). answerSchema 와 freeTextSuffixes 는 비어 있으면 넣지 않는다. */
 export function buildCreateBatchRequest({ name, template, data, settings, answerSchema = [] }) {
+  const freeTextSuffixes = normalizeSuffixes(settings.freeTextSuffixes ?? []);
   return {
     name: name.trim(),
     templateId: template.id,
@@ -257,6 +308,7 @@ export function buildCreateBatchRequest({ name, template, data, settings, answer
     reference: toReviewReference(settings),
     requiredPoolIds: settings.requiredPoolIds,
     excludedPoolIds: settings.excludedPoolIds,
+    ...(freeTextSuffixes.length > 0 ? { freeTextSuffixes } : {}),
     ...(answerSchema.length > 0 ? { answerSchema } : {}),
   };
 }

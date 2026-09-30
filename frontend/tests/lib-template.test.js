@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PREVIEW_MESSAGE_SOURCE, extractPlaceholders, jsonForScript, renderTemplate } from '../src/lib/template.js';
+import { PREVIEW_MESSAGE_SOURCE, declaredAnswerSchema, extractPlaceholders, jsonForScript, renderTemplate } from '../src/lib/template.js';
 
 describe('extractPlaceholders', () => {
   it('처음 나온 순서대로, 중복 없이 뽑는다', () => {
@@ -71,5 +71,40 @@ describe('renderTemplate', () => {
     assert.ok(preview.includes("window.addEventListener('submit'"));
     assert.ok(preview.includes('MutationObserver'));
     assert.equal(PREVIEW_MESSAGE_SOURCE, 'mturk-console-preview');
+  });
+});
+
+describe('declaredAnswerSchema (window.TASK_ANSWER_SCHEMA)', () => {
+  it('배열이 아니면 null 이라 미리보기는 화면의 라디오, 체크박스, select 를 훑는다', () => {
+    for (const value of [undefined, null, {}, 'x', { length: 1 }]) assert.equal(declaredAnswerSchema(value), null);
+    assert.deepEqual(declaredAnswerSchema([]), []);
+  });
+
+  it('agent 템플릿의 목록을 name, values, type, required 로 옮긴다 (DOM 순서 그대로)', () => {
+    const declared = [
+      { name: 'general_0_1_support', type: 'multi_select', values: ['supported', 'not_supported'], required: true },
+      { name: 'general_0_covered', type: 'choice', values: ['Yes', 'No'], required: true },
+      { name: 'general_0_missing_info', type: 'text', values: [], required: false },
+      { name: 'general_0_quality', type: 'likert', values: [1, 2, 3, 4, 5], required: true },
+    ];
+    assert.deepEqual(declaredAnswerSchema(declared), [
+      { name: 'general_0_1_support', values: ['supported', 'not_supported'], type: 'multi_select', required: true },
+      { name: 'general_0_covered', values: ['Yes', 'No'], type: 'choice', required: true },
+      { name: 'general_0_missing_info', values: [], type: 'text', required: false },
+      { name: 'general_0_quality', values: ['1', '2', '3', '4', '5'], type: 'likert', required: true },
+    ]);
+  });
+
+  it('이름이 없거나 겹치는 항목은 빼고, 모르는 값과 키는 버린다', () => {
+    const declared = [null, { values: ['a'] }, { name: '' }, { name: 'q', values: ['a', 'a', null, { x: 1 }], type: 3, required: 'yes', extra: 1 }, { name: 'q', values: ['b'] }];
+    assert.deepEqual(declaredAnswerSchema(declared), [{ name: 'q', values: ['a'] }]);
+  });
+
+  it('미리보기 스크립트가 같은 함수를 넣어 TASK_ANSWER_SCHEMA 를 먼저 본다', () => {
+    const preview = renderTemplate('<html><head></head></html>', {}, { preview: true });
+    assert.ok(preview.includes(declaredAnswerSchema.toString()));
+    assert.ok(preview.includes('declaredAnswerSchema(window.TASK_ANSWER_SCHEMA)'));
+    const script = preview.slice(preview.indexOf('(function () {'), preview.lastIndexOf('})();') + 5);
+    assert.doesNotThrow(() => new Function(script.replace('(function () {', '(function () { return;'))); // 문법이 깨지지 않았다
   });
 });

@@ -10,10 +10,12 @@ import {
   buildCreateBatchRequest,
   buildQualificationRequirements,
   defaultSettings,
+  describeAttentionCell,
   describeQualifications,
   describeReferenceCell,
   estimateFor,
   normalizeCountries,
+  normalizeSuffixes,
   toAttentionRule,
   toHitSettings,
   toReviewReference,
@@ -31,9 +33,14 @@ describe('defaults', () => {
     assert.equal(DEFAULT_SETTINGS.attentionEnabled, false);
     assert.equal(DEFAULT_SETTINGS.attentionPrefix, 'attention_');
     assert.equal(DEFAULT_SETTINGS.referenceColumn, null);
+    assert.equal(DEFAULT_SETTINGS.attentionMode, 'prefix');
+    assert.equal(DEFAULT_SETTINGS.attentionColumn, null);
+    assert.deepEqual(DEFAULT_SETTINGS.freeTextSuffixes, []);
     const a = defaultSettings();
     a.countries.push('KR');
+    a.freeTextSuffixes.push('_note');
     assert.deepEqual(defaultSettings().countries, ['US']);
+    assert.deepEqual(defaultSettings().freeTextSuffixes, []);
   });
 });
 
@@ -93,6 +100,34 @@ describe('toAttentionRule', () => {
       expectedValue: 'not_grounded',
       minCorrectRatio: 1,
     });
+  });
+
+  it('builds the column shape in the expected answers column mode, ignoring the prefix fields', () => {
+    const values = { ...DEFAULT_SETTINGS, attentionEnabled: true, attentionMode: 'column', attentionColumn: 'attention_expected', attentionExpected: 'x', attentionMinRatio: 0.5 };
+    assert.deepEqual(toAttentionRule(values), { column: 'attention_expected', minCorrectRatio: 0.5 });
+    assert.equal(toAttentionRule({ ...values, attentionEnabled: false }), null);
+  });
+});
+
+describe('normalizeSuffixes', () => {
+  it('splits a comma or space separated string, trims, and drops empties and duplicates', () => {
+    assert.deepEqual(normalizeSuffixes(' _missing_info, _comment _missing_info,, '), ['_missing_info', '_comment']);
+    assert.deepEqual(normalizeSuffixes(['_note', ' _note ', '', 3]), ['_note']);
+    assert.deepEqual(normalizeSuffixes(''), []);
+    assert.deepEqual(normalizeSuffixes(undefined), []);
+  });
+});
+
+describe('describeAttentionCell', () => {
+  it('lists the expected answers of the first row, or warns that the HIT has no attention check', () => {
+    assert.deepEqual(describeAttentionCell('{"general_1_1_support": "not_supported"}'), {
+      type: 'info',
+      message: 'Row 1 expects 1 attention answer(s): general_1_1_support = not_supported.',
+    });
+    assert.deepEqual(describeAttentionCell("{'a': 'x', 'b': 2, 'c': 'z', 'd': 'w'}"), { type: 'info', message: 'Row 1 expects 4 attention answer(s): a = x, b = 2, c = z, and 1 more.' });
+    assert.deepEqual(describeAttentionCell(''), { type: 'warning', message: 'Row 1 is empty, so that HIT has no attention check.' });
+    assert.deepEqual(describeAttentionCell('{}'), { type: 'warning', message: 'Row 1 lists no answers, so that HIT has no attention check.' });
+    assert.deepEqual(describeAttentionCell('not_grounded'), { type: 'warning', message: 'Row 1 is not an object of {answer name: expected value}, so that HIT has no attention check.' });
   });
 });
 
@@ -238,6 +273,17 @@ describe('validateSettings', () => {
     });
   });
 
+  it('checks the expected answers column instead of the prefix fields in column mode', () => {
+    const on = { ...DEFAULT_SETTINGS, attentionEnabled: true, attentionMode: 'column', attentionPrefix: '', attentionExpected: '' };
+    assert.deepEqual(validateSettings({ ...on, attentionColumn: 'passage' }, { columns }), {});
+    assert.deepEqual(validateSettings({ ...on, attentionColumn: null }, { columns }), { attentionColumn: 'Choose the CSV column that holds the expected answers.' });
+    assert.deepEqual(validateSettings({ ...on, attentionColumn: 'attention_expected', attentionMinRatio: -1 }, { columns }), {
+      attentionColumn: 'Column "attention_expected" is not in the uploaded CSV. Choose another column.',
+      attentionMinRatio: 'Enter a value from 0 to 1.',
+    });
+    assert.deepEqual(validateSettings({ ...on, attentionEnabled: false, attentionColumn: 'nope' }, { columns }), {});
+  });
+
   it('rejects a reference column that is no longer in the CSV', () => {
     assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS, referenceColumn: 'passage' }, { columns }), {});
     assert.equal(
@@ -306,6 +352,58 @@ describe('applyJobSettings (agent settings.json)', () => {
   });
 });
 
+describe('applyJobSettings (settings.json with an expected answers column)', () => {
+  // agent 의 새 출력 (문항 여러 개, 숨긴 attention, 자유 서술 답)
+  const json = {
+    Title: 'Judge which statements a passage supports',
+    Description: 'Read a passage and mark the statements it supports.',
+    Keywords: 'a, b',
+    attentionRule: { column: 'attention_expected', minCorrectRatio: 1 },
+    reference: { source: 'column', column: 'llm_label' },
+    referenceColumn: 'llm_label',
+    reasonColumn: 'llm_reason',
+    freeTextSuffixes: ['_missing_info'],
+    questions: [{ id: 'support', type: 'multi_select', scope: 'target', values: ['supported', 'not_supported'] }],
+    answerNames: { target: 'general_{i}_{j}_{qid}', item: 'general_{i}_{qid}' },
+    itemsPerHit: 10,
+    attentionPerHit: 1,
+    optionValues: ['supported', 'not_supported'],
+  };
+  const columns = ['hit_id', 'record_ids', 'item_ids', 'attention', 'passage', 'statements', 'llm_label', 'llm_reason', 'attention_expected'];
+
+  it('switches to the column mode, picks the column and reads the free-text suffixes', () => {
+    const values = applyJobSettings(defaultSettings(), json, columns);
+    assert.equal(values.Title, json.Title);
+    assert.equal(values.attentionEnabled, true);
+    assert.equal(values.attentionMode, 'column');
+    assert.equal(values.attentionColumn, 'attention_expected');
+    assert.equal(values.attentionMinRatio, 1);
+    assert.equal(values.attentionPrefix, 'attention_'); // prefix 방식의 값은 그대로 둔다
+    assert.deepEqual(values.freeTextSuffixes, ['_missing_info']);
+    assert.equal(values.referenceColumn, 'llm_label');
+    assert.deepEqual(validateSettings(values, { columns }), {});
+    assert.deepEqual(toAttentionRule(values), { column: 'attention_expected', minCorrectRatio: 1 });
+  });
+
+  it('keeps an attention column that the CSV lacks so that Next reports it', () => {
+    const values = applyJobSettings(defaultSettings(), json, ['hit_id', 'llm_label']);
+    assert.equal(values.attentionColumn, 'attention_expected');
+    assert.equal(validateSettings(values, { columns: ['hit_id', 'llm_label'] }).attentionColumn, 'Column "attention_expected" is not in the uploaded CSV. Choose another column.');
+  });
+
+  it('switches back to the prefix mode for an old settings.json, and keeps the suffixes when the key is missing', () => {
+    const column = applyJobSettings(defaultSettings(), json, columns);
+    const old = applyJobSettings(column, { attentionRule: { namePrefix: 'check_', expectedValue: 'not_grounded', minCorrectRatio: 0.5 } }, columns);
+    assert.equal(old.attentionMode, 'prefix');
+    assert.equal(old.attentionPrefix, 'check_');
+    assert.equal(old.attentionExpected, 'not_grounded');
+    assert.equal(old.attentionMinRatio, 0.5);
+    assert.deepEqual(old.freeTextSuffixes, ['_missing_info']);
+    assert.deepEqual(applyJobSettings(column, { ...json, attentionRule: null, freeTextSuffixes: [] }, columns).freeTextSuffixes, []);
+    assert.equal(applyJobSettings(column, { attentionRule: null }, columns).attentionEnabled, false);
+  });
+});
+
 describe('buildCreateBatchRequest', () => {
   const template = { id: 'tpl-1', name: 'T', html: '', placeholders: [] };
   const data = { fileName: 'data.csv', columns: ['a'], rows: [{ a: '1' }], hadBom: false, warnings: [] };
@@ -329,6 +427,18 @@ describe('buildCreateBatchRequest', () => {
       excludedPoolIds: [],
     });
     assert.ok(!('answerSchema' in request));
+  });
+
+  it('sends the column rule and the free-text suffixes', () => {
+    const request = buildCreateBatchRequest({
+      name: 'n',
+      template,
+      data: { ...data, columns: ['a', 'attention_expected'] },
+      settings: { ...DEFAULT_SETTINGS, attentionEnabled: true, attentionMode: 'column', attentionColumn: 'attention_expected', freeTextSuffixes: ['_missing_info', ' '] },
+    });
+    assert.deepEqual(request.attentionRule, { column: 'attention_expected', minCorrectRatio: 1 });
+    assert.deepEqual(request.freeTextSuffixes, ['_missing_info']);
+    assert.ok(!('freeTextSuffixes' in buildCreateBatchRequest({ name: 'n', template, data, settings: DEFAULT_SETTINGS })));
   });
 
   it('includes the answer schema when the preview reported one', () => {

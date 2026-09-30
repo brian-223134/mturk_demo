@@ -1,4 +1,5 @@
 // Review 의 응답 상세: 문항별로 이 worker 의 값, 대조 기준(reference), 같은 HIT 다른 worker 의 값을 나란히 보여준다.
+// 자유 서술 답은 태그 대신 글 그대로 보이고, 대조 기준과 비교하지 않는다.
 // openAssignmentDrawer({ detail, assignment, onAction(kind, assignment) }) → drawer handle
 
 import { api } from '../../api-client/client.js';
@@ -11,7 +12,7 @@ import { errorNotice, loading } from '../../components/notice.js';
 import { table } from '../../components/table.js';
 import { replace } from '../../components/render.js';
 import { normalizeLabel } from './answerTokens.js';
-import { attentionPrefixOf, describeReferenceSource, isAttentionName, workerPath } from './shared.js';
+import { answerKindsOf, describeReferenceSource, workerPath } from './shared.js';
 import { openTaskPreview } from './taskPreview.js';
 
 const SIBLING_PAGE = 100;
@@ -22,7 +23,7 @@ function item(label, value, wide = false) {
 
 export function openAssignmentDrawer({ detail, assignment, onAction }) {
   const { batch } = detail;
-  const prefix = attentionPrefixOf(batch);
+  const kinds = answerKindsOf(assignment, batch);
   let onlyDifferences = false;
   let others = [];
   let siblingsState = 'loading';
@@ -37,21 +38,26 @@ export function openAssignmentDrawer({ detail, assignment, onAction }) {
         const value = other.answers.find((x) => x.name === answer.name)?.value;
         return value === undefined ? [] : [{ workerId: other.WorkerId, value, rejected: other.AssignmentStatus === 'Rejected' }];
       }),
-      attention: isAttentionName(answer.name, prefix),
+      attention: kinds.isAttention(answer.name),
+      freeText: kinds.isFreeText(answer.name),
     }));
-  // 표의 Answers 열과 같은 기준: reference 가 있는 문항만, normalizeLabel 로 비교한다
-  const disagrees = (row) => row.reference !== undefined && normalizeLabel(row.reference) !== normalizeLabel(row.own);
+  // 표의 Answers 열과 같은 기준: reference 가 있는 라벨만, normalizeLabel 로 비교한다
+  const disagrees = (row) => !row.freeText && row.reference !== undefined && normalizeLabel(row.reference) !== normalizeLabel(row.own);
+  const freeText = (value, attrs = {}) => el('span', { ...attrs, className: `free-text${attrs.className ? ` ${attrs.className}` : ''}` }, value === '' ? EMPTY : value);
 
   const columns = [
-    { title: 'Item', width: 190, render: (row) => [el('code', {}, row.name), row.attention ? tag('attention', 'purple') : null] },
-    { title: 'This worker', width: 150, render: (row) => tag(row.own, disagrees(row) ? 'red' : 'default') },
-    { title: 'Reference', width: 150, render: (row) => (row.reference === undefined ? el('span', { className: 'muted' }, EMPTY) : tag(row.reference, row.attention ? 'purple' : 'default')) },
+    { title: 'Item', width: 190, render: (row) => [el('code', {}, row.name), row.attention ? tag('attention', 'purple') : null, row.freeText ? tag('free text', 'blue') : null] },
+    { title: 'This worker', width: 150, render: (row) => (row.freeText ? freeText(row.own) : tag(row.own, disagrees(row) ? 'red' : 'default')) },
+    { title: 'Reference', width: 150, render: (row) => (row.reference === undefined || row.freeText ? el('span', { className: 'muted' }, EMPTY) : tag(row.reference, row.attention ? 'purple' : 'default')) },
     {
       title: 'Other workers on this HIT',
       render: (row) =>
         row.others.length === 0
           ? el('span', { className: 'muted' }, 'none yet')
-          : row.others.map((o) => tag(o.value, 'default', { className: o.rejected ? 'tag-rejected' : '', title: `${o.workerId}${o.rejected ? ' (rejected)' : ''}` })),
+          : row.others.map((o) => {
+              const attrs = { className: o.rejected ? 'tag-rejected' : '', title: `${o.workerId}${o.rejected ? ' (rejected)' : ''}` };
+              return row.freeText ? freeText(o.value, { ...attrs, className: `${attrs.className} free-text-other`.trim() }) : tag(o.value, 'default', attrs);
+            }),
     },
   ];
 

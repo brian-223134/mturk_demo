@@ -2,10 +2,10 @@
 
 import { api } from '../../api-client/client.js';
 import { envBadge, tag } from '../../components/badges.js';
-import { el } from '../../components/dom.js';
+import { el, join } from '../../components/dom.js';
 import { notice } from '../../components/notice.js';
 import { formatCents } from '../../lib/cost.js';
-import { balanceCentsOf, buildCreateBatchRequest, describeQualifications, toAttentionRule, toHitSettings, toReviewReference } from '../../lib/settings.js';
+import { balanceCentsOf, buildCreateBatchRequest, describeQualifications, normalizeSuffixes, toAttentionRule, toHitSettings, toReviewReference } from '../../lib/settings.js';
 import { navigate } from '../../router.js';
 import { descList, failureNotice, field, refreshBalance } from './common.js';
 
@@ -20,6 +20,16 @@ export function todayText(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** attention 규칙 한 줄. 접두어 방식과 기대 답 컬럼 방식을 모두 설명한다. */
+function attentionRuleText(rule) {
+  if (!rule) return el('span', { className: 'muted' }, 'None');
+  const pass = `; pass at ${Math.round(rule.minCorrectRatio * 100)}% correct or more`;
+  if (typeof rule.column === 'string') {
+    return el('span', {}, 'Answers listed in the input column ', el('code', {}, rule.column), ' of each HIT must equal their expected values', pass);
+  }
+  return el('span', {}, 'Answers named ', el('code', {}, `${rule.namePrefix}*`), ' must be ', el('code', {}, rule.expectedValue), pass);
+}
+
 export function renderPublishStep(ctx) {
   const { draft, template, estimate, account, pools } = ctx;
   const { data, settings } = draft;
@@ -30,6 +40,7 @@ export function renderPublishStep(ctx) {
   const hitSettings = toHitSettings(settings);
   const attentionRule = toAttentionRule(settings);
   const reference = toReviewReference(settings);
+  const freeTextSuffixes = normalizeSuffixes(settings.freeTextSuffixes ?? []);
   const isProduction = account?.env === 'production';
   const balanceCents = balanceCentsOf(account);
   const overBalance = estimate !== null && balanceCents !== null && estimate.totalCents > balanceCents;
@@ -108,13 +119,15 @@ export function renderPublishStep(ctx) {
       { key: 'qualifications', label: 'Qualifications', value: qualifications.length > 0 ? qualifications.join('; ') : el('span', { className: 'muted' }, 'None') },
       { key: 'required', label: 'Only workers in', value: poolNames(settings.requiredPoolIds, 'Any worker') },
       { key: 'excluded', label: 'Exclude workers in', value: poolNames(settings.excludedPoolIds, 'Nobody') },
+      { key: 'attention', label: 'Attention rule', wide: true, value: attentionRuleText(attentionRule) },
       {
-        key: 'attention',
-        label: 'Attention rule',
+        key: 'free-text',
+        label: 'Free-text answers',
         wide: true,
-        value: attentionRule
-          ? el('span', {}, 'Answers named ', el('code', {}, `${attentionRule.namePrefix}*`), ' must be ', el('code', {}, attentionRule.expectedValue), `; pass at ${Math.round(attentionRule.minCorrectRatio * 100)}% correct or more`)
-          : el('span', { className: 'muted' }, 'None'),
+        value:
+          freeTextSuffixes.length > 0
+            ? el('span', {}, 'Answers named ', join(freeTextSuffixes.map((suffix) => el('code', {}, `*${suffix}`))), '; shown as text, left out of κ, majority, agreement and the reference')
+            : el('span', { className: 'muted' }, 'None'),
       },
       {
         key: 'reference',

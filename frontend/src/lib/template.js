@@ -29,6 +29,36 @@ function injectAtHeadStart(html, snippet) {
 export const PREVIEW_MESSAGE_SOURCE = 'mturk-console-preview';
 
 /**
+ * 템플릿이 스스로 밝힌 문항 목록 `window.TASK_ANSWER_SCHEMA` 를 미리보기가 보고할 모양으로 바꾼다. 배열이 아니면 null 이고,
+ * 그때 미리보기는 화면의 라디오, 체크박스, select 를 훑는다. 항목은 { name, values, type?, required? } 이다
+ * (type 은 choice | multi_select | likert | text, text 의 values 는 []). 이름이 없는 항목과 같은 이름의 두 번째 항목은 뺀다.
+ *
+ * 이 함수는 미리보기 iframe 안에서도 그대로 실행된다 (PREVIEW_BRIDGE 에 소스를 넣는다). 그래서 모듈의 다른 것을 쓰지 않고 ES5 로 쓴다.
+ */
+export function declaredAnswerSchema(declared) {
+  if (!Array.isArray(declared)) return null;
+  var fields = [];
+  var seen = {};
+  for (var i = 0; i < declared.length; i++) {
+    var item = declared[i];
+    if (!item || typeof item !== 'object' || typeof item.name !== 'string' || item.name === '' || seen[item.name]) continue;
+    seen[item.name] = true;
+    var values = [];
+    if (Array.isArray(item.values)) {
+      for (var j = 0; j < item.values.length; j++) {
+        var value = item.values[j];
+        if ((typeof value === 'string' || typeof value === 'number') && values.indexOf(String(value)) < 0) values.push(String(value));
+      }
+    }
+    var field = { name: item.name, values: values };
+    if (typeof item.type === 'string') field.type = item.type;
+    if (typeof item.required === 'boolean') field.required = item.required;
+    fields.push(field);
+  }
+  return fields;
+}
+
+/**
  * 미리보기 iframe 안에서 실행되는 스크립트. 콘솔 앱과는 postMessage 로만 통신한다 (iframe 에 allow-same-origin 이 없다).
  *
  * 제출 가로채기
@@ -39,7 +69,9 @@ export const PREVIEW_MESSAGE_SOURCE = 'mturk-console-preview';
  *    나지 않으므로 submit 메서드도 바꿔 둔다.
  *
  * 문항 읽기
- *  - 화면의 라디오, 체크박스, select 에서 name 과 선택지를 읽어 보낸다. 템플릿이 JS 로 문항을 그리므로 문서가 바뀌면 다시 읽는다.
+ *  - 템플릿이 window.TASK_ANSWER_SCHEMA 를 배열로 두었으면 그것을 보낸다 (declaredAnswerSchema). agent 가 만든 템플릿은
+ *    탭을 다 그린 뒤 이것을 두므로 화면에 보이지 않는 탭의 문항, 자유 서술 문항, 필수 여부까지 알 수 있다.
+ *  - 없으면 화면의 라디오, 체크박스, select 에서 name 과 선택지를 읽어 보낸다. 템플릿이 JS 로 문항을 그리므로 문서가 바뀌면 다시 읽는다.
  *  - 기존 템플릿은 DOM 을 쉬지 않고 바꾼다(초당 수백 번). "조용해지면 읽기"만으로는 영영 읽지 못하므로 최대 대기 시간을 둔다.
  *  - 기존 템플릿은 문항을 한 번에 하나씩만 그린다. 그래서 읽은 문항을 누적한다 (미리보기에서 눌러 본 만큼 모인다).
  */
@@ -83,10 +115,13 @@ const PREVIEW_BRIDGE = `(function () {
     });
   }
 
+  var declaredAnswerSchema = ${declaredAnswerSchema.toString()};
   var byName = {};
   var order = [];
   var lastSchema = '';
   function reportSchema() {
+    var declared = declaredAnswerSchema(window.TASK_ANSWER_SCHEMA);
+    if (declared) return sendSchema(declared);
     function add(name, value) {
       if (!name || name === 'input_answers' || name === 'assignmentId') return;
       if (!byName[name]) { byName[name] = []; order.push(name); }
@@ -96,7 +131,9 @@ const PREVIEW_BRIDGE = `(function () {
     document.querySelectorAll('select').forEach(function (el) {
       Array.prototype.forEach.call(el.options, function (o) { add(el.name, o.value); });
     });
-    var fields = order.map(function (name) { return { name: name, values: byName[name] }; });
+    sendSchema(order.map(function (name) { return { name: name, values: byName[name] }; }));
+  }
+  function sendSchema(fields) {
     var text = JSON.stringify(fields);
     if (text === lastSchema) return;
     lastSchema = text;

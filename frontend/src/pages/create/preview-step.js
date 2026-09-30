@@ -5,6 +5,7 @@ import { el } from '../../components/dom.js';
 import { errorNotice, muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
 import { table } from '../../components/table.js';
+import { checkAnswerFields } from '../../lib/answer-fields.js';
 import { formatCents, rewardToCents } from '../../lib/cost.js';
 import { balanceCentsOf } from '../../lib/settings.js';
 import { stepFooter } from './common.js';
@@ -58,25 +59,29 @@ function costPanel(ctx) {
   );
 }
 
-function answerFieldsBody(ctx) {
+/** row 는 미리보기 중인 CSV 행이다. column 방식 attention 은 행마다 기대 답이 다르므로 그 행의 셀로 검사한다. */
+function answerFieldsBody(ctx, row) {
   const { answerSchema, settings } = ctx.draft;
   if (answerSchema.length === 0) {
-    return muted('None yet. Fields are read from the radio buttons, checkboxes and selects in the preview below. A template that draws a question only after a click reports it once you open that question. This list is optional.');
+    return muted('None yet. Fields come from window.TASK_ANSWER_SCHEMA when the template declares it, otherwise from the radio buttons, checkboxes and selects in the preview below. A template that draws a question only after a click reports it once you open that question. This list is optional.');
   }
-  const attentionFields = settings.attentionEnabled ? answerSchema.filter((f) => f.name.startsWith(settings.attentionPrefix)) : [];
-  const expectedMissing = attentionFields.filter((f) => !f.values.includes(settings.attentionExpected));
+  const { attention, freeText, warnings } = checkAnswerFields(answerSchema, settings, row);
   const choices = [...new Set(answerSchema.flatMap((f) => f.values))];
+  const counts = [
+    settings.attentionEnabled ? `${attention.size} of them attention checks${settings.attentionMode === 'column' ? ' in this row' : ''}` : null,
+    freeText.size > 0 ? `${freeText.size} free text` : null,
+  ].filter(Boolean);
+  const color = (name) => (attention.has(name) ? 'gold' : freeText.has(name) ? 'blue' : 'default');
   return [
-    el('p', {}, `${answerSchema.length} field(s)${settings.attentionEnabled ? `, ${attentionFields.length} of them attention checks` : ''}. Used to generate fake submissions in the mock environment.`),
+    el('p', {}, `${answerSchema.length} field(s)${counts.length > 0 ? `, ${counts.join(', ')}` : ''}. Saved with the batch as its answer schema; the console uses it only to show and check the fields here.`),
     el(
       'div',
       { className: 'answer-field-list' },
-      answerSchema.slice(0, VISIBLE_FIELDS).map((f) => tag(f.name, attentionFields.includes(f) ? 'gold' : 'default', { className: 'answer-field mono', dataset: { field: f.name } })),
+      answerSchema.slice(0, VISIBLE_FIELDS).map((f) => tag(f.name, color(f.name), { className: 'answer-field mono', dataset: { field: f.name }, title: f.type ? `${f.type}${f.required === false ? ', optional' : ''}` : undefined })),
       answerSchema.length > VISIBLE_FIELDS ? el('span', { className: 'muted' }, `+${answerSchema.length - VISIBLE_FIELDS} more`) : null,
     ),
     choices.length > 0 ? muted(`Choices: ${choices.slice(0, VISIBLE_FIELDS).join(', ')}${choices.length > VISIBLE_FIELDS ? ', …' : ''}`) : null,
-    settings.attentionEnabled && attentionFields.length === 0 ? notice('warning', `No field name starts with "${settings.attentionPrefix}". Check the attention rule in Settings.`) : null,
-    expectedMissing.length > 0 ? notice('warning', `"${settings.attentionExpected}" is not one of the choices of ${expectedMissing[0].name} (${expectedMissing[0].values.join(', ')}).`) : null,
+    warnings.map((message) => notice('warning', message)),
   ];
 }
 
@@ -90,13 +95,13 @@ export function renderPreviewStep(ctx) {
   const balanceCents = balanceCentsOf(account);
   const overBalance = estimate !== null && balanceCents !== null && estimate.totalCents > balanceCents;
 
-  const answerBody = el('div', { id: 'answer-fields-body' }, answerFieldsBody(ctx));
+  const answerBody = el('div', { id: 'answer-fields-body' }, answerFieldsBody(ctx, row));
   // 템플릿이 JS 로 문항을 그리는 동안에는 빈 목록이 먼저 온다. 이미 읽은 목록을 빈 값으로 덮지 않는다.
   const onSchema = (fields) => {
     const current = ctx.draft.answerSchema;
     if (fields.length === 0 && current.length > 0) return;
     ctx.update({ answerSchema: fields }, { rerender: false });
-    answerBody.replaceChildren(...[answerFieldsBody(ctx)].flat().filter(Boolean));
+    answerBody.replaceChildren(...[answerFieldsBody(ctx, row)].flat(2).filter(Boolean));
   };
 
   const frame = previewFrame({ html: template.html, row, height: FRAME_HEIGHT, onSchema });

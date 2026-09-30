@@ -49,11 +49,12 @@ frontend/
    │  └─ client.js         call(routeName, args), api.<route>(…), ApiError { code, message, status }, createJob, fileUrl
    ├─ lib/                  DOM 을 쓰지 않는 순수 로직. Node 테스트에서 그대로 import 합니다
    │  ├─ csv.js             RFC 4180 파서(따옴표, 겹따옴표, 줄바꿈, CRLF, BOM)와 UTF-8 검사. papaparse 를 쓰지 않습니다
-   │  ├─ template.js        placeholder 추출, 치환, window.TASK_DATA 주입, 미리보기 제출 가로채기 스크립트
+   │  ├─ template.js        placeholder 추출, 치환, window.TASK_DATA 주입, 미리보기 스크립트(제출 가로채기, 문항 목록 보고)
    │  ├─ data-check.js      placeholder 와 컬럼 대조, 빈 셀, 행 크기, Data 단계의 ERROR / OK / WARN / INFO 문구
    │  ├─ cost.js            보상, 수수료(20%, MaxAssignments 10 이상은 40%), 견적
    │  ├─ reference.js       대조 기준 컬럼의 셀 읽기 (JSON, Python repr, 평문)
-   │  ├─ settings.js        Settings 기본값, 검증, MTurk 구조로 변환, agent settings.json 반영, 게시 요청 조립
+   │  ├─ settings.js        Settings 기본값, 검증, MTurk 구조로 변환, attention 규칙 두 모양, agent settings.json 반영, 게시 요청 조립
+   │  ├─ answer-fields.js   Preview 의 문항 목록을 attention 규칙, 자유 서술 접미어와 맞춰 보는 경고
    │  └─ draft.js           임시 저장 (IndexedDB). 저장소를 못 써도 마법사는 동작합니다
    ├─ components/
    │  ├─ dom.js            el() 도우미와 escapeHtml. 데이터는 항상 textContent 로 넣습니다
@@ -83,11 +84,11 @@ frontend/
       │  ├─ reviewTab.js     검수 표(필터, 정렬, 선택, 승인/반려/번복), 답 열의 W/R 토큰
       │  ├─ reviewActionModal.js  승인·반려·번복 창 (반려 사유 프리셋, attention 통과 경고)
       │  ├─ assignmentDrawer.js   응답 상세(문항별 이 worker, 대조 기준, 같은 HIT 의 다른 worker)
-      │  ├─ taskPreview.js   HIT 입력으로 템플릿을 렌더한 sandbox iframe 모달 (제출 가로채기)
+      │  ├─ taskPreview.js   HIT 입력으로 템플릿을 렌더한 sandbox iframe 모달 (Create 의 미리보기와 같은 lib/template.js 스크립트)
       │  ├─ hitsTab.js       HIT 별 진행률, Incomplete only, Add assignments…, Input(getHit), Open task
       │  ├─ resultsTab.js    κ, 만장일치, 라벨 분포, 문항 표와 필터, Export
-      │  ├─ answerTokens.js  답 값 약어(순수 함수), topUp.js  재모집 계산(9/10 규칙, 비용, 결과 문구)
-      │  └─ shared.js
+      │  ├─ answerTokens.js  답 값 약어와 자유 서술 답 줄이기(순수 함수), topUp.js  재모집 계산(9/10 규칙, 비용, 결과 문구)
+      │  └─ shared.js        attention 답과 자유 서술 답 판별(answerKindsOf), 대조 기준 문구, 반려 사유 프리셋
       ├─ workers.js        Worker Pool 의 틀. /workers, /workers/pools, /workers/:workerId
       └─ workers/
          ├─ list.js          worker 목록(정렬, 검색, pool 과 차단 필터, 선택 → pool 추가/제거, 차단/해제)
@@ -112,8 +113,8 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 ## 화면
 
-- **Create**: 템플릿과 CSV로 batch를 게시하는 5단계 마법사입니다 (`Template` → `Data` → `Settings` → `Preview & Cost` → `Publish`). 각 단계의 선택지와 기본값, 다음 단계로 가는 조건은 [Create로 batch 게시하기](../docs/creating-a-batch.md)와 같습니다. `Template`에서는 저장된 템플릿을 고르거나(`Use a saved template`), HTML을 올리거나 붙여 넣어 저장하거나(`Upload or paste HTML`), 원본 데이터와 prompt로 agent job을 돌려 만듭니다(`Generate from raw data`). job이 성공하면 카드의 `Use this result`가 template.html을 job 이름으로 저장하고, hits.csv를 올린 것처럼 읽고, settings.json의 제목·설명·키워드·attention 규칙·대조 기준 컬럼을 Settings에 채운 뒤 `Data` 단계로 갑니다. `Data`는 CSV를 브라우저에서 읽어 placeholder를 검사하고 처음 5행을 보여 줍니다. `Settings`는 HIT 설정, Qualification 세 가지, pool 포함·제외, attention 규칙, Review의 대조 기준을 받고 아래에 비용을 미리 보여 줍니다. `Preview & Cost`는 고른 행으로 템플릿을 격리된 iframe에 그려 Submit을 가로채고, `Publish`는 요약을 확인한 뒤 `Publish N HITs`로 게시하고 새 batch의 Overview로 이동합니다. 입력은 CSV까지 브라우저(IndexedDB)에 임시 저장되어 새로고침해도 이어지고, `Start over`로 비웁니다.
-- **Manage**: batch 목록과 batch 상세입니다. 상세의 `Overview`는 진행률, 응답 현황, 비용, 설정을 보여 주고, `Top up incomplete HITs`(부족한 HIT 수와 예상 비용을 확인한 뒤 재모집), `Expire now`(진행 중일 때만), `Export`(MTurk 결과 CSV, 라벨 JSON)를 제공합니다. `Review`는 응답 표에서 상태, attention 판정, WorkerId, 작업 시간으로 거르고 머리글로 정렬하며, 체크박스로 여러 건을 골라 `Approve selected`, `Reject selected…`(사유 필수, 프리셋 세 개, attention을 통과한 응답이 섞이면 경고), 반려된 건만 골랐을 때는 `Revert to approved…`를 실행합니다. `Select attention-failed`와 `Invert selection`(현재 페이지만 반전)도 있습니다. `Answers` 열은 worker의 답(W)과 대조 기준(R)을 약어 토큰으로 두 줄에 보여 주고, 행을 누르면 응답 상세가 열려 문항마다 이 worker의 답, 대조 기준, 같은 HIT의 다른 worker 답을 견주며 `Open task`로 worker가 본 화면을 sandbox iframe에 띄웁니다. 반려를 확정하면 부족해진 HIT를 재모집할지 곧바로 묻습니다. worker 상세에서 `?worker=<id>`로 넘어오면 그 worker의 응답만 보입니다. `HITs`는 HIT별 승인, 반려, 검수 대기, 남은 자리와 완료 여부를 보여 주고 `Incomplete only`로 거르며, 선택한 HIT에 `Add assignments…`(목표까지 채우기 또는 고정 수, 최대 8)로 응답을 더 모집합니다. 처음에 10개 미만으로 만든 HIT는 합계 9를 넘을 수 없으므로 넘는 요청은 이유와 함께 건너뜁니다. `Input`은 HIT의 전체 입력을, `Open task`는 task 화면을 엽니다. `Results`는 Fleiss' κ, 만장일치 비율, 투표가 있는 문항 수, 라벨 분포와 문항별 투표·majority 표(전체, 만장일치 아님, 동률, 표 부족 필터)를 보여 주고 `Export`로 내보냅니다.
+- **Create**: 템플릿과 CSV로 batch를 게시하는 5단계 마법사입니다 (`Template` → `Data` → `Settings` → `Preview & Cost` → `Publish`). 각 단계의 선택지와 기본값, 다음 단계로 가는 조건은 [Create로 batch 게시하기](../docs/creating-a-batch.md)와 같습니다. `Template`에서는 저장된 템플릿을 고르거나(`Use a saved template`), HTML을 올리거나 붙여 넣어 저장하거나(`Upload or paste HTML`), 원본 데이터와 prompt로 agent job을 돌려 만듭니다(`Generate from raw data`). job이 성공하면 카드의 `Use this result`가 template.html을 job 이름으로 저장하고, hits.csv를 올린 것처럼 읽고, settings.json의 제목·설명·키워드·attention 규칙·자유 서술 접미어·대조 기준 컬럼을 Settings에 채운 뒤 `Data` 단계로 갑니다. `Data`는 CSV를 브라우저에서 읽어 placeholder를 검사하고 처음 5행을 보여 줍니다. `Settings`는 HIT 설정, Qualification 세 가지, pool 포함·제외, attention 규칙, 자유 서술 답, Review의 대조 기준을 받고 아래에 비용을 미리 보여 줍니다. attention 규칙은 두 방식 중 하나를 고릅니다. `Answer-name prefix + one expected value`는 이름이 접두어로 시작하는 답이 모두 같은 값이어야 하는 옛 템플릿용이고, `Expected answers column`은 행마다 `{답 이름: 기대 값}`이 든 CSV 컬럼(agent의 `attention_expected`)을 고르는 방식입니다. 이 방식에서는 attention 탭이 화면에서 다른 탭과 구별되지 않습니다. `Free-text answers`에는 자유 서술 답의 이름 접미어를 쉼표로 구분해 적으며, 그 답은 Review에서 글로 보이고 κ, majority, 일치율, 대조 기준에서 빠집니다. `Preview & Cost`는 고른 행으로 템플릿을 격리된 iframe에 그려 Submit을 가로채고, 템플릿이 `window.TASK_ANSWER_SCHEMA`를 두었으면 그것을, 아니면 화면의 라디오·체크박스·select를 문항 목록으로 보여 줍니다. 이 목록은 batch의 `answerSchema`로 저장되며, 기대 답 컬럼의 키와 값이 문항과 선택지에 있는지, 자유 서술 접미어가 text 문항과 맞는지 경고하는 데 씁니다. `Publish`는 요약을 확인한 뒤 `Publish N HITs`로 게시하고 새 batch의 Overview로 이동합니다. 입력은 CSV까지 브라우저(IndexedDB)에 임시 저장되어 새로고침해도 이어지고, `Start over`로 비웁니다.
+- **Manage**: batch 목록과 batch 상세입니다. 상세의 `Overview`는 진행률, 응답 현황, 비용, 설정을 보여 주고, `Top up incomplete HITs`(부족한 HIT 수와 예상 비용을 확인한 뒤 재모집), `Expire now`(진행 중일 때만), `Export`(MTurk 결과 CSV, 라벨 JSON)를 제공합니다. `Review`는 응답 표에서 상태, attention 판정, WorkerId, 작업 시간으로 거르고 머리글로 정렬하며, 체크박스로 여러 건을 골라 `Approve selected`, `Reject selected…`(사유 필수, 프리셋 세 개, attention을 통과한 응답이 섞이면 경고), 반려된 건만 골랐을 때는 `Revert to approved…`를 실행합니다. `Select attention-failed`와 `Invert selection`(현재 페이지만 반전)도 있습니다. `Answers` 열은 worker의 답(W)과 대조 기준(R)을 약어 토큰으로 두 줄에 보여 주고(attention 답은 보라 테두리, 자유 서술 답은 짧게 자른 글이며 전문은 마우스를 올리면 보입니다. 어느 답이 attention인지는 서버가 준 `attentionNames`로 판단합니다), 행을 누르면 응답 상세가 열려 문항마다 이 worker의 답, 대조 기준, 같은 HIT의 다른 worker 답을 견주며 `Open task`로 worker가 본 화면을 sandbox iframe에 띄웁니다. 반려를 확정하면 부족해진 HIT를 재모집할지 곧바로 묻습니다. worker 상세에서 `?worker=<id>`로 넘어오면 그 worker의 응답만 보입니다. `HITs`는 HIT별 승인, 반려, 검수 대기, 남은 자리와 완료 여부를 보여 주고 `Incomplete only`로 거르며, 선택한 HIT에 `Add assignments…`(목표까지 채우기 또는 고정 수, 최대 8)로 응답을 더 모집합니다. 처음에 10개 미만으로 만든 HIT는 합계 9를 넘을 수 없으므로 넘는 요청은 이유와 함께 건너뜁니다. `Input`은 HIT의 전체 입력을, `Open task`는 task 화면을 엽니다. `Results`는 Fleiss' κ, 만장일치 비율, 투표가 있는 문항 수, 라벨 분포와 문항별 투표·majority 표(전체, 만장일치 아님, 동률, 표 부족 필터)를 보여 주고 `Export`로 내보냅니다.
 - **Worker Pool**: 오른쪽 위의 `Workers` / `Pools`로 화면을 오갑니다. worker 목록은 모든 batch를 합산한 지표를 머리글로 정렬하고, WorkerId 검색, pool 필터, `Blocked only`로 거르며, 여러 명을 골라 `Add to pool`, `Remove from pool`, `Block…`(기본 선택지는 "Add to Excluded pool instead", 차단하려면 사유 필수), `Unblock`을 실행합니다. worker 상세(`/workers/<WorkerId>`)는 지표 요약, batch별 이력(누르면 그 worker로 걸러진 Review), 메모(`Save`), assignment 이력을 보여 줍니다. `Pools`(`/workers/pools`)는 pool을 만들고(`New pool`), 인원을 보거나 빼고, `Fill by criteria…`로 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율, 최대 반려율)에 맞는 worker 수를 먼저 보여 준 뒤 확인하면 추가합니다. 조건 판정은 listWorkers로 받은 목록에 대해 화면에서 합니다.
 
 숫자의 뜻은 [콘솔의 값 읽기](../docs/reading-the-console.md)에 정리되어 있습니다.
@@ -153,9 +154,11 @@ docker compose run --rm frontend-test
 - `manage-topup.test.js`: `planTopUp`의 9/10 규칙과 건너뜀 사유, `roomOf`/`maxAddable`, 수수료율과 `unitCostCents`, `planBatchTopUp`, `describeTopUp` 문구를 확인합니다.
 - `workers-criteria.test.js`: `matchesCriteria`(null 값은 불일치, % 비교), `eligibleWorkers`(pool 소속 제외, 차단 따로 집계, 승인 순), `createSelection`을 확인합니다.
 - `lib-csv.test.js`: 파서의 따옴표, 겹따옴표, 줄바꿈, CRLF, BOM, 빈 줄, 모자라거나 넘치는 셀, 빈 헤더, 중복 헤더, 따옴표 문제, 그리고 example/의 CSV(BOM 파일은 정상, CP949 파일은 "not valid UTF-8"로 거절)를 확인합니다.
-- `lib-template.test.js`: placeholder 추출 규칙, `${}` 치환(escape 없음, `$&` 안전), TASK_DATA 주입 위치, 미리보기 스크립트 포함 여부를 확인합니다.
+- `lib-template.test.js`: placeholder 추출 규칙, `${}` 치환(escape 없음, `$&` 안전), TASK_DATA 주입 위치, 미리보기 스크립트 포함 여부, `window.TASK_ANSWER_SCHEMA`를 문항 목록으로 옮기는 `declaredAnswerSchema`와 그 함수가 미리보기 스크립트에 그대로 들어가는 것을 확인합니다.
+- `lib-answer-fields.test.js`: Preview의 문항 목록 검사(기대 답 컬럼의 키와 값, 접두어 방식의 경고, text 문항과 자유 서술 접미어)를 확인합니다.
+- `manage-shared.test.js`: Review가 attention 답과 자유 서술 답을 가리는 `answerKindsOf`(서버의 목록 우선, 없으면 접두어와 접미어)와 자유 서술 답을 줄이는 `freeTextPreview`를 확인합니다.
 - `lib-data-check.test.js`: README의 시나리오 1~4를 example/과 data/templates의 파일로 그대로 재현합니다 (`12/12 matched`, `WARN max 70.2 KB`, `row 3, 5`, 행 크기 중앙값·최대값 문구).
-- `lib-cost.test.js`, `lib-settings.test.js`: 견적과 수수료, 기본값의 MTurk 변환, Qualification, attention 규칙, 대조 기준 문구, 폼 검증 문구, agent settings.json 반영, 게시 요청 조립을 확인합니다.
+- `lib-cost.test.js`, `lib-settings.test.js`: 견적과 수수료, 기본값의 MTurk 변환, Qualification, attention 규칙 두 모양, 자유 서술 접미어, 대조 기준 문구, 폼 검증 문구, agent settings.json 반영(옛 모양과 기대 답 컬럼 모양), 게시 요청 조립을 확인합니다.
 - `lib-draft.test.js`: 저장 형식과 복원, 가짜 store로 CSV가 바뀔 때만 쓰는지, 저장소가 깨져도 오류를 던지지 않는지 확인합니다.
 
 compose의 `frontend-test`는 이 테스트를 위해 `example/`과 `data/templates/`도 읽기 전용으로 mount합니다.

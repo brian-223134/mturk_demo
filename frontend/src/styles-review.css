@@ -404,6 +404,16 @@ details.menu-disabled > summary {
 .answers-table .tag {
   margin: 1px 4px 1px 0;
 }
+/* 자유 서술 답은 글 그대로 (응답 상세) */
+.answers-table .free-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.answers-table .free-text-other {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
 
 /* ── task 미리보기 ──────────────────────────────────────────────────────── */
 

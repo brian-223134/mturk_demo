@@ -3,7 +3,7 @@
 import { api } from '../../api-client/client.js';
 import { refreshBalance } from '../../components/account.js';
 import { tag } from '../../components/badges.js';
-import { el } from '../../components/dom.js';
+import { el, join } from '../../components/dom.js';
 import { EMPTY, formatCents, formatDateTime, formatDurationSeconds, formatMoney, formatPercent } from '../../components/format.js';
 import { confirmModal, infoModal } from '../../components/modal.js';
 import { muted } from '../../components/notice.js';
@@ -145,9 +145,19 @@ export function renderOverview(panel, ctx) {
     ),
   );
 
-  const attention = batch.attentionRule
-    ? el('span', {}, 'answers named ', el('code', {}, `${batch.attentionRule.namePrefix}*`), ' must be ', el('code', {}, batch.attentionRule.expectedValue), ` (pass at ≥ ${formatPercent(batch.attentionRule.minCorrectRatio)} correct)`)
-    : 'None';
+  // attentionRule 은 두 모양이다: { namePrefix, expectedValue, … } 또는 행마다 기대 답이 든 컬럼 { column, … }
+  const rule = batch.attentionRule;
+  const pass = rule ? ` (pass at ≥ ${formatPercent(rule.minCorrectRatio ?? 1)} correct)` : '';
+  const attention = !rule
+    ? 'None'
+    : typeof rule.column === 'string'
+      ? el('span', {}, 'answers listed in the input column ', el('code', {}, rule.column), ' of each HIT must equal their expected values', pass)
+      : el('span', {}, 'answers named ', el('code', {}, `${rule.namePrefix}*`), ' must be ', el('code', {}, rule.expectedValue), pass);
+  const freeTextSuffixes = batch.freeTextSuffixes ?? [];
+  const freeText =
+    freeTextSuffixes.length === 0
+      ? 'None'
+      : el('span', {}, 'answers named ', join(freeTextSuffixes.map((suffix) => el('code', {}, `*${suffix}`))), ' (shown as text, left out of κ, majority, agreement and the reference)');
   const reference =
     batch.reference?.source === 'column'
       ? el('span', {}, 'input column ', el('code', {}, batch.reference.column))
@@ -175,6 +185,7 @@ export function renderOverview(panel, ctx) {
       item('Created', formatDateTime(batch.createdAt)),
       item('Keywords', s.Keywords || EMPTY, true),
       item('Attention rule', attention, true),
+      item('Free-text answers', freeText, true),
       item('Review reference', reference, true),
       item('Qualifications', qualifications, true),
       item('Worker pools', pools, true),

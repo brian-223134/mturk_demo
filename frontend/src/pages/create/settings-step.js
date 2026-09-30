@@ -1,10 +1,11 @@
-// Create (3) Settings: HIT 설정, Qualification 세 가지, worker pool 포함/제외, attention rule, Review 의 대조 기준.
+// Create (3) Settings: HIT 설정, Qualification 세 가지, worker pool 포함/제외, attention rule(접두어 방식, 기대 답 컬럼 방식),
+// 자유 서술 답의 접미어, Review 의 대조 기준.
 // 입력은 draft.settings 에 바로 쓰고(다시 그리지 않아 커서가 유지된다), Next 를 누를 때 lib/settings.js 의 validateSettings 로 검사한다.
 
 import { el } from '../../components/dom.js';
 import { errorNotice, notice } from '../../components/notice.js';
 import { FEE_PERCENT_10_OR_MORE, HIGH_FEE_MIN_ASSIGNMENTS, formatCents, rewardToCents } from '../../lib/cost.js';
-import { MAX_AUTO_APPROVAL_DAYS, MIN_REWARD, describeReferenceCell, estimateFor, normalizeCountries, normalizeReward, validateSettings } from '../../lib/settings.js';
+import { MAX_AUTO_APPROVAL_DAYS, MIN_REWARD, describeAttentionCell, describeReferenceCell, estimateFor, normalizeCountries, normalizeReward, normalizeSuffixes, validateSettings } from '../../lib/settings.js';
 import { field, sectionTitle, stepFooter } from './common.js';
 
 // 케이스 스터디의 worker 가 주로 있던 곳과 MTurk 에서 흔히 쓰는 영어권 국가. 다른 코드는 직접 입력한다.
@@ -20,6 +21,7 @@ const COMMON_COUNTRIES = [
 ];
 
 const MAJORITY_LABEL = 'Majority of the other workers on the same HIT';
+const ATTENTION_MODE_LABELS = { prefix: 'Answer-name prefix + one expected value', column: 'Expected answers column' };
 
 export function renderSettingsStep(ctx) {
   const { draft, pools, poolsError } = ctx;
@@ -153,22 +155,71 @@ export function renderSettingsStep(ctx) {
   poolSyncs.forEach((fn) => fn());
 
   // ── Attention check ──
+  // 방식이 둘이다. prefix: 이름이 접두어로 시작하는 답이 attention 이고 기대 값은 하나. column: 행마다 CSV 셀이 { 답 이름: 기대 값 } 이라
+  // attention 답이 화면에서 다른 문항과 구별되지 않는다 (agent 의 새 출력). minCorrectRatio 는 두 방식이 같이 쓴다.
   const attentionSwitch = el('input', { type: 'checkbox', id: 's-attentionEnabled', name: 'attentionEnabled', className: 'switch', role: 'switch', checked: s().attentionEnabled });
-  const attentionFields = el('div', { className: 'field-row', id: 'attention-fields' });
+  const attentionFields = el('div', { id: 'attention-fields' });
   const attentionOff = el('p', { className: 'muted', id: 'attention-off' }, 'Without a rule, Review shows no attention result and nothing can be selected by “attention failed”.');
+  const modeSelect = el('select', { id: 's-attentionMode', name: 'attentionMode' }, Object.entries(ATTENTION_MODE_LABELS).map(([value, label]) => el('option', { value }, label)));
+  modeSelect.value = s().attentionMode === 'column' ? 'column' : 'prefix';
+  const attentionColumnSelect = el('select', { id: 's-attentionColumn', name: 'attentionColumn' }, el('option', { value: '' }, 'Choose a CSV column'), columns.map((c) => el('option', { value: c }, c)));
+  const currentAttentionColumn = s().attentionColumn;
+  if (currentAttentionColumn && !columns.includes(currentAttentionColumn)) attentionColumnSelect.append(el('option', { value: currentAttentionColumn }, `${currentAttentionColumn} (not in the CSV)`));
+  attentionColumnSelect.value = currentAttentionColumn ?? '';
+  const attentionColumnNote = el('div', { id: 'attention-column-note' });
+
+  fields.attentionMode = field({ id: 's-attentionMode', label: 'How attention answers are found', control: modeSelect, className: 'field-wide', hint: 'Use the expected answers column for tasks generated from raw data: their attention checks look like any other question.' });
+  fields.attentionPrefix = field({ id: 's-attentionPrefix', label: 'Answer name prefix', control: textInput('attentionPrefix', { placeholder: 'attention_' }), hint: 'Answers whose name starts with this prefix are attention checks. All other answers are real questions.' });
+  fields.attentionExpected = field({ id: 's-attentionExpected', label: 'Expected value', control: textInput('attentionExpected', { placeholder: 'e.g. not_grounded' }), hint: 'The answer value that counts as correct. It differs by template: not_grounded, Not Covered, not_covered …' });
+  fields.attentionColumn = field({ id: 's-attentionColumn', label: 'Expected answers column', control: attentionColumnSelect, className: 'field-grow', hint: 'Each row holds {answer name: expected value}. Those answers are the attention checks of that HIT and must match exactly.' });
+  fields.attentionMinRatio = field({ id: 's-attentionMinRatio', label: 'Minimum correct ratio', control: numberInput('attentionMinRatio', { min: 0, max: 1, step: 0.05 }), hint: 'An assignment passes when correct attention answers / all attention answers is at least this value. 1 means all of them.' });
+  attentionFields.append(
+    fields.attentionMode,
+    el('div', { className: 'field-row' }, fields.attentionPrefix, fields.attentionExpected, fields.attentionColumn, fields.attentionMinRatio),
+    attentionColumnNote,
+  );
+
+  const syncAttentionColumnNote = () => {
+    attentionColumnNote.replaceChildren();
+    const column = s().attentionColumn;
+    if (s().attentionMode !== 'column' || !column || !ctx.draft.data || !columns.includes(column)) return;
+    const note = describeAttentionCell(ctx.draft.data.rows[0]?.[column] ?? '');
+    attentionColumnNote.append(notice(note.type, note.message));
+  };
   const syncAttention = () => {
-    attentionFields.hidden = !s().attentionEnabled;
-    attentionOff.hidden = s().attentionEnabled;
+    const { attentionEnabled, attentionMode } = s();
+    attentionFields.hidden = !attentionEnabled;
+    attentionOff.hidden = attentionEnabled;
+    const column = attentionMode === 'column';
+    fields.attentionPrefix.hidden = column;
+    fields.attentionExpected.hidden = column;
+    fields.attentionColumn.hidden = !column;
+    syncAttentionColumnNote();
   };
   attentionSwitch.addEventListener('change', () => {
     set({ attentionEnabled: attentionSwitch.checked });
     syncAttention();
   });
-  fields.attentionPrefix = field({ id: 's-attentionPrefix', label: 'Answer name prefix', control: textInput('attentionPrefix', { placeholder: 'attention_' }), hint: 'Answers whose name starts with this prefix are attention checks. All other answers are real questions.' });
-  fields.attentionExpected = field({ id: 's-attentionExpected', label: 'Expected value', control: textInput('attentionExpected', { placeholder: 'e.g. not_grounded' }), hint: 'The answer value that counts as correct. It differs by template: not_grounded, Not Covered, not_covered …' });
-  fields.attentionMinRatio = field({ id: 's-attentionMinRatio', label: 'Minimum correct ratio', control: numberInput('attentionMinRatio', { min: 0, max: 1, step: 0.05 }), hint: 'An assignment passes when correct attention answers / all attention answers is at least this value. 1 means all of them.' });
-  attentionFields.append(fields.attentionPrefix, fields.attentionExpected, fields.attentionMinRatio);
+  modeSelect.addEventListener('change', () => {
+    set({ attentionMode: modeSelect.value });
+    for (const name of ['attentionPrefix', 'attentionExpected', 'attentionColumn']) fields[name].setError('');
+    syncAttention();
+  });
+  attentionColumnSelect.addEventListener('change', () => {
+    set({ attentionColumn: attentionColumnSelect.value || null });
+    syncAttentionColumnNote();
+  });
   syncAttention();
+
+  // ── Free-text answers ──
+  const freeText = el('input', { type: 'text', id: 's-freeTextSuffixes', name: 'freeTextSuffixes', value: (s().freeTextSuffixes ?? []).join(', '), placeholder: 'e.g. _missing_info, _comment' });
+  freeText.addEventListener('input', () => set({ freeTextSuffixes: normalizeSuffixes(freeText.value) }));
+  freeText.addEventListener('change', () => {
+    const suffixes = normalizeSuffixes(freeText.value);
+    set({ freeTextSuffixes: suffixes });
+    freeText.value = suffixes.join(', ');
+  });
+  fields.freeTextSuffixes = field({ id: 's-freeTextSuffixes', label: 'Answer name suffixes', control: freeText, className: 'field-wide', hint: 'Comma separated. Answers whose name ends with one of these are free text: Review shows them as text, and they are left out of κ, majority, agreement and the reference. Leave empty when every answer is a label.' });
 
   // ── Review reference ──
   const referenceSelect = el('select', { id: 's-referenceColumn', name: 'referenceColumn' }, el('option', { value: '' }, MAJORITY_LABEL), columns.map((c) => el('option', { value: c }, `Input column: ${c}`)));
@@ -251,6 +302,9 @@ export function renderSettingsStep(ctx) {
       el('div', { className: 'switch-row' }, attentionSwitch, el('label', { for: 's-attentionEnabled' }, 'This template has attention checks')),
       attentionFields,
       attentionOff,
+
+      sectionTitle('Free-text answers'),
+      fields.freeTextSuffixes,
 
       sectionTitle('Review reference'),
       fields.referenceColumn,

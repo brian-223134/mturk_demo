@@ -646,6 +646,12 @@ p.muted {
   color: #bbb;
   background: none;
 }
+/* 자유 서술 답: 약어가 아니라 글이다. 잘린 부분은 title 로 읽는다 */
+.token-text {
+  font-style: italic;
+  text-align: left;
+  padding: 0 4px;
+}
 
 /* ── agent job 카드 ─────────────────────────────────────────────────────── */
 
