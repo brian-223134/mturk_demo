@@ -382,7 +382,7 @@ class OpenRouterCallTest(ExampleCase):
             self.assertEqual(planner.plan(self.profile, self.prompt), self.spec)
 
     def test_bad_replies(self):
-        planner = OpenRouterPlanner(test_config(), "sk-test", allow_api=True)
+        planner = OpenRouterPlanner(test_config(), "sk-test", allow_api=True, retry_backoff=(), reply_retries=0)
         for payload in (reply("not json at all"), reply("[1, 2]"), {"choices": []}, {"error": {"message": "nope"}}):
             with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(payload)):
                 with self.assertRaises(PlannerError):
@@ -390,7 +390,7 @@ class OpenRouterCallTest(ExampleCase):
 
     def test_http_error(self):
         error = urllib.error.HTTPError(openrouter.ENDPOINT, 401, "Unauthorized", {}, io.BytesIO(b'{"error":"bad key"}'))
-        planner = OpenRouterPlanner(test_config(), "sk-test", allow_api=True)
+        planner = OpenRouterPlanner(test_config(), "sk-test", allow_api=True, retry_backoff=(), reply_retries=0)
         try:
             with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(error)):
                 with self.assertRaises(PlannerError) as caught:
@@ -403,6 +403,151 @@ class OpenRouterCallTest(ExampleCase):
                 planner.plan(self.profile, self.prompt)
 
 
+def http_error(code, reason="", body=b""):
+    return urllib.error.HTTPError(openrouter.ENDPOINT, code, reason, {}, io.BytesIO(body))
+
+
+class OpenRouterRetryTest(ExampleCase):
+    """일시적 실패(429·5xx·연결 실패)의 재시도와, 비었거나 끊긴 응답을 새 호출로 다시 묻는 규칙. sleep 은 기록만 한다."""
+
+    def setUp(self):
+        super().setUp()
+        self.waits = []
+
+    def planner(self, backoff=(1, 2), reply_retries=1):
+        return OpenRouterPlanner(test_config(), "sk-test", allow_api=True, log_dir=self.out, retry_backoff=backoff,
+                                 reply_retries=reply_retries, sleep=self.waits.append)
+
+    def names(self):
+        return sorted(path.name for path in self.out.iterdir())
+
+    def read(self, name):
+        return json.loads((self.out / name).read_text(encoding="utf-8"))
+
+    def test_transient_http_error_is_sent_again_under_the_same_call(self):
+        errors = [http_error(429, "Too Many Requests", b'{"error":{"message":"rate limited"}}'), http_error(503, "Unavailable")]
+        fake = FakeOpenRouter(*errors, reply(json.dumps(self.spec), usage=usage(10, 5)))
+        planner = self.planner(backoff=(1, 2, 3))
+        try:
+            with mock.patch.object(urllib.request, "urlopen", fake):
+                self.assertEqual(planner.plan(self.profile, self.prompt), self.spec)
+        finally:
+            for error in errors:
+                error.close()
+        self.assertEqual(self.waits, [1, 2])
+        self.assertEqual(len(fake.requests), 3)
+        self.assertEqual(planner.calls, 1)
+        self.assertEqual(self.names(), ["plan_request.json", "plan_response.json"])
+        retries = self.read("plan_response.json")["retries"]
+        self.assertEqual([r["http_status"] for r in retries], [429, 503])
+        self.assertIn("rate limited", retries[0]["detail"])
+        self.assertEqual([r["waited_seconds"] for r in retries], [1, 2])
+
+    def test_transient_http_error_gives_up_after_the_backoff_list(self):
+        errors = [http_error(502, "Bad Gateway", b"gateway") for _ in range(3)]
+        planner = self.planner(backoff=(1, 2))
+        try:
+            with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(*errors)):
+                with self.assertRaises(PlannerError) as caught:
+                    planner.plan(self.profile, self.prompt)
+        finally:
+            for error in errors:
+                error.close()
+        self.assertIn("HTTP 502", str(caught.exception))
+        self.assertIn("after 2 retries", str(caught.exception))
+        self.assertEqual(self.waits, [1, 2])
+        response = self.read("plan_response.json")
+        self.assertEqual(response["http_status"], 502)
+        self.assertEqual(len(response["retries"]), 2)
+
+    def test_permanent_http_error_and_timeout_are_not_sent_again(self):
+        error = http_error(401, "Unauthorized")
+        try:
+            with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(error)):
+                with self.assertRaises(PlannerError):
+                    self.planner().plan(self.profile, self.prompt)
+        finally:
+            error.close()
+        with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(TimeoutError("read timed out"))):
+            with self.assertRaises(PlannerError) as caught:
+                self.planner().plan(self.profile, self.prompt)
+        self.assertIn("timed out", str(caught.exception))
+        self.assertEqual(self.waits, [])
+
+    def test_connection_failure_is_sent_again(self):
+        fake = FakeOpenRouter(urllib.error.URLError("no route"), reply(json.dumps(self.spec)))
+        with mock.patch.object(urllib.request, "urlopen", fake):
+            self.assertEqual(self.planner().plan(self.profile, self.prompt), self.spec)
+        self.assertEqual(self.waits, [1])
+        self.assertEqual(self.read("plan_response.json")["retries"], [{"error": "no route", "waited_seconds": 1}])
+
+    def test_empty_reply_is_asked_again_as_a_new_call(self):
+        empty = reply(None, usage=usage(100, 50))
+        empty["choices"][0]["finish_reason"] = "stop"
+        fake = FakeOpenRouter(empty, reply(json.dumps(self.spec), usage=usage(100, 60)))
+        planner = self.planner()
+        with mock.patch.object(urllib.request, "urlopen", fake):
+            self.assertEqual(planner.plan(self.profile, self.prompt), self.spec)
+        self.assertEqual(planner.calls, 2)
+        self.assertEqual(self.names(), ["plan_request.json", "plan_request_2.json", "plan_response.json", "plan_response_2.json"])
+        self.assertEqual(fake.body(0), fake.body(1))
+        self.assertEqual(planner.total_usage, {"calls": 2, "prompt_tokens": 200, "completion_tokens": 110, "total_tokens": 310})
+        self.assertEqual(self.waits, [])
+
+    def test_provider_error_in_the_reply_is_retried_once_then_reported(self):
+        def cut():
+            payload = reply('{"spec_version": 1, "task": {"id"', usage=usage(100, 20))
+            payload["choices"][0].update({"finish_reason": "error", "error": {"code": 429, "message": "upstream rate limit"}})
+            return payload
+        planner = self.planner()
+        with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(cut(), cut())):
+            with self.assertRaises(openrouter.ReplyError) as caught:
+                planner.plan(self.profile, self.prompt)
+        message = str(caught.exception)
+        self.assertIn("provider failed", message)
+        self.assertIn("upstream rate limit", message)
+        self.assertNotIn("JSON", message)
+        self.assertEqual(planner.calls, 2)
+        self.assertEqual(planner.total_usage["calls"], 2)
+
+    def test_error_field_in_an_ok_payload_is_retried(self):
+        fake = FakeOpenRouter({"error": {"message": "provider is down", "code": 503}}, reply(json.dumps(self.spec)))
+        with mock.patch.object(urllib.request, "urlopen", fake):
+            self.assertEqual(self.planner().plan(self.profile, self.prompt), self.spec)
+
+    def test_truncated_reply_is_reported_without_retry(self):
+        payload = reply('{"spec_version": 1', usage=usage(100, 4096))
+        payload["choices"][0]["finish_reason"] = "length"
+        planner = self.planner()
+        with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(payload)):
+            with self.assertRaises(openrouter.ReplyError) as caught:
+                planner.plan(self.profile, self.prompt)
+        self.assertIn("max_tokens", str(caught.exception))
+        self.assertIn("4096", str(caught.exception))
+        self.assertEqual(planner.calls, 1)
+
+    def test_whitespace_loop_at_the_token_limit_is_asked_again(self):
+        loop = reply('{\n  "spec_version": 2,' + "\n" * 5000, usage=usage(100, 16000))
+        loop["choices"][0]["finish_reason"] = "length"
+        fake = FakeOpenRouter(loop, reply(json.dumps(self.spec)))
+        planner = self.planner()
+        with mock.patch.object(urllib.request, "urlopen", fake):
+            self.assertEqual(planner.plan(self.profile, self.prompt), self.spec)
+        self.assertEqual(planner.calls, 2)
+        with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(loop)):
+            with self.assertRaises(openrouter.ReplyError) as caught:
+                self.planner(reply_retries=0).plan(self.profile, self.prompt)
+        self.assertIn("degenerated into whitespace", str(caught.exception))
+
+    def test_reasoning_only_reply_names_the_reasoning_tokens(self):
+        payload = reply("", usage={**usage(100, 900), "completion_tokens_details": {"reasoning_tokens": 900}})
+        with mock.patch.object(urllib.request, "urlopen", FakeOpenRouter(payload)):
+            with self.assertRaises(openrouter.ReplyError) as caught:
+                self.planner(reply_retries=0).plan(self.profile, self.prompt)
+        self.assertIn("empty reply", str(caught.exception))
+        self.assertIn("reasoning_tokens=900", str(caught.exception))
+
+
 class OpenRouterLogTest(ExampleCase):
     """log_dir 가 있을 때 남는 plan_request*.json / plan_response*.json 과 usage 기록."""
 
@@ -413,7 +558,9 @@ class OpenRouterLogTest(ExampleCase):
         return json.loads((self.out / name).read_text(encoding="utf-8"))
 
     def planner(self, **overrides):
-        return OpenRouterPlanner(test_config(**overrides), "sk-test", allow_api=True, log_dir=self.out)
+        # 로그 모양만 보는 테스트라 일시적 실패의 재시도는 끈다 (재시도는 OpenRouterRetryTest)
+        return OpenRouterPlanner(test_config(**overrides), "sk-test", allow_api=True, log_dir=self.out,
+                                 retry_backoff=(), reply_retries=0)
 
     def test_success_writes_request_and_response(self):
         payload = reply(json.dumps(self.spec), id="gen-1", model="test/model", usage=usage(1200, 300))

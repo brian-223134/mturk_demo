@@ -31,6 +31,16 @@ endpoint 목록: GET ENDPOINTS_URL (models/<author>/<slug>/endpoints) 은 공개
     같은 planner 로 두 번째 부르면(검증 실패 뒤 재시도) plan_request_2.json / plan_response_2.json, 세 번째는 _3 … 이다.
     첫 파일을 쓰기 전에 log_dir 의 이전 plan_request*.json / plan_response*.json 을 지워 옛 파일이 섞이지 않게 한다.
 
+일시적인 실패 (외부 annotation-template-generator 의 llm_client 에서 가져온 규칙):
+    HTTP 408/429/500/502/503/504 와 연결 실패(URLError)는 같은 요청을 retry_backoff 초(기본 5, 15, 30)만큼 기다렸다가
+    다시 보낸다. 같은 호출 번호로 다시 보내므로 로그 파일은 늘지 않고, 성공한 응답 문서의 "retries" 에 무엇을 몇 초 기다렸는지
+    남는다. 응답을 기다리다 시간이 다 된 경우(TimeoutError)는 청구됐을 수 있으므로 다시 보내지 않는다.
+    응답은 왔지만 본문이 비었거나(content 가 null·빈 문자열) provider 오류로 끊긴 경우(choices[0].error,
+    finish_reason "error", 200 응답의 error 필드, 공백만 이어 쓰다 상한에 닿은 퇴화한 응답)는 REPLY_RETRIES 번(기본 1)만
+    새 호출로 다시 묻는다. 새 호출이라 로그 번호가
+    하나 늘고, 두 호출의 usage 가 모두 total_usage 에 더해진다. finish_reason 이 "length" 면 max_tokens 에서 잘린 것이라
+    다시 물어도 같으므로 바로 PlannerError 로 알린다.
+
 안전장치: allow_api가 False면 urlopen을 절대 부르지 않는다. 요청을 저장한 뒤 PlannerError를 올린다.
 호출은 크레딧을 쓰므로 CLI의 --allow-api 또는 AGENT_ALLOW_API=1로만 켠다.
 테스트는 urllib.request.urlopen을 monkeypatch 한다 (그래서 모듈 속성으로 부른다).
@@ -41,18 +51,19 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from agent.config import ModelConfig, load_env_file
 from agent.planner.base import PlannerError
 from agent.planner.prompts import build_messages
 
 __all__ = ["ENDPOINT", "ENDPOINTS_URL", "KEY_VARIABLE", "ALLOW_VARIABLE", "NOT_ALLOWED", "NO_KEY", "REQUEST_FILE",
-           "RESPONSE_FILE", "OpenRouterPlanner", "load_env_file", "resolve_api_key", "api_allowed_by_env",
+           "RESPONSE_FILE", "TRANSIENT_STATUS", "RETRY_BACKOFF_SECONDS", "REPLY_RETRIES", "ReplyError", "OpenRouterPlanner", "load_env_file", "resolve_api_key", "api_allowed_by_env",
            "strip_code_fences", "content_text", "parse_content", "extract_reply", "log_file_name", "clear_logs",
            "fetch_endpoints", "format_endpoints"]
 
@@ -71,6 +82,14 @@ REQUEST_FILE = "plan_request.json"
 RESPONSE_FILE = "plan_response.json"
 LOG_FILE_RE = re.compile(r"^plan_(request|response)(_\d+)?\.json$")
 ERROR_BODY_CHARS = 500
+# 같은 요청을 다시 보내는 HTTP 상태와 기다리는 초. 횟수는 retry_backoff 의 길이다
+TRANSIENT_STATUS = (408, 429, 500, 502, 503, 504)
+RETRY_BACKOFF_SECONDS = (5, 15, 30)
+RETRY_DETAIL_CHARS = 200
+# 본문이 비었거나 provider 오류로 끊긴 응답을 새 호출로 다시 묻는 횟수 (크레딧을 쓰므로 작게 둔다)
+REPLY_RETRIES = 1
+# 잘린 응답에서 공백이 아닌 글자가 이 비율보다 적으면 퇴화한 응답으로 보고 다시 묻는다
+DEGENERATE_RATIO = 0.2
 # total_usage 에 더하는 usage 키. cost 는 OpenRouter 가 usage: {include: true} 일 때 주는 실제 청구액(USD, 실수)이다
 USAGE_KEYS = ("prompt_tokens", "completion_tokens", "total_tokens", "cost")
 
@@ -140,21 +159,58 @@ def parse_content(content: Any) -> dict:
     return data
 
 
+class ReplyError(PlannerError):
+    """응답은 왔지만 쓸 수 없는 경우. retryable 이면 같은 요청을 새 호출로 다시 물어볼 만하다 (빈 본문, provider 오류)."""
+
+    def __init__(self, message: str, retryable: bool = False):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+def _error_text(error: Any) -> tuple[str, Any]:
+    """error 필드(dict 또는 문자열) → (메시지, code)."""
+    if isinstance(error, dict):
+        return str(error.get("message", error)), error.get("code")
+    return str(error), None
+
+
 def extract_reply(payload: Any) -> Any:
-    """chat completions 응답에서 choices[0].message.content를 꺼낸다. error 필드가 있으면 PlannerError."""
+    """chat completions 응답에서 choices[0].message.content를 꺼낸다. 쓸 수 없는 응답이면 ReplyError.
+
+    다시 물어볼 만한 것(retryable): 200 응답의 error 필드, choices[0].error 또는 finish_reason "error"(provider 가 도중에
+    실패해 본문이 끊긴 경우), 본문이 null 이거나 비어 있음. 다시 물어도 같은 것: finish_reason "length"(max_tokens 에서
+    잘림), choices 가 없음, 응답이 객체가 아님.
+    """
     if not isinstance(payload, dict):
-        raise PlannerError("unexpected response from OpenRouter (not a JSON object)")
+        raise ReplyError("unexpected response from OpenRouter (not a JSON object)")
     error = payload.get("error")
     if error:
-        message = error.get("message", error) if isinstance(error, dict) else error
-        raise PlannerError(f"OpenRouter error: {message}")
+        message, code = _error_text(error)
+        raise ReplyError(f"OpenRouter error: {message}" + (f" (code {code})" if code is not None else ""), retryable=True)
     choices = payload.get("choices") or []
     if not choices or not isinstance(choices[0], dict):
-        raise PlannerError("OpenRouter response has no choices")
-    message = choices[0].get("message") or {}
+        raise ReplyError("OpenRouter response has no choices")
+    choice = choices[0]
+    finish = choice.get("finish_reason") or choice.get("native_finish_reason")
+    if choice.get("error") or finish == "error":
+        message, code = _error_text(choice.get("error") or "unknown provider error")
+        raise ReplyError(f"the provider failed while writing the reply (finish_reason={finish}, "
+                         f"code {code}): {message}", retryable=True)
+    usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+    message = choice.get("message") or {}
     content = message.get("content") if isinstance(message, dict) else None
-    if content is None:
-        raise PlannerError("OpenRouter response has no message content")
+    if finish == "length":
+        text = content if isinstance(content, str) else ""
+        if text and len(text.strip()) < DEGENERATE_RATIO * len(text):
+            # JSON 모드에서 줄바꿈·공백만 이어 쓰다 상한에 닿은 경우. 상한을 올려도 소용없고 다시 물으면 대개 된다
+            raise ReplyError(f"the reply degenerated into whitespace and hit the token limit (finish_reason=length, "
+                             f"{len(text.strip())} of {len(text)} characters are not whitespace)", retryable=True)
+        raise ReplyError(f"the reply was cut off at the token limit (finish_reason=length, completion_tokens="
+                         f"{usage.get('completion_tokens')}); raise params.max_tokens in the model config")
+    if content is None or (isinstance(content, str) and not content.strip()):
+        details = usage.get("completion_tokens_details") if isinstance(usage.get("completion_tokens_details"), dict) else {}
+        raise ReplyError(f"the model returned an empty reply (finish_reason={finish}, reasoning_tokens="
+                         f"{details.get('reasoning_tokens')})", retryable=True)
     return content
 
 
@@ -180,6 +236,18 @@ def clear_logs(directory: Path) -> list[Path]:
             path.unlink()
             removed.append(path)
     return removed
+
+
+def _with_retries(document: dict, retries: list[dict]) -> dict:
+    """응답 문서에 다시 보낸 기록을 붙인다 (없으면 그대로)."""
+    if retries:
+        document = dict(document)
+        document["retries"] = list(retries)
+    return document
+
+
+def _retry_note(retries: list[dict]) -> str:
+    return f" (after {len(retries)} retr{'y' if len(retries) == 1 else 'ies'})" if retries else ""
 
 
 def write_json(document: Any, path: Path) -> Path:
@@ -336,7 +404,9 @@ class OpenRouterPlanner:
 
     name = "openrouter"
 
-    def __init__(self, config: ModelConfig, api_key: str | None, allow_api: bool, log_dir: Path | None = None):
+    def __init__(self, config: ModelConfig, api_key: str | None, allow_api: bool, log_dir: Path | None = None,
+                 retry_backoff: tuple[float, ...] | None = None, reply_retries: int = REPLY_RETRIES,
+                 sleep: Callable[[float], None] | None = None):
         self.config = config
         self.model = config.model
         self.api_key = api_key
@@ -348,6 +418,9 @@ class OpenRouterPlanner:
         self.last_usage: dict | None = None     # 마지막 성공 응답의 usage
         self.total_usage: dict | None = None    # 성공 호출들의 usage 합계 ({"calls": n, "prompt_tokens": …, "cost": …})
         self._logs_cleared = False              # 이 planner 가 log_dir 의 옛 로그를 이미 지웠는지
+        self.retry_backoff = RETRY_BACKOFF_SECONDS if retry_backoff is None else tuple(retry_backoff)
+        self.reply_retries = max(0, int(reply_retries))
+        self.sleep = sleep if sleep is not None else time.sleep
 
     # ---- 요청 조립 ---------------------------------------------------------------------------
 
@@ -421,19 +494,30 @@ class OpenRouterPlanner:
         return self.complete(self.messages(profile, prompt, errors=errors, previous=previous))
 
     def complete(self, messages: list[dict]) -> dict:
-        """요청 저장 → 안전장치 → 호출 → 응답 저장 → 응답의 JSON 객체. 부를 때마다 로그 파일 번호가 하나 늘어난다."""
+        """요청 저장 → 안전장치 → 호출 → 응답 저장 → 응답의 JSON 객체. 부를 때마다 로그 파일 번호가 하나 늘어난다.
+
+        본문이 비었거나 provider 오류로 끊긴 응답(ReplyError.retryable)은 reply_retries 번까지 같은 요청을 새 호출로 다시 묻는다."""
         body = self.request_body(messages)
-        self.calls += 1
-        call = self.calls
-        self.last_usage = None
-        self._log("request", self.request_document(body), call)
-        if not self.allow_api:
-            raise PlannerError(NOT_ALLOWED)
-        if not self.api_key:
-            raise PlannerError(NO_KEY)
-        payload = self._post(body, call)
-        self._record_usage(payload)
-        return parse_content(extract_reply(payload))
+        attempt = 0
+        while True:
+            self.calls += 1
+            call = self.calls
+            self.last_usage = None
+            self._log("request", self.request_document(body), call)
+            if not self.allow_api:
+                raise PlannerError(NOT_ALLOWED)
+            if not self.api_key:
+                raise PlannerError(NO_KEY)
+            payload = self._post(body, call)
+            self._record_usage(payload)
+            try:
+                content = extract_reply(payload)
+            except ReplyError as error:
+                if not error.retryable or attempt >= self.reply_retries:
+                    raise
+                attempt += 1
+                continue
+            return parse_content(content)
 
     def _record_usage(self, payload: Any) -> None:
         usage = payload.get("usage") if isinstance(payload, dict) else None
@@ -449,31 +533,47 @@ class OpenRouterPlanner:
         self.total_usage = total
 
     def _post(self, body: dict, call: int) -> Any:
-        """요청을 보내고 응답 payload 를 돌려준다. 성공·HTTP 오류·JSON 아님 모두 log_dir 에 응답 파일을 남긴다."""
+        """요청을 보내고 응답 payload 를 돌려준다. 성공·HTTP 오류·JSON 아님 모두 log_dir 에 응답 파일을 남긴다.
+
+        TRANSIENT_STATUS 와 연결 실패(URLError)는 retry_backoff 초만큼 기다렸다가 같은 요청을 다시 보낸다. 기다린 기록은
+        응답 문서의 "retries" 에 남는다 (성공했을 때도, 끝내 실패했을 때도)."""
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(
-            ENDPOINT, data=data, method="POST",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                raw = response.read()
-        except urllib.error.HTTPError as error:
+        retries: list[dict] = []
+        for attempt in range(len(self.retry_backoff) + 1):
+            wait = self.retry_backoff[attempt] if attempt < len(self.retry_backoff) else None
+            request = urllib.request.Request(
+                ENDPOINT, data=data, method="POST",
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"})
             try:
-                text = error.read().decode("utf-8", "replace")
-            except Exception:  # noqa: BLE001 - 본문을 못 읽어도 상태 코드는 알려 준다
-                text = ""
-            self._log("response", self.response_document(parse_json_or_text(text), error.code, str(error.reason)), call)
-            detail = text[:ERROR_BODY_CHARS].strip() or str(error.reason)
-            raise PlannerError(f"OpenRouter returned HTTP {error.code}: {detail}") from None
-        except urllib.error.URLError as error:
-            raise PlannerError(f"OpenRouter request failed: {error.reason}") from None
-        except OSError as error:
-            raise PlannerError(f"OpenRouter request failed: {error}") from None
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    raw = response.read()
+                break
+            except urllib.error.HTTPError as error:
+                try:
+                    text = error.read().decode("utf-8", "replace")
+                except Exception:  # noqa: BLE001 - 본문을 못 읽어도 상태 코드는 알려 준다
+                    text = ""
+                detail = text[:ERROR_BODY_CHARS].strip() or str(error.reason)
+                if error.code in TRANSIENT_STATUS and wait is not None:
+                    retries.append({"http_status": error.code, "detail": detail[:RETRY_DETAIL_CHARS], "waited_seconds": wait})
+                    self.sleep(wait)
+                    continue
+                document = self.response_document(parse_json_or_text(text), error.code, str(error.reason))
+                self._log("response", _with_retries(document, retries), call)
+                raise PlannerError(f"OpenRouter returned HTTP {error.code}: {detail}" + _retry_note(retries)) from None
+            except urllib.error.URLError as error:
+                if wait is not None:
+                    retries.append({"error": str(error.reason)[:RETRY_DETAIL_CHARS], "waited_seconds": wait})
+                    self.sleep(wait)
+                    continue
+                raise PlannerError(f"OpenRouter request failed: {error.reason}" + _retry_note(retries)) from None
+            except OSError as error:
+                raise PlannerError(f"OpenRouter request failed: {error}" + _retry_note(retries)) from None
         text = raw.decode("utf-8", "replace")
         try:
             payload = json.loads(text)
         except ValueError:
-            self._log("response", self.response_document(text), call)
+            self._log("response", _with_retries(self.response_document(text), retries), call)
             raise PlannerError(f"OpenRouter response is not JSON: {text[:ERROR_BODY_CHARS].strip()!r}") from None
-        self._log("response", self.response_document(payload), call)
+        self._log("response", _with_retries(self.response_document(payload), retries), call)
         return payload
