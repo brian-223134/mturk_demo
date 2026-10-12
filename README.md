@@ -26,7 +26,7 @@ docker compose up -d --build frontend backend
 
 게시, 승인과 반려, pool 편집 같은 변경 사항은 Docker volume의 SQLite에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다).
 
-원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 서버도 호출을 허용한 상태로 띄워야 합니다. 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
+원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 서버를 호출 허용 상태로 띄우고, 화면의 폼에서도 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
 ```bash
 cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를 적는다
@@ -259,13 +259,22 @@ annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지"
 원본의 구조를 분석하고(`profile`), 작업 명세(task spec)를 정한 뒤(`plan`), HIT 단위 CSV와 템플릿을 만들어(`preprocess`, `render`) 검증합니다(`validate`). LLM(OpenRouter)이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나오고, 명세를 손으로 고쳐 LLM 없이 다시 만들 수 있습니다.
 탭 하나에 문항을 여러 개 둘 수 있고, 문항은 단일 선택, 체크박스 다중 선택, 척도(likert), 자유 서술 네 가지입니다. attention 탭은 worker 화면에서 다른 탭과 구별되지 않습니다.
 
-콘솔에서는 Create → New Project → `Generate from raw data`로 돌리고, 결과의 `Use this result`로 Project를 만들어 바로 게시합니다 ([원본 데이터에서 자동으로 만들기](docs/create-projects.md#원본-데이터에서-자동으로-만들기)). 명령줄로도 돌릴 수 있습니다.
+**콘솔에서 쓰기** (권장): Create → New Project → `Generate from raw data`에서 원본과 prompt를 올려 돌리고, 결과의 `Use this result`로 Project를 만들어 바로 게시합니다. 실행 준비는 [빠른 시작](#빠른-시작)의 OpenRouter 키 설정과 같고, 화면 사용법은 [원본 데이터에서 자동으로 만들기](docs/create-projects.md#원본-데이터에서-자동으로-만들기)에 있습니다.
+
+**명령줄로 쓰기**: agent 컨테이너에는 `var/`와 `output/`만 연결되므로, 입력(원본, prompt, spec)은 `var/<작업 이름>/` 아래에 두고 결과는 `output/` 아래에 받습니다. `--prompt`는 두 방식 모두 필요합니다.
 
 ```bash
-docker compose --profile agent run --rm agent run <원본> --prompt @<prompt 파일> --spec <spec 파일> --out <출력 폴더>
+# 손으로 쓴 spec 으로 실행합니다 (LLM 호출 없음)
+docker compose --profile agent run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>
+
+# LLM 이 spec 을 쓰게 합니다 (environment/.env 의 OPENROUTER_KEY 필요, 크레딧 사용)
+AGENT_ALLOW_API=1 docker compose --profile agent run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --planner openrouter --out output/<task>
+
+# 저장소 밖(예: assets/)의 원본은 폴더를 연결해서 씁니다
+docker compose --profile agent run --rm -v ./assets:/work/assets:ro agent run assets/<파일>.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>
 ```
 
-실행 방법과 출력 파일, prompt 쓰는 법은 [agent/README.md](agent/README.md)에 정리되어 있습니다. LLM 호출은 명시적으로 허용할 때만 일어납니다.
+명령줄로 만든 `template.html`과 `hits.csv`는 New Project → `Upload or paste HTML`과 Publish Batch의 `Upload CSV`로 올립니다. 모델 고르기, 출력 파일, prompt 쓰는 법은 [agent/README.md](agent/README.md)에 정리되어 있습니다.
 
 ## Preview
 
