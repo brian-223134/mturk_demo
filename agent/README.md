@@ -100,10 +100,10 @@ docker compose run --rm agent test
 docker compose run --rm agent --help
 ```
 
-OpenRouter로 spec을 만들 때는 `AGENT_ALLOW_API=1`을 붙여야 실제 호출이 일어납니다. 키는 `environment/.env`에서 읽고, 모델은 같은 파일의 `AGENT_MODEL`이 가리키는 `environment/models/<이름>.yaml`에서 읽습니다 (아래 [OpenRouter로 spec 만들기](#openrouter로-spec-만들기)와 [모델 설정](#모델-설정)).
+OpenRouter로 spec을 만들 때는 호출을 허용해야 실제 호출이 일어납니다. `environment/.env`에 `AGENT_ALLOW_API=1`을 적어 두거나, 명령 앞에 `AGENT_ALLOW_API=1`을 붙이거나, `--allow-api`를 줍니다(셸에서 준 값이 `.env`보다 앞섭니다). 키는 `environment/.env`에서 읽고, 모델은 같은 파일의 `AGENT_MODEL`이 가리키는 `environment/models/<이름>.yaml`에서 읽습니다 (아래 [OpenRouter로 spec 만들기](#openrouter로-spec-만들기)와 [모델 설정](#모델-설정)).
 
 ```bash
-AGENT_ALLOW_API=1 docker compose run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --planner openrouter --out output/<task>
+docker compose run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --planner openrouter --out output/<task>   # .env 에 AGENT_ALLOW_API=1 이 있을 때
 ```
 
 ### Docker 없이 실행하기
@@ -201,7 +201,7 @@ requester의 prompt는 markdown 파일(`prompt.md`)로 쓰고 `--prompt @경로`
 - **키**: `environment/.env`에 `OPENROUTER_KEY=…`를 적어 둡니다. 이 파일은 저장소에 들어가지 않습니다. 환경변수 `OPENROUTER_KEY`가 있으면 그것을 먼저 쓰고, 다른 파일을 쓰려면 `--env-file`로 가리킵니다.
 - **모델**: `environment/models/<이름>.yaml`에 적힌 모델 설정을 씁니다. 이름은 `environment/.env`의 `AGENT_MODEL` 또는 명령의 `--model-config`로 고르고, 둘 다 없으면 `environment/models/default.yaml`을 씁니다 (아래 [모델 설정](#모델-설정)).
 - **요청 확인**: `--dry-run`을 붙이면 API를 부르지 않고 `plan_request.json`만 저장한 뒤 정상 종료합니다. 프롬프트에 무엇이 들어가는지 먼저 확인할 때 씁니다.
-- **크레딧 안전장치**: 실제 호출은 크레딧을 쓰므로 `--allow-api`를 붙이거나 환경변수 `AGENT_ALLOW_API=1`을 줄 때만 일어납니다. 둘 다 없으면 요청을 보내지 않고 `API call not allowed` 오류로 끝납니다. 테스트는 네트워크를 전혀 쓰지 않습니다.
+- **크레딧 안전장치**: 실제 호출은 크레딧을 쓰므로 `--allow-api`를 붙이거나 `AGENT_ALLOW_API`가 켜져 있을 때만 일어납니다. `AGENT_ALLOW_API`는 셸의 환경변수를 먼저 보고, 비어 있으면 `environment/.env`의 값을 봅니다(1/true/yes/on이면 허용). 모두 꺼져 있으면 요청을 보내지 않고 `API call not allowed` 오류로 끝납니다. 테스트는 네트워크를 전혀 쓰지 않으며, `agent test`는 `.env`가 허용으로 되어 있어도 호출을 끈 채로 돕니다.
 - **요청과 응답 기록**: 보낸 요청은 `plan_request.json`으로, 돌아온 응답 원문은 `plan_response.json`으로 출력 폴더에 저장됩니다. 검증에 실패해 다시 물으면 `plan_request_2.json`과 `plan_response_2.json`이 더 생깁니다.
 - **프롬프트 구성**: 시스템 메시지(역할, spec 형식 설명서, 출력 규칙) 뒤에 예시 대화 두 쌍이 들어갑니다. 예시는 합성 예시 `examples/groundedness/`(target마다 묻는 `choice` 하나)와 `examples/coverage/`(`multi_select`와 `contains` hint, 탭마다 묻는 `choice`, 조건부 `text`)의 profile과 `prompt.md`를 사용자 메시지로, 그 `task_spec.json`을 모델의 답으로 넣은 것이라, 모델이 spec의 모양을 보고 씁니다. 실제 작업의 profile과 prompt는 그 뒤의 마지막 사용자 메시지입니다. 설명서 끝의 예시 spec 절은 첫 예시와 같은 내용이라 프롬프트에서는 뺍니다.
 - **비용**: 모델 설정의 `params`에 `usage: {include: true}`가 있어, OpenRouter가 응답의 `usage`에 실제 청구액(`cost`, USD)을 넣어 줍니다. 실행이 끝나면 `Usage: prompt 12000, completion 3000, cost $0.0034`처럼 표시되며, 다시 물었을 때는 합계입니다.

@@ -26,12 +26,14 @@ docker compose up -d --build frontend backend
 
 게시, 승인과 반려, pool 편집 같은 변경 사항은 Docker volume의 SQLite에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다).
 
-원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 서버를 호출 허용 상태로 띄우고, 화면의 폼에서도 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
+원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
 ```bash
-cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를 적는다
-AGENT_ALLOW_API=1 docker compose up -d frontend backend
+cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를, AGENT_ALLOW_API= 에 1 을 적는다
+docker compose restart backend                      # .env 를 바꾼 뒤에는 backend 를 다시 시작한다
 ```
+
+`.env`를 고치지 않고 한 번만 허용하려면 `AGENT_ALLOW_API=1 docker compose up -d frontend backend`처럼 셸에서 줄 수도 있습니다. 셸에서 준 값이 `.env`보다 앞섭니다.
 
 ### 자주 쓰는 명령
 
@@ -267,8 +269,8 @@ annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지"
 # 손으로 쓴 spec 으로 실행합니다 (LLM 호출 없음)
 docker compose --profile agent run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>
 
-# LLM 이 spec 을 쓰게 합니다 (environment/.env 의 OPENROUTER_KEY 필요, 크레딧 사용)
-AGENT_ALLOW_API=1 docker compose --profile agent run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --planner openrouter --out output/<task>
+# LLM 이 spec 을 쓰게 합니다 (environment/.env 의 OPENROUTER_KEY 와 AGENT_ALLOW_API=1 필요, 크레딧 사용)
+docker compose --profile agent run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --planner openrouter --out output/<task>
 
 # 저장소 밖(예: assets/)의 원본은 폴더를 연결해서 씁니다
 docker compose --profile agent run --rm -v ./assets:/work/assets:ro agent run assets/<파일>.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>

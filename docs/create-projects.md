@@ -90,7 +90,7 @@ LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만�
 | `Raw data` | 원본 파일입니다. 구조를 미리 알려 줄 필요는 없습니다. |
 | `Import prompt file`, `Prompt text` | 무엇을 판정하게 할지 적습니다. "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개" 같은 한 문장도 되고, 절을 나눈 markdown도 됩니다 ([prompt 쓰기](../agent/README.md#prompt-쓰기)). |
 | `Model` | `environment/models/`의 모델 설정입니다. 기본은 `default`입니다. |
-| `Allow API calls (uses credits)` | LLM이 명세를 쓰게 하려면 체크합니다. 유료 호출이므로 서버도 `AGENT_ALLOW_API=1 docker compose up -d backend frontend`로 띄워져 있어야 하며, 그렇지 않으면 체크할 수 없습니다. |
+| `Allow API calls (uses credits)` | LLM이 명세를 쓰게 하려면 job마다 체크합니다. 유료 호출이므로 서버 스위치도 켜져 있어야 하며, 그렇지 않으면 체크할 수 없습니다. 서버 스위치는 `environment/.env`에 `AGENT_ALLOW_API=1`을 적고 `docker compose restart backend`로 켭니다. |
 | `Optional task spec · offline replay` | `task_spec.json`을 올리면 LLM 없이 그 명세로 돌립니다(`plan` 단계는 `skipped`). `Reuse the saved task spec`은 `Reuse inputs`로 불러온 job의 명세를 그대로 씁니다. |
 | `Example prompt candidates` | 합성 예시 데이터와 prompt 후보 네 가지를 채웁니다 ([prompt 비교 실험](prompt-experiments.md)). |
 

@@ -7,7 +7,7 @@
 3000 포트의 **Create → Template → Generate from raw data**를 엽니다.
 
 1. `Example prompt candidates`에서 후보를 고르고 `Load prompt + example data`를 누릅니다. 본문은 편집할 수 있습니다.
-2. 모델과 후보 이름을 정하고 API 호출을 허용한 뒤 Generate를 누릅니다. 서버도 `AGENT_ALLOW_API=1`로 실행되어 있어야 합니다. 유료 호출이므로 실행할 때만 허용합니다.
+2. 모델과 후보 이름을 정하고 API 호출을 허용한 뒤 Generate를 누릅니다. 서버 스위치도 켜져 있어야 합니다(`environment/.env`의 `AGENT_ALLOW_API=1`, 또는 셸에서 `AGENT_ALLOW_API=1`을 붙여 실행). 유료 호출이므로 실행할 때만 허용합니다.
 3. 다음 후보는 `Load prompt`로 바꾸거나 이전 job의 `Reuse inputs`로 복원합니다. 제출한 raw는 재사용할 수 있습니다. API 허용 상태와 이전 spec 재사용은 복원할 때 자동으로 켜지지 않습니다.
 4. 성공한 job의 `Preview & evaluate`에서 CSV를 주입한 HTML과 prompt/spec을 확인하고 데이터·안내문·attention 평가와 메모를 저장합니다.
 5. 성공한 job 2~3개를 선택하여 `Compare selected`를 누릅니다. 공통 record/item 그룹이 있으면 같은 일반 항목을 나란히 보여 줍니다. Raw hash·모델·처리 조건이 다르거나 공통 항목이 없으면 안내합니다.

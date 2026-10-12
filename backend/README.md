@@ -165,7 +165,7 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 | `allow_api` | `"true"` / `"false"` | 실제 OpenRouter 호출을 허용할지입니다. 기본은 `false`입니다. |
 | `name` | 문자열 | 목록에 보이는 이름입니다. 생략하면 원본 파일 이름입니다. |
 
-`spec`이 있으면 prompt는 선택이고, `plan` 단계는 `skipped`가 됩니다. `spec`이 없으면 prompt가 필수이고, OpenRouter를 부르므로 **요청의 `allow_api=true`와 서버의 환경변수 `AGENT_ALLOW_API=1`이 모두** 있어야 합니다. 둘 중 하나라도 없으면 네트워크를 쓰지 않고 400 `INVALID_REQUEST`로 끝나며, 메시지에 무엇이 빠졌는지 적혀 있습니다. 서버를 `AGENT_ALLOW_API=1 docker compose up backend`로 띄웠을 때만 호출이 가능하고, 키는 `environment/.env`의 `OPENROUTER_KEY`에서 읽습니다. 호출은 크레딧을 씁니다.
+`spec`이 있으면 prompt는 선택이고, `plan` 단계는 `skipped`가 됩니다. `spec`이 없으면 prompt가 필수이고, OpenRouter를 부르므로 **요청의 `allow_api=true`(화면의 `Allow API calls`)와 서버 스위치 `AGENT_ALLOW_API=1`이 모두** 있어야 합니다. 서버 스위치는 셸의 환경변수를 먼저 보고, 비어 있으면 `environment/.env`의 값을 봅니다. 둘 중 하나라도 없으면 네트워크를 쓰지 않고 400 `INVALID_REQUEST`로 끝나며, 메시지에 무엇이 빠졌는지 적혀 있습니다. 서버 스위치는 backend가 시작할 때 한 번 읽으므로, `.env`를 고친 뒤에는 `docker compose restart backend`를 실행합니다(셸에서 주려면 `AGENT_ALLOW_API=1 docker compose up -d backend`), 키는 `environment/.env`의 `OPENROUTER_KEY`에서 읽습니다. 호출은 크레딧을 씁니다.
 
 LLM 없이 예시로 돌려 보려면 `agent/examples/groundedness/`의 세 파일을 올립니다.
 
@@ -224,7 +224,7 @@ docker-compose.yml의 `backend` 서비스가 컨테이너 경로로 채워 줍�
 | `OUTPUT_DIR` | `/app/output` | agent job의 입력과 결과 (`output/jobs/<job id>/`, gitignore) |
 | `MODELS_DIR` | `/app/environment/models` | 모델 설정 yaml |
 | `ENV_FILE` | `/app/environment/.env` | `OPENROUTER_KEY`, `AGENT_MODEL`을 읽는 파일 |
-| `AGENT_ALLOW_API` | `${AGENT_ALLOW_API:-0}` | `1`일 때만 OpenRouter 호출을 허용합니다 |
+| `AGENT_ALLOW_API` | `${AGENT_ALLOW_API:-}` | OpenRouter 호출을 허용하는 서버 스위치입니다. 셸에서 주지 않으면 빈 값이고, 그때는 `environment/.env`의 `AGENT_ALLOW_API`를 따릅니다 (1/true/yes/on이면 허용) |
 
 ## 폴더 구성
 
