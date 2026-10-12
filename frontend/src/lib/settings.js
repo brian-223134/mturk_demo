@@ -58,6 +58,80 @@ export const DEFAULT_SETTINGS = Object.freeze({
   referenceColumn: null,
 });
 
+/**
+ * 폼 값의 두 묶음. MTurk 처럼 Project 의 Enter Properties 에서 정하는 값(PROPERTY_KEYS)과, CSV 를 올린 뒤 batch 마다 정하는
+ * 검수 설정(QUALITY_KEYS: attention, 자유 서술, 대조 기준. 기대 답 컬럼과 대조 기준 컬럼이 CSV 에 달려 있다)이다.
+ * Project 에는 둘 다 저장한다(검수 설정은 다음 batch 의 기본값). Publish Batch 는 속성을 Project 에서 그대로 가져온다.
+ */
+export const PROPERTY_KEYS = Object.freeze([
+  'Title',
+  'Description',
+  'Keywords',
+  'Reward',
+  'MaxAssignments',
+  'durationMinutes',
+  'lifetimeDays',
+  'autoApprovalDays',
+  'approvalRateEnabled',
+  'approvalRate',
+  'approvedHitsEnabled',
+  'approvedHits',
+  'countriesEnabled',
+  'countries',
+  'requiredPoolIds',
+  'excludedPoolIds',
+]);
+export const QUALITY_KEYS = Object.freeze(['attentionEnabled', 'attentionMode', 'attentionPrefix', 'attentionExpected', 'attentionColumn', 'attentionMinRatio', 'freeTextSuffixes', 'referenceColumn']);
+
+function pick(object, keys) {
+  const out = {};
+  for (const key of keys) if (key in object) out[key] = object[key];
+  return out;
+}
+
+/** 값이 기본값과 같은 종류인지 (저장된 properties 를 믿지 않는다). 숫자 칸의 null 은 JSON 이 NaN 을 null 로 쓴 것이다. */
+function sameKind(defaultValue, value) {
+  if (Array.isArray(defaultValue)) return Array.isArray(value) && value.every((v) => typeof v === 'string');
+  if (defaultValue === null) return value === null || typeof value === 'string';
+  if (typeof defaultValue === 'number') return typeof value === 'number' || value === null;
+  return typeof value === typeof defaultValue;
+}
+
+/** Project 에 저장된 properties(없거나 깨졌을 수 있다)를 폼 값으로. 모르는 키와 종류가 다른 값은 버리고 기본값으로 채운다. */
+export function settingsFromProperties(properties) {
+  const values = defaultSettings();
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return values;
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    if (!(key in properties) || !sameKind(DEFAULT_SETTINGS[key], properties[key])) continue;
+    const value = properties[key];
+    values[key] = Array.isArray(value) ? [...value] : typeof DEFAULT_SETTINGS[key] === 'number' && value === null ? Number.NaN : value;
+  }
+  return values;
+}
+
+/** batch 의 폼 값에 Project 의 현재 속성을 덮는다 (검수 설정은 batch 의 것을 둔다). */
+export function withProjectProperties(settings, properties) {
+  return { ...settings, ...pick(settingsFromProperties(properties), PROPERTY_KEYS) };
+}
+
+/** Enter Properties 의 검사 (validateSettings 중 속성 항목만). */
+export function validateProperties(values, { pools = [] } = {}) {
+  return pick(validateSettings({ ...values, attentionEnabled: false, referenceColumn: null }, { pools }), PROPERTY_KEYS);
+}
+
+/** Review settings 의 검사 (validateSettings 중 검수 설정 항목만). columns 는 올린 CSV 의 컬럼이다. */
+export function validateQuality(values, { columns = [] } = {}) {
+  return pick(validateSettings(values, { columns }), QUALITY_KEYS);
+}
+
+/**
+ * 미리보기가 보고한 문항 목록에서 자유 서술 답(type text)의 이름. 접미어가 아직 비어 있을 때 Review settings 가 이 이름들을 그대로
+ * 접미어로 채운다 (이름 전체도 그 이름으로 끝나는 접미어다). attention 이 될 수 있는 이름도 그대로 둔다(attention 이 먼저다).
+ */
+export function freeTextNamesOf(schema) {
+  return [...new Set((schema ?? []).filter((field) => field && field.type === 'text' && typeof field.name === 'string').map((field) => field.name))];
+}
+
 /** 기본값의 깊은 복사 (배열을 공유하지 않게). */
 export function defaultSettings() {
   return { ...DEFAULT_SETTINGS, countries: [...DEFAULT_SETTINGS.countries], requiredPoolIds: [], excludedPoolIds: [], freeTextSuffixes: [] };

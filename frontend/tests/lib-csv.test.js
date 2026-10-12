@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-import { CsvError, decodeUtf8, parseCsv, readCsvFile, splitRecords } from '../src/lib/csv.js';
+import { CsvError, decodeUtf8, formatCsv, parseCsv, readCsvFile, splitRecords } from '../src/lib/csv.js';
 
 const EXAMPLE = new URL('../../example/', import.meta.url);
 const bytes = (path) => readFileSync(new URL(path, EXAMPLE));
@@ -178,5 +178,16 @@ describe('readCsvFile with the example files (scenario 3)', () => {
     const large = await upload('3-data-checks/large-rows.csv');
     assert.equal(large.rows.length, 3);
     assert.deepEqual(large.warnings, []);
+  });
+});
+
+describe('formatCsv (Download CSV template)', () => {  it('quotes cells that need it and parses back to the same rows', () => {
+    const rows = [{ query: 'a, b', passage: 'He said "hi"\nthen left', facts: '["x"]' }, { query: ' padded', passage: '', facts: 'plain' }];
+    const text = formatCsv(['query', 'passage', 'facts'], rows);
+    assert.equal(text.split('\r\n')[0], 'query,passage,facts');
+    assert.ok(text.endsWith('\r\n'));
+    const parsed = parseCsv(text, 'template.csv');
+    assert.deepEqual(parsed.columns, ['query', 'passage', 'facts']);
+    assert.deepEqual(parsed.rows, rows);
   });
 });

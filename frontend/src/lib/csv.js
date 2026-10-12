@@ -194,3 +194,16 @@ export function decodeUtf8(bytes) {
 export async function readCsvFile(file) {
   return parseCsv(decodeUtf8(await file.arrayBuffer()), file.name ?? 'data.csv');
 }
+
+/** 셀 하나를 CSV 필드로. 쉼표, 따옴표, 줄바꿈이 있거나 앞뒤에 공백이 있으면 따옴표로 감싼다 (RFC 4180). */
+export function csvField(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\r\n]|^\s|\s$/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** 머리줄과 행들로 CSV 글을 만든다. 줄 끝은 CRLF 이다. Publish Batch 의 "Download CSV template" 이 쓴다. */
+export function formatCsv(columns, rows = []) {
+  const lines = [columns.map(csvField).join(',')];
+  for (const row of rows) lines.push(columns.map((column) => csvField(row?.[column])).join(','));
+  return `${lines.join('\r\n')}\r\n`;
+}

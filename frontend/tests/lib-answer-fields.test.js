@@ -59,7 +59,7 @@ describe('checkAnswerFields: prefix mode (the old templates)', () => {
     assert.deepEqual(names(result.attention), ['attention_1_1']);
     assert.deepEqual(result.warnings, []);
     assert.deepEqual(checkAnswerFields(scanned, { ...prefix, attentionExpected: 'Not Grounded' }).warnings, ['"Not Grounded" is not one of the choices of attention_1_1 (grounded, not_grounded).']);
-    assert.deepEqual(checkAnswerFields(scanned, { ...prefix, attentionPrefix: 'check_' }).warnings, ['No field name starts with "check_". Check the attention rule in Settings.']);
+    assert.deepEqual(checkAnswerFields(scanned, { ...prefix, attentionPrefix: 'check_' }).warnings, ['No field name starts with "check_". Check the attention rule in Review settings.']);
   });
 
   it('checks nothing about attention when the rule is off', () => {

@@ -1,10 +1,12 @@
-// Create (5) Publish: 요약을 확인하고 게시한다. 게시 후에는 해당 batch 의 Overview(/manage/<id>)로 간다.
+// Publish Batch (4) Confirm and publish: 비용 견적과 요약을 확인하고 게시한다 (MTurk 의 "Confirm and publish batch").
+// 게시 후에는 해당 batch 의 Overview(/manage/<id>)로 간다.
 
 import { api } from '../../api-client/client.js';
 import { envBadge, tag } from '../../components/badges.js';
 import { el, join } from '../../components/dom.js';
-import { notice } from '../../components/notice.js';
-import { formatCents } from '../../lib/cost.js';
+import { errorNotice, muted, notice } from '../../components/notice.js';
+import { table } from '../../components/table.js';
+import { formatCents, rewardToCents } from '../../lib/cost.js';
 import { balanceCentsOf, buildCreateBatchRequest, describeQualifications, normalizeSuffixes, toAttentionRule, toHitSettings, toReviewReference } from '../../lib/settings.js';
 import { navigate } from '../../router.js';
 import { descList, failureNotice, field, refreshBalance } from './common.js';
@@ -30,11 +32,57 @@ function attentionRuleText(rule) {
   return el('span', {}, 'Answers named ', el('code', {}, `${rule.namePrefix}*`), ' must be ', el('code', {}, rule.expectedValue), pass);
 }
 
-export function renderPublishStep(ctx) {
+/** 비용 견적 표: 보상 소계, 수수료, 합계, 잔액. */
+function costPanel(ctx) {
+  const { draft, estimate, account, accountError } = ctx;
+  const rowCount = draft.data.rows.length;
+  const settings = draft.settings;
+  const balanceCents = balanceCentsOf(account);
+  const overBalance = estimate !== null && balanceCents !== null && estimate.totalCents > balanceCents;
+  const assignments = rowCount * settings.MaxAssignments;
+
+  let body;
+  if (estimate) {
+    const rows = [
+      { key: 'reward', item: 'Reward subtotal', detail: `${rowCount.toLocaleString('en-US')} HITs × ${settings.MaxAssignments} assignments × ${formatCents(rewardToCents(settings.Reward))}`, amount: formatCents(estimate.rewardCents) },
+      { key: 'fee', item: `Fee (${estimate.feePercent}%)`, detail: `${assignments.toLocaleString('en-US')} assignments × ${estimate.feePercent}% of the reward (at least $0.01 each)`, amount: formatCents(estimate.feeCents) },
+      { key: 'total', item: el('strong', {}, 'Total'), detail: 'Held from the balance when the batch is published', amount: el('strong', {}, formatCents(estimate.totalCents)) },
+      {
+        key: 'balance',
+        item: 'Available balance',
+        detail: el('span', { className: 'muted' }, balanceCents === null || overBalance ? '' : `${formatCents(balanceCents - estimate.totalCents)} left after publishing`),
+        amount: balanceCents === null ? '…' : formatCents(balanceCents),
+      },
+    ];
+    body = table({
+      columns: [
+        { title: 'Item', width: 200, render: (r) => r.item },
+        { title: 'Calculation', render: (r) => r.detail },
+        { title: 'Amount', width: 120, align: 'right', className: 'tabular', render: (r) => r.amount },
+      ],
+      rows,
+      rowKey: (r) => r.key,
+      rowAttrs: (r) => ({ dataset: { cost: r.key } }),
+      className: 'cost-table',
+    });
+  } else {
+    body = notice('error', 'The cost cannot be estimated. Edit the project and check the reward and the number of assignments.');
+  }
+  return el(
+    'div',
+    { className: 'card', id: 'cost-panel' },
+    el('h4', { className: 'card-title' }, 'Cost estimate'),
+    accountError ? errorNotice(accountError, 'Account') : null,
+    body,
+    muted('Top-ups after rejections are not included.'),
+  );
+}
+
+export function renderConfirmStep(ctx) {
   const { draft, template, estimate, account, pools } = ctx;
   const { data, settings } = draft;
 
-  // 이름을 아직 정하지 않았으면 "<템플릿 이름> <날짜>" 를 제안한다. 처음 들어왔을 때만이고, 사용자가 지운 이름을 다시 채우지는 않는다.
+  // 이름을 아직 정하지 않았으면 "<Project 이름> <날짜>" 를 제안한다. 처음 들어왔을 때만이고, 사용자가 지운 이름을 다시 채우지는 않는다.
   if (draft.batchName === '') ctx.update({ batchName: `${template.name} ${todayText()}` }, { rerender: false });
 
   const hitSettings = toHitSettings(settings);
@@ -108,14 +156,14 @@ export function renderPublishStep(ctx) {
   const summary = descList(
     [
       { key: 'env', label: 'Environment', value: account ? envBadge(account.env) : '…' },
-      { key: 'template', label: 'Template', value: template.name },
+      { key: 'template', label: 'Project', value: template.name },
       { key: 'data', label: 'Data', value: `${data.fileName}: ${plural(data.rows.length, 'row')} → ${plural(data.rows.length, 'HIT')}, ${plural(data.columns.length, 'column')}`, wide: true },
       { key: 'title', label: 'Title', value: hitSettings.Title, wide: true },
       { key: 'reward', label: 'Reward', value: `$${hitSettings.Reward} per assignment` },
-      { key: 'max', label: 'MaxAssignments', value: `${hitSettings.MaxAssignments} per HIT` },
+      { key: 'max', label: 'Assignments per task', value: `${hitSettings.MaxAssignments} per HIT` },
       { key: 'duration', label: 'Time allotted', value: plural(settings.durationMinutes, 'minute') },
-      { key: 'lifetime', label: 'HIT lifetime', value: plural(settings.lifetimeDays, 'day') },
-      { key: 'auto', label: 'Auto-approval delay', value: plural(settings.autoApprovalDays, 'day') },
+      { key: 'lifetime', label: 'Task expires in', value: plural(settings.lifetimeDays, 'day') },
+      { key: 'auto', label: 'Auto-approve in', value: plural(settings.autoApprovalDays, 'day') },
       { key: 'qualifications', label: 'Qualifications', value: qualifications.length > 0 ? qualifications.join('; ') : el('span', { className: 'muted' }, 'None') },
       { key: 'required', label: 'Only workers in', value: poolNames(settings.requiredPoolIds, 'Any worker') },
       { key: 'excluded', label: 'Exclude workers in', value: poolNames(settings.excludedPoolIds, 'Nobody') },
@@ -151,10 +199,11 @@ export function renderPublishStep(ctx) {
   const node = el(
     'section',
     { className: 'panel step', id: 'step-publish' },
-    el('h3', { className: 'panel-title' }, 'Publish'),
+    el('h3', { className: 'panel-title' }, 'Confirm and publish'),
+    costPanel(ctx),
     nameField,
     summary,
-    overBalance ? notice('error', 'The total cost exceeds the available balance. Go back and lower the reward, MaxAssignments or the number of rows.') : null,
+    overBalance ? notice('error', `The total ${formatCents(estimate.totalCents)} exceeds the available balance ${formatCents(balanceCents)}.`, 'Edit the project to lower the reward or the number of assignments, or upload fewer rows.') : null,
     isProduction
       ? notice(
           'warning',
@@ -164,7 +213,7 @@ export function renderPublishStep(ctx) {
         )
       : null,
     errorSlot,
-    el('div', { className: 'step-footer' }, hint, el('button', { type: 'button', className: 'btn', id: 'back-btn', onClick: () => ctx.goTo(3) }, 'Back'), button),
+    el('div', { className: 'step-footer' }, hint, el('button', { type: 'button', className: 'btn', id: 'back-btn', onClick: () => ctx.goTo(2) }, 'Back'), button),
   );
   return { node };
 }

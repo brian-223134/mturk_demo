@@ -5,6 +5,8 @@ import { describe, it } from 'node:test';
 
 import {
   DEFAULT_SETTINGS,
+  PROPERTY_KEYS,
+  QUALITY_KEYS,
   applyJobSettings,
   balanceCentsOf,
   buildCreateBatchRequest,
@@ -14,12 +16,17 @@ import {
   describeQualifications,
   describeReferenceCell,
   estimateFor,
+  freeTextNamesOf,
   normalizeCountries,
   normalizeSuffixes,
+  settingsFromProperties,
   toAttentionRule,
   toHitSettings,
   toReviewReference,
+  validateProperties,
+  validateQuality,
   validateSettings,
+  withProjectProperties,
 } from '../src/lib/settings.js';
 
 describe('defaults', () => {
@@ -447,5 +454,41 @@ describe('buildCreateBatchRequest', () => {
     assert.deepEqual(request.answerSchema, answerSchema);
     assert.deepEqual(request.reference, { source: 'majority' });
     assert.equal(request.attentionRule, null);
+  });
+});
+
+describe('Project properties and batch review settings', () => {
+  it('the two groups cover every form value exactly once', () => {
+    assert.deepEqual([...PROPERTY_KEYS, ...QUALITY_KEYS].sort(), Object.keys(DEFAULT_SETTINGS).sort());
+  });
+
+  it('settingsFromProperties keeps known values of the right kind', () => {
+    const values = settingsFromProperties({ Title: 'T', MaxAssignments: null, countries: ['US', 3], referenceColumn: 'gt', attentionEnabled: 'yes', junk: 1 });
+    assert.equal(values.Title, 'T');
+    assert.ok(Number.isNaN(values.MaxAssignments)); // JSON 의 null 은 NaN 으로 (검사가 걸러 낸다)
+    assert.deepEqual(values.countries, DEFAULT_SETTINGS.countries);
+    assert.equal(values.referenceColumn, 'gt');
+    assert.equal(values.attentionEnabled, false);
+    assert.ok(!('junk' in values));
+    assert.deepEqual(settingsFromProperties(null), defaultSettings());
+  });
+
+  it('withProjectProperties takes the properties from the project and keeps the batch review settings', () => {
+    const batch = { ...defaultSettings(), Title: 'old', attentionEnabled: true, referenceColumn: 'gt' };
+    const merged = withProjectProperties(batch, { Title: 'new', attentionEnabled: false });
+    assert.equal(merged.Title, 'new');
+    assert.equal(merged.attentionEnabled, true);
+    assert.equal(merged.referenceColumn, 'gt');
+  });
+
+  it('validateProperties and validateQuality only report their own fields', () => {
+    const values = { ...defaultSettings(), Title: '', attentionEnabled: true, attentionMode: 'column', attentionColumn: null, referenceColumn: 'missing' };
+    assert.deepEqual(Object.keys(validateProperties(values)), ['Title']);
+    assert.deepEqual(Object.keys(validateQuality(values, { columns: ['a'] })).sort(), ['attentionColumn', 'referenceColumn']);
+  });
+
+  it('freeTextNamesOf lists the text answers of the schema', () => {
+    assert.deepEqual(freeTextNamesOf([{ name: 'a', type: 'choice' }, { name: 'comment', type: 'text' }, { name: 'comment', type: 'text' }, { type: 'text' }]), ['comment']);
+    assert.deepEqual(freeTextNamesOf(undefined), []);
   });
 });

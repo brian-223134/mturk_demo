@@ -1,15 +1,16 @@
-// Create (2) Data: CSV 업로드와 placeholder 검증. 파일은 서버로 보내지 않고 브라우저에서 읽는다 (lib/csv.js).
+// Publish Batch (1) Upload CSV: CSV 업로드와 placeholder 검증. 파일은 서버로 보내지 않고 브라우저에서 읽는다 (lib/csv.js).
 // 검사 줄의 문구는 lib/data-check.js 의 checkLines 가 만든다 (README 의 시나리오 표가 인용하는 문구).
+// MTurk 처럼 Project 의 변수를 머리줄로 둔 CSV 양식을 내려받을 수 있고, 시험 삼아 Project 의 표본 행을 HIT 1개로 올릴 수도 있다.
 
 import { tag } from '../../components/badges.js';
 import { el } from '../../components/dom.js';
 import { muted, notice } from '../../components/notice.js';
 import { table } from '../../components/table.js';
-import { decodeUtf8, parseCsv, readCsvFile } from '../../lib/csv.js';
+import { readCsvFile } from '../../lib/csv.js';
 import { checkLines, describeCsv } from '../../lib/data-check.js';
-import { failureNotice, fetchExample, placeholderTags, stepFooter } from './common.js';
+import { navigate } from '../../router.js';
+import { downloadCsvTemplate, failureNotice, placeholderTags, stepFooter } from './common.js';
 
-export const SAMPLE_CSV_PATH = '1-task-data/data.csv';
 const PREVIEW_ROWS = 5;
 // 셀 하나가 100KB 를 넘기도 한다. 표와 tooltip 에는 잘라서 넣는다.
 const CELL_CHARS = 80;
@@ -70,20 +71,13 @@ export function renderDataStep(ctx) {
     }
   }
 
-  const sampleButton = el('button', { type: 'button', className: 'btn btn-small', id: 'load-sample-csv' }, 'Load sample CSV');
-  sampleButton.addEventListener('click', async () => {
-    sampleButton.disabled = true;
+  const templateButton = el('button', { type: 'button', className: 'btn btn-small', id: 'download-csv-template', disabled: template.placeholders.length === 0, title: 'A CSV with the columns this project reads and its sample values as the first row' }, 'Download CSV template');
+  templateButton.addEventListener('click', () => downloadCsvTemplate(template.name, template.html, template.sampleRow ?? {}));
+  const sampleButton = el('button', { type: 'button', className: 'btn btn-small', id: 'use-sample-row', disabled: template.placeholders.length === 0, title: 'Publish one HIT with the sample values of the project, to try the flow' }, 'Use the sample row');
+  sampleButton.addEventListener('click', () => {
+    const row = Object.fromEntries(template.placeholders.map((name) => [name, template.sampleRow?.[name] ?? '']));
     errorSlot.replaceChildren();
-    try {
-      // example/ 폴더의 파일을 그대로 쓴다. 사람이 직접 올려 보는 파일과 버튼이 채우는 내용이 같다.
-      const bytes = await fetchExample(SAMPLE_CSV_PATH, 'bytes');
-      if (ctx.signal.aborted) return;
-      accept(parseCsv(decodeUtf8(bytes), 'data.csv'));
-    } catch (error) {
-      if (ctx.signal.aborted) return;
-      sampleButton.disabled = false;
-      fail('the sample CSV', error);
-    }
+    accept({ fileName: 'sample row', columns: [...template.placeholders], rows: [row], hadBom: false, warnings: [] });
   });
 
   // 끌어다 놓기 영역. 안의 file input 을 눌러도 되고, 파일을 떨어뜨려도 된다.
@@ -134,7 +128,7 @@ export function renderDataStep(ctx) {
     }
     parts.push(
       el('h4', { className: 'section-title' }, 'Placeholder check'),
-      muted(`Template: ${template.name}`),
+      muted(`Project: ${template.name}`),
       el('div', { className: 'check-list', id: 'check-list' }, checkLines(check, template.placeholders).map(checkLine)),
       el('h4', { className: 'section-title' }, `Preview (first ${Math.min(PREVIEW_ROWS, data.rows.length)} rows)`),
       el(
@@ -158,13 +152,14 @@ export function renderDataStep(ctx) {
   const node = el(
     'section',
     { className: 'panel step', id: 'step-data' },
-    el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Data'), sampleButton),
+    el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Upload CSV'), el('span', { className: 'panel-actions' }, templateButton, sampleButton)),
     dropzone,
     errorSlot,
     parts,
     stepFooter({
-      onBack: () => ctx.goTo(0),
-      onNext: () => ctx.goTo(2),
+      onBack: () => navigate('/create'),
+      backLabel: 'Back to projects',
+      onNext: () => ctx.goTo(1),
       nextDisabled: blocked,
       hint: !data ? 'Upload a CSV to continue.' : blocked ? 'Fix the missing columns to continue.' : undefined,
     }),

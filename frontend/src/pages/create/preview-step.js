@@ -1,69 +1,22 @@
-// Create (4) Preview & Cost: 선택한 행으로 템플릿을 렌더해 worker 화면 그대로 보여 주고(components/preview-frame.js), 비용을 견적한다.
+// Publish Batch (2) Preview tasks: CSV 의 행을 하나씩 골라 Project 의 layout 으로 그린 worker 화면 그대로 보여 준다
+// (components/preview-frame.js, MTurk 의 "Preview" 와 같다). 미리보기가 보고한 답 칸 목록은 batch 의 answerSchema 로 저장된다.
+// 비용 견적은 (4) Confirm and publish 에 있다 (publish-step.js).
 
 import { tag } from '../../components/badges.js';
 import { el } from '../../components/dom.js';
-import { errorNotice, muted, notice } from '../../components/notice.js';
+import { muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
-import { table } from '../../components/table.js';
 import { checkAnswerFields } from '../../lib/answer-fields.js';
-import { formatCents, rewardToCents } from '../../lib/cost.js';
-import { balanceCentsOf } from '../../lib/settings.js';
 import { stepFooter } from './common.js';
 
 const VISIBLE_FIELDS = 10;
 const FRAME_HEIGHT = 640;
 
-function costPanel(ctx) {
-  const { draft, estimate, account, accountError } = ctx;
-  const rowCount = draft.data.rows.length;
-  const settings = draft.settings;
-  const balanceCents = balanceCentsOf(account);
-  const overBalance = estimate !== null && balanceCents !== null && estimate.totalCents > balanceCents;
-  const assignments = rowCount * settings.MaxAssignments;
-
-  let body;
-  if (estimate) {
-    const rows = [
-      { key: 'reward', item: 'Reward subtotal', detail: `${rowCount.toLocaleString('en-US')} HITs × ${settings.MaxAssignments} assignments × ${formatCents(rewardToCents(settings.Reward))}`, amount: formatCents(estimate.rewardCents) },
-      { key: 'fee', item: `MTurk fee (${estimate.feePercent}%)`, detail: `${assignments.toLocaleString('en-US')} assignments × ${estimate.feePercent}% of the reward (at least $0.01 each)`, amount: formatCents(estimate.feeCents) },
-      { key: 'total', item: el('strong', {}, 'Total'), detail: 'Held from the balance when the batch is published', amount: el('strong', {}, formatCents(estimate.totalCents)) },
-      {
-        key: 'balance',
-        item: 'Available balance',
-        detail: el('span', { className: 'muted' }, balanceCents === null || overBalance ? '' : `${formatCents(balanceCents - estimate.totalCents)} left after publishing`),
-        amount: balanceCents === null ? '…' : formatCents(balanceCents),
-      },
-    ];
-    body = table({
-      columns: [
-        { title: 'Item', width: 200, render: (r) => r.item },
-        { title: 'Calculation', render: (r) => r.detail },
-        { title: 'Amount', width: 120, align: 'right', className: 'tabular', render: (r) => r.amount },
-      ],
-      rows,
-      rowKey: (r) => r.key,
-      rowAttrs: (r) => ({ dataset: { cost: r.key } }),
-      className: 'cost-table',
-    });
-  } else {
-    body = notice('error', 'The cost cannot be estimated. Go back to Settings and check Reward and MaxAssignments.');
-  }
-  return el(
-    'div',
-    { className: 'card', id: 'cost-panel' },
-    el('h4', { className: 'card-title' }, 'Cost estimate'),
-    accountError ? errorNotice(accountError, 'Account') : null,
-    body,
-    muted('Top-ups after rejections are not included.'),
-    overBalance ? notice('error', `The total ${formatCents(estimate.totalCents)} exceeds the available balance ${formatCents(balanceCents)}.`, 'Lower the reward or MaxAssignments, or use fewer rows.') : null,
-  );
-}
-
 /** row 는 미리보기 중인 CSV 행이다. column 방식 attention 은 행마다 기대 답이 다르므로 그 행의 셀로 검사한다. */
 function answerFieldsBody(ctx, row) {
   const { answerSchema, settings } = ctx.draft;
   if (answerSchema.length === 0) {
-    return muted('None yet. Fields come from window.TASK_ANSWER_SCHEMA when the template declares it, otherwise from the radio buttons, checkboxes and selects in the preview below. A template that draws a question only after a click reports it once you open that question. This list is optional.');
+    return muted('None yet. Fields come from window.TASK_ANSWER_SCHEMA when the layout declares it (layouts built with <ann-*> elements always do), otherwise from the radio buttons, checkboxes and selects in the preview below. A layout that draws a question only after a click reports it once you open that question. This list is optional.');
   }
   const { attention, freeText, warnings } = checkAnswerFields(answerSchema, settings, row);
   const choices = [...new Set(answerSchema.flatMap((f) => f.values))];
@@ -86,14 +39,11 @@ function answerFieldsBody(ctx, row) {
 }
 
 export function renderPreviewStep(ctx) {
-  const { draft, template, estimate, account } = ctx;
+  const { draft, template } = ctx;
   const rowCount = draft.data.rows.length;
   const index = Math.min(Math.max(0, draft.previewRow), rowCount - 1);
   const row = draft.data.rows[index];
   const goToRow = (next) => ctx.update({ previewRow: Math.min(Math.max(0, next), rowCount - 1) });
-
-  const balanceCents = balanceCentsOf(account);
-  const overBalance = estimate !== null && balanceCents !== null && estimate.totalCents > balanceCents;
 
   const answerBody = el('div', { id: 'answer-fields-body' }, answerFieldsBody(ctx, row));
   // 템플릿이 JS 로 문항을 그리는 동안에는 빈 목록이 먼저 온다. 이미 읽은 목록을 빈 값으로 덮지 않는다.
@@ -115,12 +65,7 @@ export function renderPreviewStep(ctx) {
   const node = el(
     'div',
     { className: 'step', id: 'step-preview' },
-    el(
-      'div',
-      { className: 'two-col' },
-      costPanel(ctx),
-      el('div', { className: 'card', id: 'answer-fields' }, el('h4', { className: 'card-title' }, 'Answer fields found in this row'), answerBody),
-    ),
+    el('div', { className: 'card', id: 'answer-fields' }, el('h4', { className: 'card-title' }, 'Answer fields found in this row'), answerBody),
     el(
       'section',
       { className: 'panel', id: 'task-preview' },
@@ -144,12 +89,7 @@ export function renderPreviewStep(ctx) {
     el(
       'section',
       { className: 'panel step-footer-panel' },
-      stepFooter({
-        onBack: () => ctx.goTo(2),
-        onNext: () => ctx.goTo(4),
-        nextDisabled: overBalance || estimate === null,
-        hint: overBalance ? 'The total exceeds the available balance.' : undefined,
-      }),
+      stepFooter({ onBack: () => ctx.goTo(0), onNext: () => ctx.goTo(2) }),
     ),
   );
   return { node, cleanup: frame.destroy };

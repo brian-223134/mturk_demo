@@ -39,12 +39,12 @@ function memoryStore() {
 }
 
 describe('emptyDraft / steps', () => {
-  it('has five steps and starts at Template with the default settings', () => {
-    assert.deepEqual(STEP_TITLES, ['Template', 'Data', 'Settings', 'Preview & Cost', 'Publish']);
-    assert.equal(LAST_STEP, 4);
+  it('has the four Publish Batch steps and starts at Upload CSV with the default settings', () => {
+    assert.deepEqual(STEP_TITLES, ['Upload CSV', 'Preview tasks', 'Review settings', 'Confirm and publish']);
+    assert.equal(LAST_STEP, 3);
     const draft = emptyDraft();
     assert.equal(draft.step, 0);
-    assert.equal(draft.templateMode, 'saved');
+    assert.ok(!('templateMode' in draft) && !('editor' in draft));
     assert.equal(draft.templateId, null);
     assert.equal(draft.data, null);
     assert.equal(draft.settings.Reward, '0.10');
@@ -69,9 +69,10 @@ describe('serializeDraft / restoreDraft', () => {
   it('returns null for a missing or foreign version, and fills settings added later with defaults', () => {
     assert.equal(restoreDraft(undefined, undefined), null);
     assert.equal(restoreDraft({ version: 99 }, undefined), null);
-    const restored = restoreDraft({ version: DRAFT_VERSION, step: 7, settings: { Title: 'X' }, templateMode: 'weird', hasData: true }, { junk: true });
+    assert.equal(restoreDraft({ version: 1, step: 1, templateMode: 'saved' }, undefined), null); // Project 구조 이전의 저장본
+    const restored = restoreDraft({ version: DRAFT_VERSION, step: 7, settings: { Title: 'X' }, templateId: 3, hasData: true }, { junk: true });
     assert.equal(restored.draft.step, LAST_STEP);
-    assert.equal(restored.draft.templateMode, 'saved');
+    assert.equal(restored.draft.templateId, null);
     assert.equal(restored.draft.settings.Title, 'X');
     assert.equal(restored.draft.settings.Reward, '0.10');
     assert.equal(restored.draft.data, null); // CSV 모양이 아니면 버린다
@@ -101,6 +102,23 @@ describe('createDraftStorage', () => {
     await storage.clear();
     assert.equal(store.map.size, 0);
     assert.equal(await storage.load(), null);
+  });
+
+  it('load returns the last saved draft from memory, even when the store never answers', async () => {
+    const hanging = { get: () => new Promise(() => {}), set: () => new Promise(() => {}), del: () => new Promise(() => {}) };
+    const storage = createDraftStorage(hanging, { timeoutMs: 20 });
+    void storage.save({ ...emptyDraft(), templateId: 'tpl-1', data: csv });
+    const loaded = await storage.load();
+    assert.equal(loaded.draft.templateId, 'tpl-1');
+    assert.deepEqual(loaded.draft.data, csv);
+    void storage.clear();
+    const original = console.warn;
+    console.warn = () => {};
+    try {
+      assert.equal(await storage.load(), null); // 지운 뒤에는 store 를 기다리다 포기한다
+    } finally {
+      console.warn = original;
+    }
   });
 
   it('markCsvStored skips rewriting the CSV that was just restored', async () => {

@@ -1,4 +1,4 @@
-// Create (4) Preview & Cost 의 "Answer fields" 카드: 미리보기가 보고한 문항 목록(answerSchema)을 Settings 의 attention 규칙과
+// Publish Batch (2) Preview tasks 의 "Answer fields" 카드: 미리보기가 보고한 문항 목록(answerSchema)을 검수 설정의 attention 규칙과
 // 자유 서술 접미어에 맞춰 본다. DOM 을 쓰지 않아 Node 에서 테스트한다.
 //
 // answerSchema 의 항목은 { name, values, type?, required? } 다. 템플릿이 window.TASK_ANSWER_SCHEMA 를 두면 type 이 있고
@@ -52,7 +52,7 @@ export function checkAnswerFields(schema, settings, row = {}) {
   } else if (settings.attentionEnabled) {
     const prefix = settings.attentionPrefix;
     attention = new Set(names.filter((name) => name.startsWith(prefix)));
-    if (attention.size === 0) warnings.push(`No field name starts with "${prefix}". Check the attention rule in Settings.`);
+    if (attention.size === 0) warnings.push(`No field name starts with "${prefix}". Check the attention rule in Review settings.`);
     const expectedMissing = schema.filter((field) => attention.has(field.name) && !field.values.includes(settings.attentionExpected));
     if (expectedMissing.length > 0) {
       warnings.push(`"${settings.attentionExpected}" is not one of the choices of ${expectedMissing[0].name} (${expectedMissing[0].values.join(', ')}).`);

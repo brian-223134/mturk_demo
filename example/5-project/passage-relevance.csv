@@ -1,0 +1,9 @@
+query,passage,gold,attention_expected
+When did the city library move to Elm Street?,"The city library opened in 1921 in a converted school building. After a fire damaged the school in 1968, the collection moved to a new building on Elm Street, where it remains today.",relevant,
+How long is the river bridge?,"The river bridge was finished in 1932. Its main span is 410 meters long, and the whole bridge measures just under one kilometer from end to end.",relevant,
+Who designed the river bridge?,The river bridge was finished in 1932 and was repainted in 1990. It carries two lanes of traffic and a narrow footpath on its east side.,partially_relevant,
+What is the bakery on Elm Street known for?,A small bakery at the north end of Elm Street opened in 2005. Its sourdough bread sells out most mornings before ten o'clock.,relevant,
+Pancake recipe: how much milk do I need?,The museum is closed on Mondays. Guided tours start at eleven and last about an hour; tickets can be bought at the front desk.,not_relevant,"{""relevance"": ""not_relevant""}"
+When does the museum open on weekends?,The museum is closed on Mondays. Guided tours start at eleven and last about an hour; tickets can be bought at the front desk.,partially_relevant,
+How many floors does the city library have?,Elm Street was paved in 1950 and is lined with oak trees. Two cafes and a bakery sit at its north end.,not_relevant,
+What color is the river bridge?,"To make twelve pancakes, whisk two eggs with one and a half cups of milk, then stir in two cups of flour and a pinch of salt.",not_relevant,"{""relevance"": ""not_relevant""}"

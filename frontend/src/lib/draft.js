@@ -1,24 +1,22 @@
-// Create 마법사의 임시 저장. "진행 중인 입력은 브라우저에 임시 저장되어 새로고침해도 유지된다."
-// CSV 가 수 MB 일 수 있어 localStorage 가 아니라 IndexedDB 에 둔다. 저장소를 못 써도 마법사는 동작해야 하므로 여기의 함수는 오류를 던지지 않는다.
+// Publish Batch 의 임시 저장. "진행 중인 입력은 브라우저에 임시 저장되어 새로고침해도 유지된다."
+// CSV 가 수 MB 일 수 있어 localStorage 가 아니라 IndexedDB 에 둔다. 저장소를 못 써도 화면은 동작해야 하므로 여기의 함수는 오류를 던지지 않는다.
 // prototype/src/features/create/draft.ts 를 옮겼다. 순수한 부분(emptyDraft, serializeDraft, restoreDraft)과 저장소를 주입받는
 // createDraftStorage 는 Node 에서 테스트하고, IndexedDB 는 indexedDbStore 에만 있다.
+// 템플릿(Project) 편집 중의 임시 저장은 lib/project-draft.js 에 따로 있다. 둘은 같은 IndexedDB store 를 쓴다(sharedStore).
 
 import { defaultSettings } from './settings.js';
 
-export const STEP_TITLES = ['Template', 'Data', 'Settings', 'Preview & Cost', 'Publish'];
+export const STEP_TITLES = ['Upload CSV', 'Preview tasks', 'Review settings', 'Confirm and publish'];
 export const LAST_STEP = STEP_TITLES.length - 1;
-export const TEMPLATE_MODES = ['saved', 'new', 'generate'];
 
 export function emptyDraft() {
   return {
     step: 0, // 0부터
-    templateMode: 'saved', // 'saved' | 'new' | 'generate'
-    templateId: null,
-    editor: { id: null, name: '', html: '' }, // 저장된 템플릿을 고치는 중이면 id, 새로 만드는 중이면 null
+    templateId: null, // 게시할 Project(템플릿)의 id
     data: null, // CsvData { fileName, columns, rows, hadBom, warnings }
-    settings: defaultSettings(),
+    settings: defaultSettings(), // Project 의 속성 위에 이 batch 의 검수 설정(attention, 자유 서술, 대조 기준)을 얹은 값
     previewRow: 0, // 0부터
-    batchName: '', // 비어 있으면 Publish 단계가 "<템플릿 이름> <날짜>" 를 제안한다
+    batchName: '', // 비어 있으면 Confirm 단계가 "<Project 이름> <날짜>" 를 제안한다
     answerSchema: [], // 미리보기에서 읽어 낸 문항 목록. 게시할 때 answerSchema 로 보낸다
   };
 }
@@ -26,8 +24,10 @@ export function emptyDraft() {
 export const DRAFT_KEY = 'mturk-console:create-draft';
 // 폼에 글자를 칠 때마다 수 MB 의 CSV 를 다시 쓰지 않게 CSV 는 다른 키에 두고, 바뀌었을 때만 쓴다
 export const DRAFT_CSV_KEY = 'mturk-console:create-draft:csv';
-export const DRAFT_VERSION = 1;
+// 2: Create 가 Project 구조로 바뀌며 templateMode, editor 를 뺐다. 1 의 저장본은 버린다
+export const DRAFT_VERSION = 2;
 const LOAD_TIMEOUT_MS = 3000;
+const OPERATION_TIMEOUT_MS = 4000;
 const DB_NAME = 'mturk-console-frontend';
 const STORE_NAME = 'kv';
 
@@ -54,13 +54,11 @@ export function restoreDraft(stored, csv) {
   const draft = {
     ...base,
     ...rest,
-    editor: { ...base.editor, ...(isObject(rest.editor) ? rest.editor : {}) },
     settings: { ...base.settings, ...(isObject(rest.settings) ? rest.settings : {}) },
     answerSchema: Array.isArray(rest.answerSchema) ? rest.answerSchema : [],
     data,
   };
   draft.step = Math.min(Math.max(0, Math.trunc(Number(draft.step)) || 0), LAST_STEP);
-  if (!TEMPLATE_MODES.includes(draft.templateMode)) draft.templateMode = 'saved';
   if (typeof draft.templateId !== 'string') draft.templateId = null;
   if (typeof draft.batchName !== 'string') draft.batchName = '';
   draft.previewRow = Math.max(0, Math.trunc(Number(draft.previewRow)) || 0);
@@ -74,10 +72,13 @@ export function restoreDraft(stored, csv) {
 export function createDraftStorage(store, { timeoutMs = LOAD_TIMEOUT_MS } = {}) {
   let queue = Promise.resolve();
   let storedCsv; // 마지막으로 저장한 CSV. 참조가 같으면 다시 쓰지 않는다
+  // 같은 탭 안에서는 마지막으로 저장한 draft 를 메모리에서 바로 돌려준다. 다른 화면(New Project 의 agent 결과)이 넘긴 CSV 를
+  // IndexedDB 를 기다리지 않고 받으려는 것이고, IndexedDB 가 멈춘 브라우저에서도 화면 사이의 이동은 이어진다.
+  let memory = null;
   let warned = false;
 
   function warnOnce(error) {
-    if (!warned) console.warn('[create] The wizard draft cannot use the browser storage. The wizard still works, but a reload loses the input.', error);
+    if (!warned) console.warn('[create] The batch draft cannot use the browser storage. Publishing still works, but a reload loses the input.', error);
     warned = true;
   }
 
@@ -90,6 +91,7 @@ export function createDraftStorage(store, { timeoutMs = LOAD_TIMEOUT_MS } = {}) 
   }
 
   async function load() {
+    if (memory) return restoreDraft(memory.stored, memory.csv);
     try {
       // 일부 환경에서는 IndexedDB 요청이 오류도 없이 끝나지 않는다
       const [stored, csv] = await Promise.race([
@@ -109,8 +111,9 @@ export function createDraftStorage(store, { timeoutMs = LOAD_TIMEOUT_MS } = {}) 
   }
 
   function save(draft) {
+    const { stored, csv } = serializeDraft(draft);
+    memory = { stored, csv };
     return enqueue(async () => {
-      const { stored, csv } = serializeDraft(draft);
       if (storedCsv !== csv) {
         if (csv) await store.set(DRAFT_CSV_KEY, csv);
         else await store.del([DRAFT_CSV_KEY]);
@@ -121,6 +124,7 @@ export function createDraftStorage(store, { timeoutMs = LOAD_TIMEOUT_MS } = {}) 
   }
 
   function clear() {
+    memory = null;
     return enqueue(async () => {
       storedCsv = undefined;
       await store.del([DRAFT_KEY, DRAFT_CSV_KEY]);
@@ -161,6 +165,23 @@ export function indexedDbStore() {
   }
 
   async function run(mode, action) {
+    // 다른 페이지(뒤로 가기 캐시에 들어간 이전 문서)가 연결을 쥔 채 멈추면 요청이 오류 없이 끝나지 않는다. 기다리지 않고 실패시키고,
+    // 다음 요청 때 다시 연다.
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        dbPromise = null;
+        reject(new Error(`IndexedDB did not answer within ${OPERATION_TIMEOUT_MS} ms`));
+      }, OPERATION_TIMEOUT_MS);
+    });
+    try {
+      return await Promise.race([runNow(mode, action), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function runNow(mode, action) {
     const db = await open();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, mode);
@@ -189,10 +210,17 @@ export function indexedDbStore() {
   };
 }
 
+let shared = null;
 let defaultStorage = null;
+
+/** 화면이 쓰는 IndexedDB store 하나. batch draft 와 Project draft 가 함께 쓴다. */
+export function sharedStore() {
+  if (!shared) shared = indexedDbStore();
+  return shared;
+}
 
 /** 화면이 쓰는 저장소 (IndexedDB). 처음 부를 때 만든다. */
 export function draftStorage() {
-  if (!defaultStorage) defaultStorage = createDraftStorage(indexedDbStore());
+  if (!defaultStorage) defaultStorage = createDraftStorage(sharedStore());
   return defaultStorage;
 }

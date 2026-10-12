@@ -1,7 +1,8 @@
-// Template 단계의 세 번째 방법 `Generate from raw data`: 원본 데이터와 prompt 로 HIT 묶음을 만드는 agent job 패널과 job 목록, 진행 카드.
+// New Project 의 `Generate from raw data`: 원본 데이터와 prompt 로 HIT 묶음을 만드는 agent job 패널과 job 목록, 진행 카드.
 // job API 는 backend 에만 있다. prototype 의 mock API 는 /api/agent/models 에 404 로 답하므로 그때는 안내를 보이고 폼을 잠근다.
 // queued / running 인 job 은 2초마다 getJob 으로 다시 받아 카드를 갱신한다. 패널을 떠나면(stop) 타이머를 멈춘다.
-// 성공한 job 의 카드에는 `Use this result` 가 있어 template.html, hits.csv, settings.json 을 마법사에 채운다 (onUseResult).
+// 성공한 job 의 카드에는 `Use this result` 가 있어 template.html 과 settings.json 을 Project 로 저장하고 hits.csv 를 그 Project 의
+// Publish Batch 에 올린다 (onUseResult, pages/create/new-project.js).
 
 import { agent, isApiError } from '../../api-client/client.js';
 import { jobStatusTag, stepChip, tag } from '../../components/badges.js';
@@ -50,7 +51,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
     el(
       'div',
       { className: 'generate-panel', id: 'generate-panel' },
-      muted('Upload the raw annotation data and a prompt that says what to judge. The pipeline profiles the data, plans a task spec (LLM, or your own task_spec.json), and produces hits.csv and template.html for a batch. When a job succeeds, "Use this result" fills the Template, Data and Settings steps.'),
+      muted('Upload the raw annotation data and a prompt that says what to judge. The pipeline profiles the data, plans a task spec (LLM, or your own task_spec.json), and produces hits.csv and template.html for a batch. When a job succeeds, "Use this result" saves the layout as a project and opens Publish Batch with hits.csv.'),
       generateBody,
     ),
     el('div', { className: 'jobs-panel', id: 'jobs-panel' }, el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Jobs'), el('span', { className: 'muted small' }, 'Select 2–3 successful runs'), compare, refresh), jobsBody),
@@ -233,7 +234,7 @@ function usageBlock(usage) {
   );
 }
 
-/** 성공한 job 의 결과를 마법사에 채우는 버튼. 실패하면 카드 안에 이유를 보인다. */
+/** 성공한 job 의 결과로 Project 를 만들고 Publish Batch 로 가는 버튼. 실패하면 카드 안에 이유를 보인다. */
 function useResultBlock(job, onUseResult) {
   if (!hasResult(job) || !onUseResult) return null;
   const errorSlot = el('div', { className: 'use-result-error' });
@@ -253,7 +254,7 @@ function useResultBlock(job, onUseResult) {
   return el(
     'div',
     { className: 'job-section use-result-section' },
-    el('div', { className: 'use-result-row' }, button, el('span', { className: 'muted small' }, 'Saves template.html as a template, loads hits.csv as the data and fills the settings from settings.json.')),
+    el('div', { className: 'use-result-row' }, button, el('span', { className: 'muted small' }, 'Saves template.html and settings.json as a project named after the job (replacing a project with the same name), then opens Publish Batch with hits.csv.')),
     errorSlot,
   );
 }

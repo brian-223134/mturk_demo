@@ -14,6 +14,10 @@ configure({ container: layout.content, onNavigate: (tab) => layout.setActive(tab
 route('/', null, { redirect: '/create' });
 route('/index.html', null, { redirect: '/create' });
 route('/create', create.render, { tab: 'create' });
+route('/create/new', create.renderNew, { tab: 'create' });
+route('/create/project/:projectId', create.renderProject, { tab: 'create' });
+route('/create/project/:projectId/:tab', create.renderProject, { tab: 'create' });
+route('/create/publish/:projectId', create.renderPublish, { tab: 'create' });
 route('/manage', manage.render, { tab: 'manage' });
 route('/manage/:batchId', batch.render, { tab: 'manage' });
 route('/manage/:batchId/:tab', batch.render, { tab: 'manage' });

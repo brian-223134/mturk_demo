@@ -189,7 +189,8 @@ export function renderOverview(panel, ctx) {
       item('Review reference', reference, true),
       item('Qualifications', qualifications, true),
       item('Worker pools', pools, true),
-      item('Template', el('code', {}, batch.templateId)),
+      // 템플릿 레코드가 Create 의 Project 다. 게시된 batch 는 layout 사본(templateHtml)을 따로 갖고 있어 Project 를 고쳐도 바뀌지 않는다
+      item('Project', el('a', { href: `/create/project/${encodeURIComponent(batch.templateId)}/properties`, title: 'Open the project this batch was published from' }, el('code', {}, batch.templateId))),
       item('Input columns', el('span', { title: batch.inputColumns.join(', ') }, String(batch.inputColumns.length))),
     ),
   );
