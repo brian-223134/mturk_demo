@@ -421,7 +421,7 @@ class CommandTest(unittest.TestCase):
             self.assertIn("(provider: auto)", stdout)
             self.assertNotIn("provider", document["body"])
             self.assertEqual(document["body"]["model"], document["model_config"]["model"])
-            self.assertEqual(document["body"]["max_tokens"], 8000)
+            self.assertEqual(document["body"]["max_tokens"], 16000)
             self.assertEqual(document["body"]["response_format"], {"type": "json_object"})
             self.assertEqual(document["body"]["reasoning"], {"effort": "medium"})
 

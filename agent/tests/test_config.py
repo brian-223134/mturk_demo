@@ -28,7 +28,7 @@ YAML_AVAILABLE = importlib.util.find_spec("yaml") is not None
 COMMITTED_CONFIGS = ("default", "qwen3-235b", "deepseek-v3.2")
 # usage: {include: true} 는 OpenRouter 가 응답 usage 에 실제 청구액 cost 를 넣게 한다 (세 설정 파일 모두)
 USAGE_PARAM = {"include": True}
-DEFAULT_PARAMS = {"temperature": 0, "max_tokens": 8000, "response_format": {"type": "json_object"},
+DEFAULT_PARAMS = {"temperature": 0, "max_tokens": 16000, "response_format": {"type": "json_object"},
                   "usage": USAGE_PARAM, "reasoning": {"effort": "medium"}}
 TAG_ROUTING = {"order": ["gmicloud"], "allow_fallbacks": False, "quantizations": ["fp8"]}
 VALID_YAML = textwrap.dedent("""\
@@ -390,7 +390,7 @@ class LoadYamlTest(TempDirCase):
         self.assertEqual(cfg.model, "openai/gpt-oss-120b")
         self.assertEqual(cfg.params, DEFAULT_PARAMS)
         self.assertEqual(cfg.timeout_seconds, 180)
-        self.assertEqual(cfg.spec_fix_retries, 1)
+        self.assertEqual(cfg.spec_fix_retries, 2)
         self.assertEqual(cfg.profile_max_chars, 24000)
         self.assertEqual(load_model_config("default", MODELS_DIR), cfg)
         self.assertEqual(load_model_config(str(MODELS_DIR / "default.yaml")), cfg)
