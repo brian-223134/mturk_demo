@@ -64,12 +64,12 @@ function flow(boxes) {
 
 export function renderTutorial(root) {
   const toc = [
-    ['tutorial-concepts', 'Project와 batch'],
+    ['tutorial-concepts', 'Project와 Batch'],
     ['tutorial-starter', 'starter로 만들어 게시하기'],
     ['tutorial-generate', '원본 데이터에서 자동으로 만들기'],
-    ['tutorial-previews', '미리보기 세 곳'],
+    ['tutorial-previews', '단계별 미리보기'],
     ['tutorial-layout', '템플릿 직접 고치기'],
-    ['tutorial-faq', '자주 묻는 것'],
+    ['tutorial-faq', 'Pre Q&A'],
   ];
 
   root.append(
@@ -88,32 +88,32 @@ export function renderTutorial(root) {
     section(
       'tutorial-concepts',
       1,
-      'Project와 batch',
-      el('p', {}, 'Create는 MTurk의 Requester 화면처럼 두 단계로 나뉩니다. ', el('strong', {}, 'Project'), '는 어떤 작업인지 정한 틀이고, ', el('strong', {}, 'batch'), '는 그 틀에 실제 데이터를 넣어 worker에게 내보낸 한 번의 게시입니다.'),
+      'Project와 Batch',
+      el('p', {}, 'Create는 MTurk의 Requester 화면처럼 두 단계로 나뉩니다. ', el('strong', {}, 'Project'), '는 어떤 작업인지 정한 틀이고, ', el('strong', {}, 'Batch'), '는 그 틀에 실제 데이터를 넣어 worker에게 내보낸 한 번의 게시입니다.'),
       flow([
         { title: 'New Project', text: '작업의 틀을 만듭니다' },
         { title: 'Project', text: '화면 + 속성', accent: true },
         { title: 'Publish Batch', text: 'CSV를 올립니다' },
-        { title: 'batch', text: '한 행 = HIT 하나', accent: true },
+        { title: 'Batch', text: '한 행 = HIT 하나', accent: true },
         { title: 'Manage', text: '검수와 결과' },
       ]),
       simpleTable(
         ['', ui('New Project'), ui('New Batch with an Existing Project')],
         [
-          ['만드는 것', 'Project: 어떤 작업인지 정한 틀', 'batch: 실제 데이터로 내보낸 한 번의 게시'],
-          ['담는 것', 'worker가 보는 화면(layout), 제목·설명, 보상, HIT당 인원, 기간, worker 조건', 'CSV(한 행 = HIT 하나), 이번 게시의 검수 설정(attention, 대조 기준), batch 이름'],
+          ['만드는 것', 'Project: 어떤 작업인지 정한 틀', 'Batch: 실제 데이터로 내보낸 한 번의 게시'],
+          ['담는 것', 'worker가 보는 화면(layout), 제목·설명, 보상, HIT당 인원, 기간, worker 조건', 'CSV(한 행 = HIT 하나), 이번 게시의 검수 설정(attention, 대조 기준), Batch 이름'],
           ['횟수', '작업 종류마다 한 번', '같은 Project로 여러 번 (예: 파일럿 20개 → 본 실험 400개)'],
-          ['결과', '저장만 됩니다. worker에게는 아직 아무것도 나가지 않습니다', 'Manage에 batch와 HIT가 생기고, 비용이 잔액에서 빠집니다'],
+          ['결과', '저장만 됩니다. worker에게는 아직 아무것도 나가지 않습니다', 'Manage에 Batch와 HIT가 생기고, 비용이 잔액에서 빠집니다'],
         ],
       ),
-      el('p', { className: 'muted' }, 'Project를 고쳐도 이미 게시한 batch는 게시할 때의 화면 사본을 갖고 있어서 바뀌지 않습니다.'),
+      el('p', { className: 'muted' }, 'Project를 고쳐도 이미 게시한 Batch는 게시할 때의 화면 사본을 갖고 있어서 바뀌지 않습니다.'),
     ),
 
     section(
       'tutorial-starter',
       2,
       'starter로 만들어 게시하기',
-      el('p', {}, '연구실에서 자주 쓰는 형태의 starter 템플릿으로 Project를 만들고, attention check가 들어 있는 예시 CSV로 batch를 게시해 봅니다.'),
+      el('p', {}, '연구실에서 자주 쓰는 형태의 starter 템플릿으로 Project를 만들고, attention check가 들어 있는 예시 CSV로 Batch를 게시해 봅니다.'),
       el('div', { className: 'tutorial-actions' }, openGallery('passage-relevance', 'Passage relevance 열기'), el('a', { href: EXAMPLE_CSV, download: 'passage-relevance.csv', className: 'btn btn-small', id: 'tutorial-example-csv' }, '예시 CSV 내려받기')),
       steps([
         [ui('New Project'), '에서 ', ui('Passage relevance'), '를 고르면 오른쪽에 worker 화면이 표본 데이터로 보입니다. ', ui('Submit'), '을 눌러 제출되는 답의 모양도 볼 수 있습니다. ', ui('Create Project'), '를 누릅니다.'],
@@ -153,7 +153,7 @@ export function renderTutorial(root) {
     section(
       'tutorial-previews',
       4,
-      '미리보기 세 곳',
+      '단계별 미리보기',
       el('p', {}, 'worker 화면을 미리 보는 곳이 세 군데 있고, 보는 시점과 데이터가 다릅니다.'),
       simpleTable(
         ['어디서', '화면', '보는 것'],
@@ -183,12 +183,13 @@ export function renderTutorial(root) {
     section(
       'tutorial-faq',
       6,
-      '자주 묻는 것',
+      'Pre Q&A',
+      el('p', {}, '헷갈리기 쉬운 부분을 미리 질문과 답으로 정리했습니다.'),
       el(
         'dl',
         { className: 'tutorial-faq' },
-        el('dt', {}, 'Project를 고치면 이미 게시한 batch도 바뀌나요?'),
-        el('dd', {}, '아니요. batch는 게시할 때의 화면 사본을 따로 갖고 있습니다.'),
+        el('dt', {}, 'Project를 고치면 이미 게시한 Batch도 바뀌나요?'),
+        el('dd', {}, '아니요. Batch는 게시할 때의 화면 사본을 따로 갖고 있습니다.'),
         el('dt', {}, 'attention check는 어떻게 넣나요?'),
         el('dd', {}, 'CSV에 attention 행을 섞고, 그 행의 기대 답을 ', code('{"답 이름": "기대 값"}'), ' 모양으로 한 컬럼에 적습니다. Review settings에서 그 컬럼을 고르면 Review가 통과 여부를 판정합니다. 자동 생성 결과에는 이 컬럼(', code('attention_expected'), ')이 이미 들어 있습니다.'),
         el('dt', {}, '정답이나 LLM 라벨과 비교하려면?'),
