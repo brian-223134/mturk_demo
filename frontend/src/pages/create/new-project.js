@@ -37,6 +37,11 @@ function readChoice() {
   return STARTERS[0].id;
 }
 
+/** 갤러리를 열 때 처음 고를 항목을 정해 둔다 (Tutorial 의 버튼이 쓴다). id 는 starter id, 'upload', 'generate' 중 하나다. */
+export function presetChoice(id) {
+  writeChoice(id);
+}
+
 function writeChoice(value) {
   try {
     sessionStorage.setItem(CHOICE_KEY, value);

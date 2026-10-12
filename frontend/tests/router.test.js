@@ -12,6 +12,11 @@ const routes = [
   ['/', null, { redirect: '/create' }],
   ['/index.html', null, { redirect: '/create' }],
   ['/create', handlers.create, { tab: 'create' }],
+  ['/create/new', handlers.create, { tab: 'create' }],
+  ['/create/tutorial', handlers.create, { tab: 'create' }],
+  ['/create/project/:projectId', handlers.create, { tab: 'create' }],
+  ['/create/project/:projectId/:tab', handlers.create, { tab: 'create' }],
+  ['/create/publish/:projectId', handlers.create, { tab: 'create' }],
   ['/manage', handlers.manage, { tab: 'manage' }],
   ['/manage/:batchId', handlers.batch, { tab: 'manage' }],
   ['/manage/:batchId/:tab', handlers.batch, { tab: 'manage' }],
@@ -59,6 +64,15 @@ describe('matchRoute (main.js 의 패턴)', () => {
     assert.deepEqual(matchRoute(routes, '/workers').params, {});
     assert.equal(matchRoute(routes, '/manage').handler, handlers.manage);
     assert.equal(matchRoute(routes, '/create').meta.tab, 'create');
+  });
+
+  it('Create 의 경로: 갤러리, Tutorial, Project 편집기(탭 있음/없음), Publish Batch', () => {
+    assert.deepEqual(matchRoute(routes, '/create/new').params, {});
+    assert.deepEqual(matchRoute(routes, '/create/tutorial').params, {});
+    assert.deepEqual(matchRoute(routes, '/create/project/new').params, { projectId: 'new' });
+    assert.deepEqual(matchRoute(routes, '/create/project/tpl-a/layout').params, { projectId: 'tpl-a', tab: 'layout' });
+    assert.deepEqual(matchRoute(routes, '/create/publish/tpl-a').params, { projectId: 'tpl-a' });
+    assert.equal(matchRoute(routes, '/create/publish/tpl-a/extra'), null);
   });
 
   it('/ 와 /index.html 은 redirect 메타를 가진 route 에 맞는다', () => {

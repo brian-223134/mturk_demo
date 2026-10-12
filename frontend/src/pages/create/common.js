@@ -11,10 +11,10 @@ import { formatCsv } from '../../lib/csv.js';
 import { lintLayout } from '../../lib/layout-lint.js';
 import { extractPlaceholders } from '../../lib/template.js';
 
-/** MTurk 의 Create 화면처럼 위쪽에 두 갈래를 둔다. active: 'projects' | 'new' */
+/** MTurk 의 Create 화면처럼 위쪽에 두 갈래를 두고, 따라 하기 안내(Tutorial)를 옆에 둔다. active: 'projects' | 'new' | 'tutorial' */
 export function createSubnav(active) {
   const item = (key, href, label) => el('a', { href, className: `subnav-link${key === active ? ' active' : ''}`, dataset: { subnav: key }, 'aria-current': key === active ? 'page' : null }, label);
-  return el('nav', { className: 'subnav', id: 'create-subnav', 'aria-label': 'Create' }, item('projects', '/create', 'New Batch with an Existing Project'), item('new', '/create/new', 'New Project'));
+  return el('nav', { className: 'subnav', id: 'create-subnav', 'aria-label': 'Create' }, item('projects', '/create', 'New Batch with an Existing Project'), item('new', '/create/new', 'New Project'), item('tutorial', '/create/tutorial', 'Tutorial'));
 }
 
 const LAYOUT_KINDS = {

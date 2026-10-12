@@ -15,6 +15,7 @@ route('/', null, { redirect: '/create' });
 route('/index.html', null, { redirect: '/create' });
 route('/create', create.render, { tab: 'create' });
 route('/create/new', create.renderNew, { tab: 'create' });
+route('/create/tutorial', create.renderGuide, { tab: 'create' });
 route('/create/project/:projectId', create.renderProject, { tab: 'create' });
 route('/create/project/:projectId/:tab', create.renderProject, { tab: 'create' });
 route('/create/publish/:projectId', create.renderPublish, { tab: 'create' });

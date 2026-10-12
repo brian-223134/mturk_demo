@@ -770,6 +770,96 @@ a.btn:hover {
   margin-right: 4px;
 }
 
+/* ── Tutorial ────────────────────────────────────────────────────────────── */
+
+.tutorial-intro p {
+  margin: 0 0 10px;
+}
+.tutorial-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.tutorial-section {
+  scroll-margin-top: 12px;
+  line-height: 1.6;
+}
+.tutorial-section > p {
+  margin: 8px 0;
+}
+.tutorial-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--link);
+  color: #fff;
+  font-size: 13px;
+}
+.tutorial-flow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.tutorial-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafaf9;
+  max-width: 220px;
+}
+.tutorial-box.accent {
+  border-color: #bcd2f3;
+  background: #e8f0fc;
+}
+.tutorial-arrow {
+  color: var(--muted);
+  font-size: 18px;
+}
+.tutorial-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.tutorial-steps {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.tutorial-steps li {
+  margin-bottom: 8px;
+}
+.tutorial-table {
+  margin: 10px 0;
+}
+.tutorial-table td:first-child {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.tutorial-ui {
+  background: #eef3fb;
+  border-color: #d4e1f5;
+}
+.tutorial-code {
+  font-size: 12.5px;
+  overflow-x: auto;
+}
+.tutorial-faq dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+.tutorial-faq dd {
+  margin: 4px 0 0;
+}
+
 @media (max-width: 1100px) {
   .layout-split {
     grid-template-columns: 1fr;
