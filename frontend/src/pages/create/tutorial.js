@@ -141,7 +141,7 @@ export function renderTutorial(root) {
       el('div', { className: 'tutorial-actions' }, openGallery('generate', 'Generate from raw data 열기')),
       steps([
         [ui('Candidate name'), '에 이름을 적고, ', ui('Raw data'), '에 원본을, ', ui('Prompt text'), '에 무엇을 판정하게 할지 적습니다. 예: "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개"'],
-        [ui('Allow API calls (uses credits)'), '를 체크하고 ', ui('Generate'), '를 누릅니다. 유료 호출이라 서버도 ', code('AGENT_ALLOW_API=1'), '로 떠 있어야 체크할 수 있습니다. 한 번에 1센트 안팎이 들고 2~4분 걸리며, 실패할 수도 있습니다.'],
+        [ui('Allow API calls (uses credits)'), '를 체크하고 ', ui('Generate'), '를 누릅니다. 유료 호출이라 ', code('environment/.env'), '에 ', code('AGENT_ALLOW_API=1'), '을 적고 backend를 다시 시작해 둬야 체크할 수 있습니다. 한 번에 1센트 안팎이 들고 2~4분 걸리며, 실패할 수도 있습니다.'],
         ['아래 ', ui('Jobs'), ' 목록의 카드에서 진행 상황을 봅니다. 끝나면 HIT 수, 정답 라벨 분포, 검증 결과, LLM 비용이 보입니다.'],
         [ui('Preview & evaluate'), '로 LLM이 쓴 명세(', ui('Task spec'), ')와 worker 화면을 검토합니다. 안내문의 기준이 정답 라벨과 맞는지, HIT 구성이 요청대로인지 봅니다.'],
         ['명세를 고쳐야 하면 카드의 ', ui('Files'), '에서 ', code('task_spec.json'), '을 내려받아 고치고, ', ui('Reuse inputs'), '를 누른 뒤 ', ui('Optional task spec · offline replay'), '에 고친 파일을 올려 다시 ', ui('Generate'), '합니다. LLM을 부르지 않으므로 비용이 없고 몇 초면 끝납니다.'],

@@ -178,13 +178,13 @@ async def create_job(request: Request) -> dict:
             raise invalid('Either "spec" (a task_spec.json file, no LLM call) or "prompt" (a file) / "prompt_text" is required.')
         if not allow_api and not settings.api_allowed:
             raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false and the server was started "
-                          f"without {ALLOW_API_VARIABLE}=1 (both are required). Upload a \"spec\" file to run without an LLM.")
+                          f"without {ALLOW_API_VARIABLE}=1 in environment/.env or the shell (both are required). Upload a \"spec\" file to run without an LLM.")
         if not allow_api:
             raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false (send allow_api=true; "
                           f"the server has {ALLOW_API_VARIABLE}=1).")
         if not settings.api_allowed:
             raise invalid("Calling OpenRouter is not allowed: the server was started without "
-                          f"{ALLOW_API_VARIABLE}=1 (allow_api=true in the request is not enough).")
+                          f"{ALLOW_API_VARIABLE}=1 in environment/.env or the shell (allow_api=true in the request is not enough).")
         model_config = model_config or selected_model_name(settings.env_file)
         if not MODEL_NAME_RE.match(model_config):
             raise invalid(f'"model_config" must be the name of a file in the models folder without .yaml (got {model_config!r}).')

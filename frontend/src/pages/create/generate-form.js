@@ -45,7 +45,7 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
     field('Prompt text', prompt),
     field('Model', model),
     el('label', { className: 'checkbox' }, allow, ' Allow API calls (uses credits)'),
-    muted(models.api_allowed ? 'API permission is required for each session unless a task spec is supplied.' : 'LLM calls are disabled on this server. Use a task spec for an offline run.'),
+    muted(models.api_allowed ? 'API permission is required for each session unless a task spec is supplied.' : 'LLM calls are disabled on this server. Set AGENT_ALLOW_API=1 in environment/.env and restart the backend to enable them, or use a task spec for an offline run.'),
     el('details', {}, el('summary', {}, 'Optional task spec · offline replay'), field('Task spec', spec),
       el('button', { type: 'button', className: 'btn btn-small', onClick: () => { spec.value = ''; reuseSpec.checked = false; refresh(); } }, 'Clear spec'), reuseLabel),
     specStatus, el('div', { className: 'form-actions' }, submit, reset));

@@ -960,6 +960,23 @@ class EnvTest(unittest.TestCase):
         with clean_env(AGENT_ALLOW_API="0"):
             self.assertFalse(openrouter.api_allowed_by_env())
 
+    def test_api_allowed_reads_the_env_file_when_the_variable_is_empty(self):
+        allow = self.dir / "allow.env"
+        allow.write_text("OPENROUTER_KEY=sk-file\nAGENT_ALLOW_API=1\n", encoding="utf-8")
+        deny = self.dir / "deny.env"
+        deny.write_text("AGENT_ALLOW_API=0\n", encoding="utf-8")
+        with clean_env():
+            self.assertTrue(openrouter.api_allowed(allow))
+            self.assertFalse(openrouter.api_allowed(deny))
+            self.assertFalse(openrouter.api_allowed(self.dir / "missing.env"))
+            self.assertFalse(openrouter.api_allowed(None))
+        with clean_env(AGENT_ALLOW_API=""):  # compose 가 셸 값이 없을 때 넘기는 빈 값
+            self.assertTrue(openrouter.api_allowed(allow))
+        with clean_env(AGENT_ALLOW_API="0"):  # 셸의 값이 파일보다 앞선다
+            self.assertFalse(openrouter.api_allowed(allow))
+        with clean_env(AGENT_ALLOW_API="1"):
+            self.assertTrue(openrouter.api_allowed(deny))
+
     def test_model_selection_moved_out_of_openrouter(self):
         for name in ("DEFAULT_MODEL", "MODEL_VARIABLE", "default_model"):
             self.assertFalse(hasattr(openrouter, name), name)

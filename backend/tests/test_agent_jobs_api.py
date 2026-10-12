@@ -42,6 +42,21 @@ def test_models_lists_configs(client: TestClient) -> None:
     assert body["api_allowed"] is False
 
 
+def test_server_switch_reads_the_env_file(tmp_path, monkeypatch) -> None:
+    """서버 스위치: AGENT_ALLOW_API 환경변수가 비어 있으면 ENV_FILE(environment/.env)의 같은 이름을 따른다. 셸 값이 앞선다."""
+    env_file = tmp_path / "server.env"
+    env_file.write_text("AGENT_ALLOW_API=1\n", encoding="utf-8")
+    monkeypatch.setenv("ENV_FILE", str(env_file))
+    assert Settings.from_env().api_allowed is True
+    monkeypatch.setenv("AGENT_ALLOW_API", "")
+    assert Settings.from_env().api_allowed is True
+    monkeypatch.setenv("AGENT_ALLOW_API", "0")
+    assert Settings.from_env().api_allowed is False
+    monkeypatch.delenv("AGENT_ALLOW_API")
+    env_file.write_text("AGENT_ALLOW_API=0\n", encoding="utf-8")
+    assert Settings.from_env().api_allowed is False
+
+
 def test_job_with_spec_succeeds(client: TestClient, settings: Settings) -> None:
     """raw + prompt + spec → 202, plan 은 skipped, 나머지 단계는 succeeded, 결과 파일 9개, 검증 통과."""
     job = submit_example(client, name="example")

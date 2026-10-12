@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -44,7 +45,7 @@ from agent.paths import PathError
 from agent.planner.base import SPEC_FILE, Planner, PlannerError, run_plan
 from agent.planner.file_planner import FilePlanner
 from agent.planner.openrouter import (ALLOW_VARIABLE, ENDPOINTS_TIMEOUT, KEY_VARIABLE, REQUEST_FILE, RESPONSE_FILE,
-                                      OpenRouterPlanner, api_allowed_by_env, fetch_endpoints, format_endpoints,
+                                      OpenRouterPlanner, api_allowed, fetch_endpoints, format_endpoints,
                                       resolve_api_key)
 from agent.profile import run_profile
 from agent.sample import register_sample_command
@@ -130,7 +131,7 @@ def make_planner(args: argparse.Namespace, out_dir: Path) -> Planner:
     config = load_model_config(args.model_config or selected_model_name(args.env_file), models_dir)
     print(f"Model config: {config.name} ({config.display_path()}) -> {config.api} {config.model} "
           f"(provider: {describe_provider(config)})")
-    allowed = (bool(args.allow_api) or api_allowed_by_env()) and not args.dry_run
+    allowed = (bool(args.allow_api) or api_allowed(args.env_file)) and not args.dry_run
     return OpenRouterPlanner(config, api_key=resolve_api_key(None, args.env_file), allow_api=allowed, log_dir=out_dir)
 
 
@@ -312,6 +313,9 @@ def cmd_providers(args: argparse.Namespace) -> int:
 
 
 def cmd_test(args: argparse.Namespace) -> int:
+    # 테스트는 네트워크를 쓰지 않는다. environment/.env 에 AGENT_ALLOW_API=1 을 적어 두었어도 테스트 중에는 호출을 막는다
+    # (비어 있지 않은 환경변수가 파일보다 앞선다. 허용이 필요한 테스트는 clean_env 로 스스로 켠다)
+    os.environ[ALLOW_VARIABLE] = "0"
     suite = unittest.defaultTestLoader.discover(start_dir=str(AGENT_DIR / "tests"), pattern="test_*.py",
                                                 top_level_dir=str(REPO_ROOT))
     result = unittest.TextTestRunner(verbosity=2 if args.verbose else 1).run(suite)
@@ -347,7 +351,7 @@ def add_planner_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--dry-run", action="store_true",
                        help=f"write the request to OUT/{REQUEST_FILE} and exit without calling the API")
     group.add_argument("--allow-api", action="store_true",
-                       help=f"actually call the OpenRouter API; this spends credits (${ALLOW_VARIABLE}=1 also allows it). "
+                       help=f"actually call the OpenRouter API; this spends credits (${ALLOW_VARIABLE}=1 in the shell or environment/.env also allows it). "
                             f"The request and the reply are kept in OUT/{REQUEST_FILE} and OUT/{RESPONSE_FILE}")
     group.add_argument("--env-file", metavar="FILE", default=DEFAULT_ENV_FILE,
                        help=f"file with {KEY_VARIABLE}=... and {MODEL_VARIABLE}=... (default: %(default)s)")

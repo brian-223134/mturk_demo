@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent.planner.openrouter import api_allowed
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOW_API_VARIABLE = "AGENT_ALLOW_API"
 
@@ -26,17 +28,19 @@ class Settings:
     output_dir: Path    # agent job 의 입력과 결과 (<output_dir>/jobs/<job id>/)
     models_dir: Path    # 모델 설정 yaml (environment/models/)
     env_file: Path      # OPENROUTER_KEY, AGENT_MODEL 이 든 env 파일 (environment/.env)
-    api_allowed: bool   # AGENT_ALLOW_API == "1" 일 때만 OpenRouter 호출을 허용한다
+    api_allowed: bool   # OpenRouter 호출을 허용하는 서버 스위치. AGENT_ALLOW_API 환경변수, 없으면 env 파일의 같은 이름 (1/true/yes/on)
 
     @classmethod
     def from_env(cls) -> "Settings":
+        env_file = _path("ENV_FILE", REPO_ROOT / "environment" / ".env")
         return cls(
             data_dir=_path("DATA_DIR", REPO_ROOT / "data"),
             db_path=_path("DB_PATH", REPO_ROOT / "var" / "backend.sqlite"),
             output_dir=_path("OUTPUT_DIR", REPO_ROOT / "output"),
             models_dir=_path("MODELS_DIR", REPO_ROOT / "environment" / "models"),
-            env_file=_path("ENV_FILE", REPO_ROOT / "environment" / ".env"),
-            api_allowed=os.environ.get(ALLOW_API_VARIABLE, "").strip() == "1",
+            env_file=env_file,
+            # 셸의 AGENT_ALLOW_API 가 있으면 그 값, 없으면 environment/.env 의 값. 서버를 띄울 때 한 번 읽는다
+            api_allowed=api_allowed(env_file),
         )
 
     @property

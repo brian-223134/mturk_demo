@@ -7,6 +7,7 @@
         last_usage                              마지막 성공 응답의 usage (dict) 또는 None
         total_usage                             이 planner 로 부른 성공 호출들의 usage 합계 (calls, prompt_tokens, …, cost) 또는 None
     resolve_api_key(explicit, env_file)         인자 → OPENROUTER_KEY 환경변수 → env 파일 순서로 키를 찾는다
+    api_allowed(env_file)                       호출 허용 여부: AGENT_ALLOW_API 환경변수 → env 파일 순서 (backend 의 서버 스위치도 이것을 쓴다)
     load_env_file(path)                         agent.config 의 것을 다시 내보낸다 (예전 import 경로 유지)
     fetch_endpoints(model, timeout)             OpenRouter 의 공개 endpoint 목록 (그 모델을 서비스하는 업체들). 키 없음
     format_endpoints(payload)                   그 목록을 tag, quantization, context, 값, uptime, status 표로
@@ -63,7 +64,7 @@ from agent.planner.base import PlannerError
 from agent.planner.prompts import build_messages
 
 __all__ = ["ENDPOINT", "ENDPOINTS_URL", "KEY_VARIABLE", "ALLOW_VARIABLE", "NOT_ALLOWED", "NO_KEY", "REQUEST_FILE",
-           "RESPONSE_FILE", "TRANSIENT_STATUS", "RETRY_BACKOFF_SECONDS", "REPLY_RETRIES", "ReplyError", "OpenRouterPlanner", "load_env_file", "resolve_api_key", "api_allowed_by_env",
+           "RESPONSE_FILE", "TRANSIENT_STATUS", "RETRY_BACKOFF_SECONDS", "REPLY_RETRIES", "ReplyError", "OpenRouterPlanner", "load_env_file", "resolve_api_key", "api_allowed_by_env", "api_allowed",
            "strip_code_fences", "content_text", "parse_content", "extract_reply", "log_file_name", "clear_logs",
            "fetch_endpoints", "format_endpoints"]
 
@@ -116,6 +117,15 @@ def resolve_api_key(explicit: str | None, env_file: Path | str | None) -> str | 
 def api_allowed_by_env() -> bool:
     """AGENT_ALLOW_API 환경변수가 1/true/yes/on 이면 True."""
     return os.environ.get(ALLOW_VARIABLE, "").strip().lower() in TRUE_VALUES
+
+
+def api_allowed(env_file: Path | str | None) -> bool:
+    """OpenRouter 호출을 허용하는지. AGENT_ALLOW_API 환경변수가 비어 있지 않으면 그 값(1/true/yes/on 이면 허용, 그 밖은 불허)을,
+    비어 있으면 env 파일(environment/.env)의 AGENT_ALLOW_API 를 따른다. 셸에서 준 값이 파일보다 앞선다 (0 을 주면 파일이 1 이어도 막는다).
+    backend 의 서버 스위치와 CLI 가 같은 규칙을 쓴다."""
+    from_env = os.environ.get(ALLOW_VARIABLE, "").strip()
+    value = from_env if from_env else load_env_file(env_file).get(ALLOW_VARIABLE, "").strip()
+    return value.lower() in TRUE_VALUES
 
 
 # ----------------------------------------------------------------------------------------------
