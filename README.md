@@ -1,124 +1,97 @@
 # MTurk Annotation Console (mock)
 
-Amazon Mechanical Turk(MTurk)로 진행하는 annotation 작업을 **게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
+Amazon Mechanical Turk(MTurk)로 진행하던 annotation 작업을 **만들고, 게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
-지금은 **mock 단계**입니다. 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다.
-실제 MTurk에는 연동하지 않습니다. MTurk의 용어와 화면 구성, 그리고 HIT, assignment, reward, qualification, attention check 같은 annotation 설정 방식을 차용한 자체 annotation 콘솔을 목표로 하며, 이 프로토타입은 그 화면과 백엔드를 설계하기 위한 것입니다. Production 용도의 설계를 진행할 때, mono-repo 구조로 진행할 예정이며, 기술 스택은 frontend: vanilla javascript, backend: fastapi(python)으로 생각하고 있습니다.
+실제 MTurk에는 연동하지 않습니다. MTurk의 용어와 화면 구성, 그리고 HIT, assignment, reward, qualification, attention check 같은 annotation 설정 방식을 차용한 자체 annotation 콘솔을 목표로 합니다.
+지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있고, worker가 HIT를 푸는 화면은 아직 없습니다.
+
+콘솔은 mono-repo로 구성되어 있습니다. 주 화면은 `frontend/`(vanilla JavaScript)와 `backend/`(FastAPI)이고, 원본 데이터에서 annotation 템플릿과 HIT를 자동으로 만드는 파이프라인이 `agent/`에 있습니다. 화면과 REST 계약을 처음 설계할 때 만든 React 프로토타입은 `prototype/`에 남아 있습니다.
 
 | 탭 | 하는 일 |
 |---|---|
-| **Create** | 템플릿(HTML)과 데이터(CSV)를 올려 batch를 게시합니다. worker에게 보일 화면을 미리 보고 비용을 확인합니다. |
+| **Create** | MTurk처럼 작업의 틀인 Project(worker 화면 + 보상·인원·기간 같은 속성)를 만들고, Project에 CSV를 올려 batch를 게시합니다. 원본 데이터와 prompt로 템플릿을 자동으로 만들 수도 있습니다. |
 | **Manage** | batch의 진행률과 비용을 확인하고, 제출된 응답을 승인하거나 반려합니다. 부족한 응답은 다시 모집하고, 결과(majority, Fleiss' κ)를 확인해 내보냅니다. |
 | **Worker Pool** | worker별 품질 지표를 살펴보고, 믿을 만한 worker와 제외할 worker를 pool로 관리합니다. |
 
 ## 빠른 시작
 
-Docker만 설치되어 있으면 됩니다.
-
-```bash
-docker compose up --build
-```
-
-브라우저에서 http://localhost:8080 을 열면 프로토타입 콘솔이, http://localhost:3000 을 열면 production 뼈대의 화면이 나옵니다. 컨테이너 네 개가 실행됩니다.
-
-- `web`: 프로토타입 화면을 제공하고 `/api` 요청을 `api`로 전달합니다 (nginx).
-- `api`: 프로토타입의 mock API 서버입니다 (Node + SQLite). 처음 실행될 때 [data/](data/) 폴더의 내용을 DB에 채웁니다.
-- `frontend`: 실제 서비스용 화면(vanilla JavaScript)의 뼈대입니다. `/api` 요청을 `backend`로 전달합니다 (nginx).
-- `backend`: FastAPI 백엔드입니다. 처음 실행될 때 [data/](data/)로 DB를 채우고, agent 파이프라인을 job API로 노출합니다.
-
-승인과 반려, batch 게시, pool 편집 같은 변경 사항은 SQLite에 저장됩니다. 그래서 브라우저나 PC를 바꿔도 같은 상태를 볼 수 있습니다.
-처음 상태로 되돌리려면 화면 오른쪽 위의 **Mock tools → Reset to fixtures**를 누르거나, `docker compose down -v`로 DB를 지웁니다.
-
-### 자주 쓰는 명령
-
-| 명령 | 설명 |
-|---|---|
-| `docker compose --profile dev up dev` | 개발용 서버입니다. `prototype/src/`를 고치면 화면에 바로 반영됩니다. http://localhost:5173 |
-| `docker compose --profile mock up web-mock` | API 서버 없이 브라우저만으로 동작하는 버전입니다. http://localhost:8081 |
-| `docker compose run --rm test` | 프로토타입의 단위 테스트를 실행합니다 (Vitest). |
-| `docker compose run --rm backend-test` | backend의 테스트를 실행합니다 (pytest, 테스트 이미지 안에만 설치). |
-| `docker compose run --rm frontend-test` | frontend의 테스트를 실행합니다 (Node 내장 test runner, npm 의존성 없음). |
-| `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"` | DB의 내용을 SQL로 조회합니다. |
-
-### 알아 두면 좋은 점
-
-- 기본 설정으로는 이 PC에서만 접속할 수 있습니다(`127.0.0.1`). 다른 PC에서 접속하려면 `BIND_ADDR=0.0.0.0 docker compose up`으로 실행합니다. 포트는 `WEB_PORT`와 `API_PORT`로 바꿉니다.
-- 코드를 고친 뒤에는 `--build`를 붙여 `web`을 다시 빌드해야 합니다. `data/` 폴더는 `api`에 연결되어 있으므로, 고친 뒤 **Reset to fixtures**만 누르면 반영됩니다.
-- 개발용 서버에서 코드를 고쳐도 화면이 바뀌지 않는다면 `VITE_WATCH_POLLING=true`를 붙여 실행해 보세요. 파일 변경 알림이 컨테이너까지 전달되지 않는 환경에서 필요합니다.
-
-### Docker 없이 실행하기
-
-Node 24 이상이 필요합니다 (Node에 내장된 SQLite를 사용합니다). 콘솔과 mock API 서버의 코드는 `prototype/` 폴더에 있으므로 npm 명령은 그 안에서 실행합니다.
-
-```bash
-cd prototype
-npm install
-npm run dev                         # 브라우저만으로 동작 (http://localhost:5173)
-npm run server & npm run dev:http   # mock API 서버와 함께 실행. DB는 저장소 루트의 var/mturk-console.sqlite
-npm test && npm run typecheck
-```
-
-## Production 뼈대: `frontend/`와 `backend/`
-
-프로토타입으로 확인한 화면과 REST 계약을 실제 서비스용 스택으로 옮기는 중입니다. `docker compose up --build`로 프로토타입과 함께 뜹니다.
-
-| 서비스 | 주소 | 하는 일 |
-|---|---|---|
-| `frontend` | http://localhost:3000 | vanilla JavaScript 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api`를 `backend`로 전달합니다. |
-| `backend` | http://localhost:8000/api/health | FastAPI 백엔드입니다. 프로토타입의 REST 경로 표를 같은 경로, 같은 JSON으로 구현하고, `agent/`를 import해 `/api/agent/jobs`로 노출합니다. |
-
-이 두 서비스만 띄우려면 저장소 루트에서 다음을 실행하고 http://localhost:3000 을 엽니다. 처음 실행하면 이미지를 만들고, DB를 [data/](data/)의 시작 데이터로 채웁니다. 처음 써 보는 사람은 Create의 `Tutorial` 탭부터 보면 됩니다.
+Docker만 설치되어 있으면 됩니다. 저장소 루트에서 다음을 실행하고 http://localhost:3000 을 엽니다. 처음 써 보는 사람은 Create의 `Tutorial` 탭부터 보면 됩니다.
 
 ```bash
 docker compose up -d --build frontend backend
 ```
 
-원본 데이터에서 LLM으로 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. `environment/.env.example`을 `environment/.env`로 복사해 `OPENROUTER_KEY`를 적고, 호출을 허용해 다시 띄웁니다. 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
+- `frontend`: 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api` 요청을 `backend`로 전달합니다.
+- `backend`: FastAPI 백엔드입니다 (http://localhost:8000/api/health). 처음 실행될 때 [data/](data/)의 시작 데이터로 SQLite DB를 채우고, agent 파이프라인을 job API로 노출합니다.
+
+게시, 승인과 반려, pool 편집 같은 변경 사항은 Docker volume의 SQLite에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다).
+
+원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 서버도 호출을 허용한 상태로 띄워야 합니다. 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
 ```bash
 cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를 적는다
 AGENT_ALLOW_API=1 docker compose up -d frontend backend
 ```
 
-production 뼈대에서 되는 것은 다음과 같습니다.
+### 자주 쓰는 명령
 
-- backend는 프로토타입 REST 경로 표의 경로를 모두 구현했고, 같은 시작 데이터에 대해 프로토타입 mock API와 같은 응답을 돌려줍니다.
-- 화면은 프로토타입의 세 탭을 모두 옮겼습니다. Create는 MTurk의 Requester 화면처럼 **Project**를 만들고 그 Project에 CSV를 올려 batch를 게시하는 구조입니다. Project는 `Enter Properties`(제목, 보상, 인원, 기간, worker 조건), `Design Layout`(템플릿 HTML 편집기와 실시간 미리보기), `Preview and Finish` 세 탭으로 만들고, batch는 `Upload CSV` → `Preview tasks` → `Review settings` → `Confirm and publish`로 게시합니다. 자세한 내용은 [Project로 batch 게시하기](docs/create-projects.md)에 있습니다.
-- 새 Project는 starter 템플릿 9종 중에서 고르거나, HTML을 올리거나, **Generate from raw data**로 만듭니다. starter는 콘솔이 제공하는 `<ann-*>` 요소로 쓴 짧은 HTML이며, 요소가 문항 그리기, 필수 문항 검사, Review가 읽는 형식의 제출을 맡습니다 ([`<ann-*>` 요소로 템플릿 쓰기](docs/annotation-elements.md)). Generate는 원본 데이터(JSON, JSONL, CSV)와 prompt, 필요하면 task spec을 올리면 backend가 agent 파이프라인을 돌려 템플릿과 HIT CSV, 설정을 만들고, `Use this result`로 Project를 저장한 뒤 Publish Batch를 엽니다. spec 없이 LLM으로 spec을 만들려면 화면의 OpenRouter 스위치와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다.
-- 아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, 검수 화면은 시작 데이터의 batch로 확인합니다.
+| 명령 | 설명 |
+|---|---|
+| `docker compose run --rm frontend-test` | frontend의 테스트를 실행합니다 (Node 내장 test runner, npm 의존성 없음). |
+| `docker compose run --rm backend-test` | backend의 테스트를 실행합니다 (pytest, 테스트 이미지 안에만 설치). |
+| `docker compose --profile agent run --rm agent test` | agent 파이프라인의 테스트를 실행합니다. |
+| `docker compose restart backend` | backend를 다시 시작합니다. 자동 생성 job 목록을 다시 읽을 때 씁니다. |
 
-실행 방법과 API는 [backend/README.md](backend/README.md)에, 화면 구성은 [frontend/README.md](frontend/README.md)에 정리되어 있습니다. 테스트는 각 폴더의 `tests/`에 있으며 `docker compose run --rm backend-test`와 `docker compose run --rm frontend-test`로 실행합니다.
+### 알아 두면 좋은 점
+
+- `frontend/src`, `backend/app`, `agent/`는 컨테이너에 연결되어 있어서, 고친 뒤 새로고침하면 반영됩니다(backend는 자동으로 다시 시작합니다). 이미지를 다시 만들 필요는 의존성을 바꿨을 때뿐입니다.
+- 기본 설정으로는 이 PC에서만 접속할 수 있습니다(`127.0.0.1`). 다른 PC에서 접속하려면 `BIND_ADDR=0.0.0.0`을 붙여 실행합니다. 포트는 `FRONTEND_PORT`와 `BACKEND_PORT`로 바꿉니다.
+- 자동 생성 job의 입력과 결과는 `output/jobs/`(저장소에 들어가지 않음)에 저장됩니다. 실행하면 저절로 생기므로 미리 만들 필요는 없습니다.
+- 실행 방법과 API는 [backend/README.md](backend/README.md)에, 화면 구성과 코드 구조는 [frontend/README.md](frontend/README.md)에 정리되어 있습니다.
+
+### 프로토타입 콘솔
+
+처음 설계할 때 만든 React + antd 화면과 Node mock API 서버입니다. Create가 이전의 5단계 마법사(Template → Data → Settings → Preview & Cost → Publish)이고, 가짜 응답을 만드는 `Mock tools`가 있습니다. production 화면과 같은 REST 경로 표를 씁니다.
+
+```bash
+docker compose up --build        # 프로토타입(web, api)과 production(frontend, backend)을 함께 띄웁니다
+```
+
+| 명령 | 설명 |
+|---|---|
+| (위 명령) | 프로토타입 화면 http://localhost:8080, mock API 서버 http://localhost:8787 |
+| `docker compose --profile dev up dev` | 개발용 서버입니다. `prototype/src/`를 고치면 화면에 바로 반영됩니다. http://localhost:5173 |
+| `docker compose --profile mock up web-mock` | API 서버 없이 브라우저만으로 동작하는 버전입니다. http://localhost:8081 |
+| `docker compose run --rm test` | 프로토타입의 단위 테스트를 실행합니다 (Vitest). |
+| `docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"` | 프로토타입 DB의 내용을 SQL로 조회합니다. |
+
+Docker 없이 실행하려면 Node 24 이상이 필요합니다 (Node에 내장된 SQLite를 사용합니다). `prototype/`에서 `npm install` 뒤 `npm run dev`(브라우저만으로 동작) 또는 `npm run server & npm run dev:http`(mock API 서버와 함께)를 실행합니다.
+코드를 고친 뒤에는 `--build`를 붙여 `web`을 다시 빌드해야 하고, 화면이 바뀌지 않으면 `VITE_WATCH_POLLING=true`를 붙여 실행해 봅니다.
 
 ## 화면 둘러보기
-
-이 절과 아래의 예시 시나리오, Preview는 **프로토타입 콘솔(http://localhost:8080)** 기준입니다. production 콘솔(http://localhost:3000)의 Create는 Project 구조로 바뀌었으며 [Project로 batch 게시하기](docs/create-projects.md)에 정리되어 있습니다.
 
 화면의 글자는 MTurk의 용어와 맞추기 위해 영어로 표시합니다. 이 문서에서 `이렇게 표시한 글자`는 화면에 보이는 그대로입니다.
 
 ### 상단 바
 
-- **`MOCK` 배지**: 현재 환경을 나타냅니다. mock에서는 항상 `MOCK`입니다. `SANDBOX`(파랑)와 `PRODUCTION`(빨강)은 production 콘솔에서 시험 환경과 실제 환경을 구분하기 위해 남겨 둔 값입니다.
+- **`MOCK` 배지**: 현재 환경을 나타냅니다. mock에서는 항상 `MOCK`입니다. `SANDBOX`(파랑)와 `PRODUCTION`(빨강)은 시험 환경과 실제 환경을 구분하기 위해 남겨 둔 값입니다.
 - **`Balance`**: 잔액입니다. batch를 게시하거나 응답을 추가로 모집하면 비용이 미리 차감되고, 응답을 반려하면 그만큼 돌아옵니다. 잔액이 부족하면 게시와 재모집을 할 수 없습니다.
-- **`Mock tools`**: mock 환경에서만 보이는 도구 모음입니다.
-  - `Generate fake submissions…`: 아직 비어 있는 응답 자리에 검수 대기 상태의 가짜 응답을 채웁니다. 실제 worker 없이도 검수 과정을 따라가 볼 수 있습니다.
-  - `Export data (JSON)` / `Import data (JSON)…`: 현재 상태 전체를 파일 하나로 내려받거나 불러옵니다.
-  - `Reset to fixtures`: 모든 변경 사항을 버리고 `data/` 폴더의 처음 상태로 되돌립니다.
-  - 메뉴 맨 아래에는 현재 동작 방식과 저장 위치가 표시됩니다 (예: `API: http · Store: SQLite (server)`).
+- 프로토타입 콘솔에는 오른쪽 위에 **`Mock tools`**(가짜 응답 만들기, 상태 내보내기와 불러오기, `Reset to fixtures`)가 더 있습니다.
 
-### Create: batch 게시
+### Create: Project 만들기와 batch 게시
 
-템플릿과 CSV로 batch를 게시하는 5단계 마법사입니다. 입력한 내용은 브라우저에 임시로 저장되므로, 새로고침하거나 다른 탭에 다녀와도 이어서 진행할 수 있습니다. 처음부터 다시 하려면 `Start over`를 누릅니다.
+MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 CSV를 올려 **batch**를 게시합니다. Project는 작업의 틀(worker 화면과 속성)이고, batch는 그 틀에 실제 데이터를 넣어 내보낸 한 번의 게시입니다. 같은 Project로 batch를 여러 번 게시할 수 있습니다.
+위쪽에 탭이 세 개 있습니다.
 
-| 단계 | 내용 |
-|---|---|
-| 1. `Template` | 저장된 템플릿을 고르거나, `.html` 파일을 올리거나, HTML을 직접 붙여 넣어 새로 만듭니다. 저장하면 템플릿에 쓰인 `${컬럼명}` 목록이 표시됩니다. |
-| 2. `Data` | CSV를 올리면 템플릿과 맞는지 검사합니다. 템플릿이 쓰는 컬럼이 CSV에 없으면 다음 단계로 넘어갈 수 없습니다. 빈 셀, 쓰이지 않는 컬럼, 64KB를 넘는 행은 경고로 알려 줍니다. |
-| 3. `Settings` | 제목과 설명, 보상, HIT당 응답 수(MaxAssignments), 제한 시간과 게시 기간을 정합니다. 자격 조건(승인율, 승인된 HIT 수, 국가), 참여시키거나 제외할 worker pool, attention check 규칙도 여기서 정합니다. |
-| 4. `Preview & Cost` | 고른 행의 데이터로 worker가 보게 될 화면을 그대로 미리 봅니다. Submit을 눌러도 실제로 제출되지는 않고, 제출되었을 응답(JSON)을 보여 줍니다. 예상 비용(보상 + 수수료)과 게시 후 잔액도 함께 표시됩니다. |
-| 5. `Publish` | batch 이름과 전체 요약을 확인하고 게시합니다. 게시가 끝나면 그 batch의 Overview로 이동합니다. production 환경에서는 실수를 막기 위해 batch 이름을 한 번 더 입력해야 합니다. |
+- **`New Batch with an Existing Project`**: Project 목록입니다. 행마다 `Publish Batch`(CSV를 올려 게시), `Edit`, `Copy`, `Delete`가 있습니다.
+- **`New Project`**: 무엇으로 시작할지 고릅니다. starter 템플릿 9종(실제 미리보기와 함께), HTML 올리기, 원본 데이터에서 자동으로 만들기(`Generate from raw data`) 중에서 고릅니다.
+- **`Tutorial`**: 처음 쓰는 사람을 위한 한국어 따라 하기 안내입니다. 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
 
-어떤 파일을 올리면 되는지는 아래의 [예시 파일로 mock 테스팅 해보기](#예시-파일로-mock-테스팅-해보기)에서 설명합니다.
-단계마다 고를 수 있는 것과 기본값은 [Create로 batch 게시하기](docs/creating-a-batch.md)에 정리되어 있습니다.
+Project는 세 탭으로 만듭니다. `Enter Properties`에서 worker에게 보일 제목과 설명, 보상, HIT당 인원, 기간, worker 조건을 정하고, `Design Layout`에서 템플릿 HTML을 고치며 오른쪽의 worker 화면 미리보기를 바로 확인하고, `Preview and Finish`에서 요약을 보고 저장합니다.
+batch는 네 단계로 게시합니다. `Upload CSV`에서 템플릿이 쓰는 컬럼이 있는지 검사하고, `Preview tasks`에서 행마다 worker 화면을 보고, `Review settings`에서 attention 규칙과 Review의 대조 기준을 정한 뒤, `Confirm and publish`에서 비용을 확인하고 게시합니다.
+
+starter 템플릿은 콘솔이 제공하는 `<ann-*>` 요소로 쓴 짧은 HTML입니다. 요소가 문항을 그리고, 필수 문항을 검사하고, Review가 읽는 형식으로 답을 제출합니다.
+화면별 선택지와 조건은 [Project로 batch 게시하기](docs/create-projects.md)에, 요소는 [`<ann-*>` 요소로 템플릿 쓰기](docs/annotation-elements.md)에 정리되어 있습니다. 프로토타입의 5단계 마법사는 [Create로 batch 게시하기](docs/creating-a-batch.md)에 있습니다.
 
 ### Manage: 진행 확인과 검수
 
@@ -130,7 +103,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 - **`Overview`**: 진행률, 응답 현황, 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
 - **`Review`**: 응답을 검수하는 화면입니다.
   - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 여러 건을 한 번에 승인하거나 반려할 수 있습니다. `Select attention-failed`는 attention check를 틀린 검수 대기 응답을 한 번에 선택합니다.
-  - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 Create의 `Settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
+  - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 batch를 게시할 때 `Review settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
   - 행을 누르면 응답 상세가 열립니다. 문항마다 이 worker의 답, 같은 HIT를 수행한 다른 worker들의 답, 대조 기준을 나란히 보여 줍니다. `Open task`를 누르면 worker가 실제로 본 화면을 그대로 띄웁니다.
   - 반려할 때는 사유를 반드시 입력해야 하며, 자주 쓰는 문구 세 가지를 바로 고를 수 있습니다. attention check를 통과한 응답을 반려하려고 하면 경고가 표시됩니다.
   - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
@@ -150,25 +123,41 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 - **Pools**: pool을 만들고 구성원을 확인하거나 뺄 수 있습니다. `Fill by criteria…`는 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율 등)을 입력하면 **해당하는 worker가 몇 명인지 먼저 보여 주고**, 확인한 뒤에 추가합니다.
 - **Worker 상세**: 지표 요약, batch별 참여 이력, 메모를 볼 수 있습니다. batch 이름을 누르면 그 worker의 응답만 걸러진 Review 화면으로 이동합니다.
 
-pool은 Create의 `Settings` 단계에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. MTurk의 custom Qualification과 같은 역할입니다.
+pool은 Project의 `Enter Properties`(Worker requirements)에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. MTurk의 custom Qualification과 같은 역할입니다.
 
 ## 예시 파일로 mock 테스팅 해보기
 
-프로토타입 콘솔의 Create 마법사는 **템플릿(`.html`) 하나와 데이터(`.csv`) 하나**를 받습니다. CSV의 한 행이 HIT 하나가 됩니다.
-올려 볼 수 있는 파일은 모두 [example/](example/) 폴더에 준비되어 있습니다. 아래에 적은 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구입니다.
+올려 볼 수 있는 파일은 모두 [example/](example/) 폴더에 준비되어 있습니다. CSV의 한 행이 HIT 하나가 됩니다. 아래에 적은 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구입니다.
 
 ```
 example/
-├─ 1-task-data/         template.html, data.csv              window.TASK_DATA 방식 (새 템플릿에 권장)
+├─ 1-task-data/         template.html, data.csv              window.TASK_DATA 방식
 ├─ 2-placeholder/       template.html, data.csv              ${컬럼명} 방식 (MTurk Requester 웹사이트와 동일)
 │                       data-missing-column.csv              필요한 컬럼이 빠진 CSV
-├─ 3-data-checks/       empty-cells.csv, excel-utf8-bom.csv, Data 단계의 검사를 하나씩 확인하는 CSV
+├─ 3-data-checks/       empty-cells.csv, excel-utf8-bom.csv, CSV 검사를 하나씩 확인하는 CSV
 │                       excel-cp949.csv, large-rows.csv
-└─ 4-saved-templates/   chunk-fact-relevance-input.csv,      콘솔에 미리 저장된 템플릿에 넣을 입력
-                        query-fact-coverage-input.csv
+├─ 4-saved-templates/   chunk-fact-relevance-input.csv,      콘솔에 미리 저장된 템플릿에 넣을 입력
+│                       query-fact-coverage-input.csv
+└─ 5-project/           passage-relevance.csv                starter 로 만든 Project 에 넣을 입력 (attention 행, 정답 컬럼)
 ```
 
-### 시나리오 1. 처음부터 끝까지 게시해 보기
+### starter로 attention check가 있는 batch 게시하기
+
+| 단계 | 진행 방법 | 화면에 표시되는 내용 |
+|---|---|---|
+| 1. New Project | `Passage relevance`를 고르고 `Create Project`를 누릅니다. | `Enter Properties`에 보상 $0.05, HIT당 3명이 채워져 있고, HIT 하나의 비용 `$0.18`이 보입니다. |
+| 2. Preview and Finish | `Finish and publish a batch`를 누릅니다. | Project가 저장되고 Publish Batch가 열립니다. |
+| 3. Upload CSV | `5-project/passage-relevance.csv`를 올립니다. | `8 rows, 4 columns`, `OK` 2/2 matched. 쓰이지 않는 컬럼 `gold`, `attention_expected`와 빈 셀이 있는 6행이 `WARN`으로 보이며, 이 빈 셀은 attention 행이 아닌 행의 `attention_expected`라 정상입니다. |
+| 4. Review settings | `Attention check`를 켜고 `Expected answers column` → `attention_expected`, `Compare answers with` → `gold`를 고릅니다. | 첫 행의 `gold`가 `relevant`로 읽힌다는 안내가 보입니다. |
+| 5. Confirm and publish | 비용을 확인하고 게시합니다. | 8 HITs × 3 assignments × $0.05 = $1.20, 수수료 $0.24, 합계 **$1.44**. 게시가 끝나면 새 batch의 Overview로 갑니다. |
+
+5행과 8행이 질문과 상관없는 passage를 붙인 attention 행입니다. 자세한 설명은 [Project로 batch 게시하기](docs/create-projects.md#따라-하기-starter로-attention-check가-있는-batch-게시하기)에 있습니다.
+
+### 프로토타입 콘솔에서
+
+아래 시나리오는 프로토타입 콘솔(http://localhost:8080)의 5단계 마법사 기준입니다. production 콘솔에서도 같은 파일을 New Project → `Upload or paste HTML`과 Publish Batch의 `Upload CSV`에 올리면 CSV 검사 문구가 같게 나옵니다.
+
+#### 시나리오 1. 처음부터 끝까지 게시해 보기
 
 가장 빠른 방법은 화면의 `Load sample template`과 `Load sample CSV` 버튼입니다. 두 버튼은 `1-task-data/`의 파일을 그대로 불러옵니다. 파일을 직접 올려도 결과는 같습니다.
 
@@ -182,7 +171,7 @@ example/
 
 게시한 뒤 **Mock tools → Generate fake submissions…**로 가짜 응답을 만들면, Manage의 Review에서 검수까지 이어서 해 볼 수 있습니다.
 
-### 시나리오 2. `${컬럼명}` 방식과 컬럼 누락 오류
+#### 시나리오 2. `${컬럼명}` 방식과 컬럼 누락 오류
 
 MTurk Requester 웹사이트에서 쓰던 템플릿이 이 방식입니다. 템플릿의 `${passage}` 자리에 CSV의 `passage` 셀 내용이 **그대로** 들어갑니다.
 
@@ -194,7 +183,7 @@ MTurk Requester 웹사이트에서 쓰던 템플릿이 이 방식입니다. 템�
 
 Settings의 `Expected value`에는 `not_grounded`를 입력합니다. Preview에서 `Item p01`과 문단이 치환되어 보이는 것을 확인할 수 있습니다.
 
-### 시나리오 3. Data 단계의 검사 확인하기
+#### 시나리오 3. Data 단계의 검사 확인하기
 
 시나리오 1의 템플릿을 고른 상태에서 CSV만 바꿔 가며 올려 봅니다 (`Drop another CSV here`).
 
@@ -205,7 +194,7 @@ Settings의 `Expected value`에는 `not_grounded`를 입력합니다. Preview에
 | `3-data-checks/excel-cp949.csv` | 한국어 Excel에서 일반 "CSV"로 저장한 파일 (CP949) | **업로드가 거절됩니다.** `The file is not valid UTF-8. Save it again as "CSV UTF-8" and upload it again.` 그대로 읽으면 글자가 깨진 채 게시되기 때문입니다. 앞서 올린 CSV는 그대로 유지됩니다. |
 | `3-data-checks/large-rows.csv` | 한 행의 입력이 64KB를 넘는 CSV | `WARN` max 70.2 KB. 1 row(s) exceed MTurk's 64 KB Question limit. MTurk의 HIT 크기 제한을 기준으로 삼은 경고이며, 진행은 막지 않습니다. |
 
-### 시나리오 4. 미리 저장된 템플릿 사용하기
+#### 시나리오 4. 미리 저장된 템플릿 사용하기
 
 콘솔에는 실제 annotation 작업에 쓰던 템플릿 두 개가 저장되어 있습니다. `Template` 단계에서 하나를 고르고, 그 템플릿이 요구하는 16개 컬럼의 CSV를 올립니다.
 이 CSV는 셀 하나가 길이 11인 Python 리스트 문자열이고(탭 10개 + attention 1개), 본문은 익명화한 합성 텍스트입니다.
@@ -221,21 +210,35 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 ### CSV를 만들 때
 
 - 첫 줄에는 컬럼 이름을 쓰고, 둘째 줄부터 한 행이 HIT 하나가 됩니다. 인코딩은 **UTF-8**이어야 합니다 (Excel에서는 "CSV UTF-8"로 저장).
-- `${컬럼명}` 방식의 템플릿이라면, 템플릿에 쓰인 모든 placeholder가 CSV의 컬럼으로 있어야 합니다. 그 밖의 컬럼이 더 있는 것은 괜찮습니다.
+- 템플릿에 쓰인 모든 `${컬럼명}`이 CSV의 컬럼으로 있어야 합니다. 그 밖의 컬럼이 더 있는 것은 괜찮으며, 정답이나 attention 기대 답처럼 worker에게 보이지 않을 값을 두는 데 씁니다. Publish Batch의 `Download CSV template`으로 맞는 머리줄의 양식을 받을 수 있습니다.
 - TASK_DATA 방식의 템플릿은 콘솔이 어떤 컬럼이 필요한지 알 수 없으므로 검사 없이 통과합니다. 템플릿이 읽는 키와 CSV의 컬럼 이름을 직접 맞춰 주세요.
-- attention 문항을 쓰려면 템플릿에서 해당 문항의 `name`이 `attention_`으로 시작하도록 하고, Settings에 정답 값을 입력합니다.
+- attention check는 두 방식 중 하나를 씁니다. attention 행의 기대 답을 `{"답 이름": "기대 값"}` 모양으로 한 컬럼에 적는 방식(starter, 자동 생성 결과)과, 예전 템플릿처럼 attention 문항의 이름을 `attention_`으로 시작하게 하고 기대 값 하나를 정하는 방식입니다. 둘 다 `Review settings`에서 고릅니다.
 - `3-data-checks/`와 `4-saved-templates/`의 CSV는 `python3 scripts/build_examples.py`로 다시 만들 수 있습니다.
 
 ## 시작 데이터 (`data/`)
 
 콘솔이 처음 실행될 때 읽는 데이터는 [data/](data/) 폴더에 있습니다. 데이터는 JSON으로, 템플릿은 HTML 파일로 관리합니다. 폴더 구조와 수정 방법은 [data/README.md](data/README.md)에 정리되어 있습니다.
 
-- 파일을 고친 뒤 **Reset to fixtures**를 누르면 반영됩니다. 파일끼리 맞지 않는 부분이 있으면 어느 파일의 무엇이 잘못되었는지 알려 줍니다.
-- 콘솔에서 만든 상태는 **Mock tools → Export data (JSON)**으로 내려받을 수 있습니다. 이 파일을 다른 사람에게 전달해 **Import data**로 불러오게 하거나, `prototype/`에서 `npm run data:unpack -- <파일>`을 실행해 `data/` 구조로 풀어 새로운 시작 상태로 삼을 수 있습니다.
+- backend는 DB가 비어 있을 때만 `data/`를 읽습니다. 파일을 고친 뒤 반영하려면 `docker compose down -v`로 DB를 지우고 다시 띄웁니다. 프로토타입 콘솔에서는 **Mock tools → Reset to fixtures**로 바로 반영됩니다.
+- 시작 데이터에는 batch 세 개와 템플릿 두 개(`Chunk-Fact Relevance`, `Query-Fact Coverage`)가 들어 있습니다. 템플릿은 Create의 Project 목록에 Project로 보입니다.
+- 프로토타입 콘솔에서는 만든 상태를 **Mock tools → Export data (JSON)**으로 내려받아 다른 사람이 **Import data**로 불러오게 하거나, `prototype/`에서 `npm run data:unpack -- <파일>`로 `data/` 구조로 풀어 새로운 시작 상태로 삼을 수 있습니다.
 - 들어 있는 batch 세 개는 실제 annotation 결과를 **익명화한 것**입니다. ID는 모두 새로 만들었고, 본문은 같은 길이의 합성 텍스트로 바꿨습니다. 응답 값, 검수 상태, 작업 시간은 그대로 두었기 때문에 진행률, worker 지표, Fleiss' κ는 원본과 같습니다.
 - 익명화에 쓰는 salt(`scripts/.fixture_salt`)와 원본 파일 목록(`scripts/fixture_sources.json`)은 저장소와 Docker 이미지에 포함하지 않습니다.
 
 ## 동작 방식
+
+```
+브라우저 ──▶ frontend (nginx) ── frontend/src 를 그대로 서빙, /elements/(<ann-*> 요소, starter), /example/(예시 파일)
+               │ /api
+               ▼
+            backend (FastAPI) ──▶ SQLite (Docker volume backend-db), 처음 한 번 data/ 로 채움
+               └─▶ agent/ (import) ──▶ output/jobs/<job id>/  (자동 생성 job 의 입력과 결과)
+```
+
+REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, backend(`backend/app/routes.py`)와 frontend(`frontend/src/api-client/routes.js`)가 같은 표를 따릅니다. 테스트가 세 표가 어긋나지 않는지 확인합니다.
+화면에서 미리 보는 worker 화면은 sandbox iframe 안에서 그려지고, Submit은 실제로 보내지 않고 가로채 답을 보여 줍니다.
+
+### 프로토타입의 동작 방식
 
 화면 코드는 `prototype/src/api/client.ts`의 `api` 객체만 호출합니다. 그 뒤에서 실제로 무엇이 동작할지는 빌드할 때 `VITE_API_MODE`로 정하며, 어느 쪽이든 화면 코드는 동일합니다.
 현재 어떤 방식으로 동작 중인지는 Mock tools 메뉴 맨 아래에 표시됩니다.
@@ -252,43 +255,39 @@ Production 백엔드(FastAPI)는 같은 경로를 구현하며, 화면은 부르
 
 ## 원본 데이터에서 HIT 만들기 (`agent/`)
 
-annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로부터, Create 탭에 올릴 `hits.csv`와 `template.html`을 자동으로 만드는 파이프라인입니다.
-원본을 분석해 구조와 이상치를 정리하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 CSV와 MTurk 템플릿을 만들어 검증합니다. 명세는 LLM(OpenRouter)이 채우거나 손으로 쓴 파일을 그대로 쓸 수 있으며, LLM 호출은 명시적으로 허용할 때만 일어납니다.
+annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로부터 `hits.csv`와 `template.html`을 자동으로 만드는 파이프라인입니다.
+원본의 구조를 분석하고(`profile`), 작업 명세(task spec)를 정한 뒤(`plan`), HIT 단위 CSV와 템플릿을 만들어(`preprocess`, `render`) 검증합니다(`validate`). LLM(OpenRouter)이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나오고, 명세를 손으로 고쳐 LLM 없이 다시 만들 수 있습니다.
 탭 하나에 문항을 여러 개 둘 수 있고, 문항은 단일 선택, 체크박스 다중 선택, 척도(likert), 자유 서술 네 가지입니다. attention 탭은 worker 화면에서 다른 탭과 구별되지 않습니다.
 
+콘솔에서는 Create → New Project → `Generate from raw data`로 돌리고, 결과의 `Use this result`로 Project를 만들어 바로 게시합니다 ([원본 데이터에서 자동으로 만들기](docs/create-projects.md#원본-데이터에서-자동으로-만들기)). 명령줄로도 돌릴 수 있습니다.
+
 ```bash
-docker compose run --rm agent run <원본> --prompt @<prompt 파일> --spec <spec 파일> --out <출력 폴더>
+docker compose --profile agent run --rm agent run <원본> --prompt @<prompt 파일> --spec <spec 파일> --out <출력 폴더>
 ```
 
-실행 방법과 출력 파일, 콘솔에 올리는 순서는 [agent/README.md](agent/README.md)에 정리되어 있습니다.
+실행 방법과 출력 파일, prompt 쓰는 법은 [agent/README.md](agent/README.md)에 정리되어 있습니다. LLM 호출은 명시적으로 허용할 때만 일어납니다.
 
 ## Preview
 
-전체 흐름을 한 번 따라가 보는 순서입니다. 시작하기 전에 **Reset to fixtures**를 눌러 두세요.
-미리 저장된 템플릿의 미리보기는 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
+production 콘솔에서 전체 흐름을 한 번 따라가 보는 순서입니다. 시작하기 전에 `docker compose down -v`로 DB를 처음 상태로 되돌려 두세요.
+시작 데이터의 템플릿과 자동 생성 템플릿의 미리보기는 `assets.crowd.aws`의 스크립트를 불러오므로 인터넷 연결이 필요합니다.
 
 1. **Manage 목록**: 익명화한 batch 세 개가 보입니다. 진행률, 반려율, 비용이 자동으로 계산되어 있고, `pilot close-ended chunk-fact`에는 `Needs review`가 붙어 있습니다.
 2. **Review**: 그 batch의 `Review` 탭에서 Status를 Submitted로 거르면 6건이 나옵니다. 표의 `Answers` 열에서 worker의 답과 다른 worker들의 majority를 바로 비교해 보고, 행을 눌러 응답 상세를 열고 `Open task`로 worker가 본 화면을 열어 봅니다.
 3. **반려와 재모집**: 두 건을 골라 반려합니다. attention check를 통과한 응답이라는 경고가 표시되고, 반려를 확정하면 다시 모집할지 물어봅니다. 나머지 응답은 승인합니다.
 4. **HITs**: `Incomplete only`를 켜고, HIT 하나에 큰 수를 추가해 봅니다. 9개를 넘을 수 없다는 이유와 함께 건너뛰는 것을 볼 수 있습니다.
 5. **Results**: Fleiss' κ가 0.731로 표시됩니다. 이 값은 statsmodels의 `fleiss_kappa` 결과와 소수 여섯째 자리까지 일치하며, 테스트로 고정되어 있습니다. Export로 받는 CSV는 MTurk Requester 웹사이트의 결과 CSV와 컬럼이 같아서 기존 분석 스크립트를 그대로 쓸 수 있습니다.
-6. **Create**: `Load sample template`과 `Load sample CSV`로 5단계를 끝까지 진행해 게시합니다 (시나리오 1). 잔액이 줄고 Manage 목록에 새 batch가 생깁니다.
-7. **가짜 응답 만들기**: **Mock tools → Generate fake submissions…**로 방금 게시한 batch에 응답을 채우고, 다시 Review에서 검수합니다.
-8. **Worker Pool**: `Rej%`를 내림차순으로 정렬해 상위 worker를 선택하고 `Block…`을 누른 뒤, 기본 선택지인 "Excluded pool에 추가"를 고릅니다. 이어서 Pools에서 `Fill by criteria…`로 Trusted pool을 채워 봅니다.
+6. **Create**: `Tutorial` 탭의 순서대로 starter로 Project를 만들고, [위의 예시](#starter로-attention-check가-있는-batch-게시하기)처럼 `5-project/passage-relevance.csv`를 올려 게시합니다. 잔액이 줄고 Manage 목록에 새 batch가 생깁니다. 이어서 New Project → `Generate from raw data`에서 `Load prompt + example data`로 합성 예시를 채우고, `Optional task spec · offline replay`에 `agent/examples/groundedness/task_spec.json`을 올려 LLM 없이 자동 생성을 해 봅니다.
+7. **Worker Pool**: `Rej%`를 내림차순으로 정렬해 상위 worker를 선택하고 `Block…`을 누른 뒤, 기본 선택지인 "Excluded pool에 추가"를 고릅니다. 이어서 Pools에서 `Fill by criteria…`로 Trusted pool을 채워 봅니다.
    기본 조건(승인 20건 이상, attention 실패 0%, 일치율 90% 이상)으로는 해당하는 worker가 없습니다. 예시 데이터에서는 승인이 가장 많은 worker가 20건이고 attention 실패율이 5%이기 때문입니다. **승인 기준을 5로 낮추면 7명**이 나옵니다.
-   이렇게 만든 pool을 Create의 Settings에서 참여 또는 제외로 지정하면, 가짜 응답도 그 조건을 따릅니다.
-9. **저장과 API 확인**: Mock tools 메뉴 맨 아래에 `API: http · Store: SQLite (server)`가 표시됩니다. 터미널에서 아래 명령으로 방금 한 검수가 DB에 저장된 것과 REST 응답을 확인할 수 있습니다.
+   이렇게 만든 pool은 Project의 `Enter Properties`에서 참여 또는 제외로 지정합니다.
+8. **API 확인**: 터미널에서 `curl localhost:8000/api/batches`로 방금 게시한 batch가 REST 응답에 있는 것을 확인할 수 있습니다.
 
-   ```bash
-   docker compose exec api npm run sql -- "SELECT status, COUNT(*) AS n FROM assignments GROUP BY 1"
-   curl localhost:8787/api/batches
-   ```
-
-   같은 화면은 API 서버 없이도 동작합니다: `docker compose --profile mock up web-mock` (http://localhost:8081)
+worker가 HIT를 푸는 화면은 아직 없어서 production 콘솔에서 새로 게시한 batch에는 응답이 들어오지 않습니다. 검수 흐름은 시작 데이터의 batch로 보거나, 프로토타입 콘솔의 **Mock tools → Generate fake submissions…**로 가짜 응답을 만들어 확인합니다.
 
 ## 폴더 구조
 
-실제 서비스용 화면 `frontend/`와 백엔드 `backend/`, 프로토타입 `prototype/`, 파이프라인 `agent/`가 나란히 있고, 시작 데이터와 예시 파일, 문서는 저장소 루트에 있습니다.
+실제 서비스용 화면 `frontend/`와 백엔드 `backend/`, 파이프라인 `agent/`, 프로토타입 `prototype/`이 나란히 있고, 시작 데이터와 예시 파일, 문서는 저장소 루트에 있습니다.
 
 ```
 frontend/           실제 서비스용 화면 (vanilla JavaScript). src/ 를 nginx 가 그대로 서빙합니다
@@ -318,11 +317,15 @@ prototype/          프로토타입 콘솔(React + antd)과 mock API 서버. npm
 agent/              원본 데이터와 prompt로 HIT 단위 CSV와 템플릿을 만드는 파이프라인 (Python)
 data/               시작 데이터 (JSON + 템플릿 HTML)
 example/            Create에 올려 볼 예시 템플릿과 CSV
-docs/               Create의 사용 방법(프로토타입, production), <ann-*> 요소, 화면에 나오는 값을 읽는 방법
-environment/        agent의 모델 설정(models/)과 OpenRouter 키를 두는 .env
+docs/               Create의 사용 방법(production, 프로토타입), <ann-*> 요소, 화면에 나오는 값을 읽는 방법, prompt 실험
+environment/        agent의 모델 설정(models/)과, OpenRouter 키를 두는 .env (.env 는 저장소에 들어가지 않습니다)
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
-docker-compose.yml  web, api, dev, test, web-mock, agent, backend, frontend 서비스
+docker-compose.yml  frontend, backend, agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
+
+저장소에 들어가지 않는 폴더 (.gitignore)
+output/             자동 생성 job 의 입력과 결과 (output/jobs/<job id>/). 실행하면 저절로 생깁니다
+assets/             실제 원본 데이터와 예전 템플릿 같은 로컬 참고 자료. 코드와 테스트는 쓰지 않습니다
+var/                프로토타입 mock API 서버의 SQLite, agent 명령줄 실행의 입력
 ```
 
-- 계산 로직은 모두 `prototype/src/domain/`의 순수 함수로 작성했고 단위 테스트가 있습니다.
-- `npm test`는 계산 로직 외에도 `data/`가 기대한 규모인지, κ가 statsmodels의 값과 같은지, REST 요청과 SQLite 저장이 제대로 되는지, `example/`의 파일이 위 시나리오대로 동작하는지를 확인합니다.
+- 테스트는 `frontend/tests/`(node:test), `backend/tests/`(pytest), `agent/tests/`(unittest), `prototype/`(Vitest)에 있습니다. 계산 규칙의 기대값(κ, 비용, 진행률)은 프로토타입의 테스트에서 시작해 backend 테스트로 옮겨 고정했습니다.
