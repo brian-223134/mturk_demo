@@ -5,7 +5,7 @@
 import { api } from '../../api-client/client.js';
 import { el } from '../../components/dom.js';
 import { EMPTY, formatDateTime } from '../../components/format.js';
-import { errorNotice, loading, notice } from '../../components/notice.js';
+import { errorNotice, loading, muted, notice } from '../../components/notice.js';
 import { confirmModal } from '../../components/modal.js';
 import { table } from '../../components/table.js';
 import { toast } from '../../components/toast.js';
@@ -33,7 +33,15 @@ export async function renderProjects(root, signal) {
     createSubnav('projects'),
     flash ? notice('success', flash.message) : null,
     resumeSlot,
-    el('section', { className: 'panel', id: 'projects-panel' }, el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Projects')), body),
+    el(
+      'section',
+      { className: 'panel', id: 'projects-panel' },
+      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Projects')),
+      muted(
+        'A project is a reusable task: the layout workers see plus its properties (title, reward, assignments, time, worker requirements). Publish Batch uploads a CSV to a project, and each row becomes one HIT. One project can publish many batches. To make a project, use New Project.',
+      ),
+      body,
+    ),
   ];
   root.append(...parts.filter(Boolean));
 

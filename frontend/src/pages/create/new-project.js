@@ -86,7 +86,9 @@ export async function renderNewProject(root, signal) {
       'section',
       { className: 'panel', id: 'new-project' },
       el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a template to start a new project')),
-      muted('Every template is a short HTML layout that you can change in the next steps. The preview shows sample data; your CSV replaces it when you publish a batch.'),
+      muted(
+        'A new project starts from a template, your own HTML, or a layout generated from raw data. You set its properties and layout here, then publish batches from it in New Batch with an Existing Project. The preview shows sample data; your CSV replaces it when you publish a batch.',
+      ),
       el('div', { className: 'gallery' }, list, detail),
     ),
   );
