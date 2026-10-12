@@ -174,6 +174,8 @@ for (var qi = 0; qi < QS.length; qi++) QBYID[QS[qi].id] = QS[qi];
 // 답 이름: target 문항은 general_{i}_{j}{suffix}, item 문항은 general_{i}{suffix}. j는 0부터 받아 1부터 쓴다
 function nameOf(i, j, q) { return 'general_' + i + (j === null ? '' : '_' + (j + 1)) + q.suffix; }
 function groupOf(i, q) { return i + ':' + q.id; }
+// multi_select의 "해당 없음" 칸 이름. 답은 아니지만, 이름 없는 입력이 있으면 crowd-html-elements가 미리보기에 Potential errors 상자를 띄운다
+function noneNameOf(i, q) { return 'none_' + i + '_' + q.id; }
 // 탭 하나의 답 칸들 (화면 순서). 전처리의 answer_slots와 같은 규칙이다
 function slotsOf(i) {
   var out = [], n = TARGETS[i].length;
@@ -289,7 +291,7 @@ function multiBlock(i, q) {
     h += '<label class="chk-opt"><input type="checkbox" name="' + esc(nameOf(i, j, q)) + '" value="' + esc(q.options[0].value) + '" data-group="' + group + '">' +
       '<span class="chk-num">' + (j + 1) + '</span><span class="chk-text">' + esc(targets[j]) + '</span></label>';
   }
-  h += '<label class="chk-opt chk-none"><input type="checkbox" data-group="' + group + '" data-none="1"><span class="chk-text">' + esc(q.none_label) + '</span></label>';
+  h += '<label class="chk-opt chk-none"><input type="checkbox" name="' + esc(noneNameOf(i, q)) + '" data-group="' + group + '" data-none="1"><span class="chk-text">' + esc(q.none_label) + '</span></label>';
   return h + '</div></div></div>';
 }
 function itemBlock(i, q) {
@@ -420,8 +422,8 @@ function handleFormSubmit() {
   var hidden = crowdForm.querySelector('input[name="input_answers"]');
   if (!hidden) { hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'input_answers'; crowdForm.appendChild(hidden); }
   hidden.value = JSON.stringify(result);
-  // 문항 입력의 name을 잠시 떼어 crowd-form이 input_answers만 보내게 한다
-  var named = document.querySelectorAll('input[name^="general_"], textarea[name^="general_"]');
+  // 문항 입력과 "해당 없음" 칸의 name을 잠시 떼어 crowd-form이 input_answers만 보내게 한다
+  var named = document.querySelectorAll('input[name^="general_"], textarea[name^="general_"], input[name^="none_"]');
   for (var r = 0; r < named.length; r++) { named[r].setAttribute('data-bak', named[r].getAttribute('name') || ''); named[r].removeAttribute('name'); }
   crowdForm.submit();
   setTimeout(function () {

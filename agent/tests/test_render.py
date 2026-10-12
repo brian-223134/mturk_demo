@@ -165,12 +165,20 @@ class WidgetTest(unittest.TestCase):
     def test_widget_markup(self):
         for marker in ('type="checkbox"', 'data-none="1"', "data-group", "chk-opt", "chk-none", "multi-body", "q-card",
                        '<textarea class="ft"', "ft-count", "req-note", "likertRow", "TASK_ANSWER_SCHEMA",
-                       "required: !!q.required && !q.required_when", "input[name^=\"general_\"], textarea[name^=\"general_\"]"):
+                       "required: !!q.required && !q.required_when",
+                       "input[name^=\"general_\"], textarea[name^=\"general_\"], input[name^=\"none_\"]"):
             self.assertIn(marker, self.html, marker)
         for absent in ("attention_", "llm_label", "attention_expected"):
             self.assertNotIn(absent, self.html)
         self.assertLessEqual(len(self.html.encode("utf-8")), 40 * 1024)
         self.assertEqual(self.html.count("</script"), 2)
+
+    def test_every_input_has_a_name(self):
+        # crowd-html-elements 는 이름 없는 입력을 미리보기에 Potential errors 상자로 띄운다. "해당 없음" 칸도 이름이 있어야 한다
+        inputs = re.findall(r"<input [^>]*>", self.html)
+        self.assertTrue(any('data-none="1"' in tag for tag in inputs))
+        self.assertEqual([tag for tag in inputs if "name=" not in tag], [])
+        self.assertIn("function noneNameOf(i, q) { return 'none_' + i + '_' + q.id; }", self.html)
 
     def test_likert_layout(self):
         def mutate(d):
