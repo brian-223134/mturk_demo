@@ -12,7 +12,7 @@ docker compose up --build frontend backend      # http://localhost:3000
 
 `src/`는 컨테이너에 bind mount되므로 파일을 고친 뒤 새로고침만 하면 반영됩니다. 이미지를 다시 빌드할 필요는 없습니다. html, js, css 모두 `Cache-Control: no-cache`로 내려가므로 파일 이름에 해시를 붙이지 않아도 옛 파일이 남지 않습니다.
 
-backend 없이 화면만 보려면 프로토타입의 mock API 서버(`api`, 포트 8787)에 붙일 수 있습니다. 경로 표가 같으므로 콘솔 화면은 그대로 동작하고, agent job API만 없어 Create 화면에 안내가 표시됩니다.
+backend 없이 화면만 보려면 프로토타입의 mock API 서버(`api`, 포트 8787)에 붙일 수 있습니다. 경로 표가 같으므로 콘솔 화면은 그대로 동작하고, agent job API가 없어 Generate 패널에 안내가 표시됩니다. 프로토타입의 API는 Project의 속성(`properties`)과 표본 행(`sampleRow`)을 저장하지 않으므로, 저장한 Project를 다시 열면 기본값이 보입니다.
 
 ```
 API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api
@@ -20,7 +20,9 @@ API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api
 
 `API_UPSTREAM`은 nginx가 `/api/`를 넘길 주소입니다. 기본값은 `http://backend:8000`입니다.
 
-`Load sample template`과 `Load sample CSV`는 저장소의 `example/`을 `/example/…`로 읽습니다. compose는 `./example`을 `/usr/share/nginx/example`에 mount하고 Dockerfile도 같은 자리에 복사하며, nginx가 `alias`로 `/example/`에 잇습니다. `frontend/src`는 읽기 전용 mount라 그 안에는 mount할 수 없습니다.
+템플릿이 불러오는 `<ann-*>` 요소(`/elements/ann-elements.js`)와 New Project의 starter 템플릿(`/elements/starters/*.html`)은 `src/elements/`에 있고, 다른 정적 파일과 함께 서빙됩니다. 미리보기 iframe의 문서(`srcdoc`)도 콘솔과 같은 주소에서 이 파일을 읽으므로 외부 CDN이 필요 없습니다.
+
+저장소의 `example/`은 `/example/…`로 내려받을 수 있습니다. compose는 `./example`을 `/usr/share/nginx/example`에 mount하고 Dockerfile도 같은 자리에 복사하며, nginx가 `alias`로 `/example/`에 잇습니다. `frontend/src`는 읽기 전용 mount라 그 안에는 mount할 수 없습니다.
 
 ## 폴더 구성
 
@@ -35,14 +37,21 @@ frontend/
 │  ├─ client.test.js      fetch 를 가짜로 바꾼 API 클라이언트 검사
 │  ├─ format.test.js      표시 도우미
 │  ├─ dom.test.js         escapeHtml, join, el
-│  └─ router.test.js      경로 패턴 매칭
+│  ├─ router.test.js      경로 패턴 매칭
+│  ├─ elements.test.js    <ann-*> 요소의 core (답 이름, 문항 목록, 제출할 답, 막는 문구)
+│  ├─ layout-lint.test.js  Design Layout 의 검사
+│  └─ starters.test.js    starter 템플릿과 example/5-project
 └─ src/
    ├─ index.html           루트 요소 하나와 <script type="module" src="/main.js">
    ├─ main.js              레이아웃을 그리고 라우터에 페이지를 등록합니다
-   ├─ router.js            history API 라우터. /create, /manage, /manage/:batchId(/:tab), /workers, /workers/pools, /workers/:workerId. / 는 /create 로 보냅니다
+   ├─ router.js            history API 라우터. 경로는 main.js 에서 등록합니다 (/create, /create/new, /create/project/:projectId(/:tab),
+   │                       /create/publish/:projectId, /manage, /manage/:batchId(/:tab), /workers, /workers/pools, /workers/:workerId). / 는 /create 로 보냅니다
    ├─ router-match.js      경로 패턴 → 정규식(compilePattern), 경로에 맞는 route 찾기(matchRoute). DOM 을 쓰지 않아 Node 에서 테스트합니다
    ├─ styles.css           밝은 테마. 배지 색은 mock 회색, sandbox 파랑, production 빨강
-   ├─ styles-create.css     Create 마법사의 스타일 (단계 표시줄, 검사 줄, 폼, 미리보기)
+   ├─ styles-create.css     Create 의 스타일 (Project 목록, 갤러리, 편집기와 미리보기, 단계 표시줄, 검사 줄, 폼)
+   ├─ elements/            템플릿이 불러오는 파일 (frontend 가 그대로 서빙합니다)
+   │  ├─ ann-elements.js   <ann-form>, <ann-choice> 등 annotation 요소. 문항 그리기, 필수 검사, input_answers 제출, TASK_ANSWER_SCHEMA
+   │  └─ starters/         New Project 의 starter 템플릿 9종 (<ann-*> 로 쓴 HTML)
    ├─ styles-review.css     Manage 의 Review·HITs·Results 와 Worker Pool 의 스타일
    ├─ api-client/          (api/ 가 아닌 이유: /api/ 는 nginx 가 backend 로 넘기는 경로라 정적 파일과 겹칩니다)
    │  ├─ routes.js         REST 경로 표(API_ROUTES)와 agent job 경로(AGENT_ROUTES), 요청 인코딩(encodeRequest)
@@ -53,9 +62,13 @@ frontend/
    │  ├─ data-check.js      placeholder 와 컬럼 대조, 빈 셀, 행 크기, Data 단계의 ERROR / OK / WARN / INFO 문구
    │  ├─ cost.js            보상, 수수료(20%, MaxAssignments 10 이상은 40%), 견적
    │  ├─ reference.js       대조 기준 컬럼의 셀 읽기 (JSON, Python repr, 평문)
-   │  ├─ settings.js        Settings 기본값, 검증, MTurk 구조로 변환, attention 규칙 두 모양, agent settings.json 반영, 게시 요청 조립
+   │  ├─ settings.js        폼 기본값, Project 속성과 검수 설정의 구분, 검증, MTurk 구조로 변환, attention 규칙 두 모양, agent settings.json 반영, 게시 요청 조립
    │  ├─ answer-fields.js   Preview 의 문항 목록을 attention 규칙, 자유 서술 접미어와 맞춰 보는 경고
-   │  └─ draft.js           임시 저장 (IndexedDB). 저장소를 못 써도 마법사는 동작합니다
+   │  ├─ draft.js           Publish Batch 의 임시 저장 (IndexedDB). 저장소를 못 써도 화면은 동작합니다
+   │  ├─ project-draft.js   Project 편집기의 임시 저장, 저장본과의 비교, 저장 요청
+   │  ├─ starters.js        starter 템플릿 목록 (설명, 표본 행, 미리 채울 속성)
+   │  ├─ layout-lint.js     Design Layout 의 검사 (<ann-*> 를 잘못 쓴 곳)
+   │  └─ element-reference.js  Insert element 메뉴와 Element reference 패널의 요소 설명
    ├─ components/
    │  ├─ dom.js            el() 도우미와 escapeHtml. 데이터는 항상 textContent 로 넣습니다
    │  ├─ layout.js         제목 줄(환경 배지, 잔액), 세 탭, 오류 띠
@@ -75,8 +88,16 @@ frontend/
    │  ├─ render.js         null 과 배열을 받는 replace(node, …children)
    │  └─ preview-frame.js   sandbox iframe 미리보기. Submit 을 가로채 답을 보여 줍니다
    └─ pages/
-      ├─ create.js         5단계 마법사의 뼈대: draft, 자동 저장, 단계 이동 조건, Start over
-      ├─ create/           template-step, data-step, settings-step, preview-step, publish-step, generate(agent job 패널), common
+      ├─ create.js         Create 의 경로별 진입점
+      ├─ create/
+      │  ├─ projects.js      Project 목록 (Publish Batch, Edit, Copy, Delete)
+      │  ├─ new-project.js   New Project 갤러리 (starter, HTML 올리기, Generate from raw data 와 Use this result)
+      │  ├─ project-editor.js  Project 편집기의 틀: 세 탭, 임시 저장, Save, Discard changes, Preview and Finish
+      │  ├─ properties-form.js  Enter Properties 의 폼
+      │  ├─ layout-tab.js    Design Layout: 편집기, Insert element, 검사, 표본 값, 미리보기, 답 칸
+      │  ├─ publish-batch.js  Publish Batch 의 틀: draft, 자동 저장, 단계 이동 조건, Start over
+      │  ├─ data-step.js, preview-step.js, quality-step.js, publish-step.js  Upload CSV, Preview tasks, Review settings, Confirm and publish
+      │  └─ generate.js, generate-form.js, job-results.js, common.js  agent job 패널과 공용 조각
       ├─ manage.js         batch 목록
       ├─ batch.js          batch 상세의 틀. 제목 줄과 네 탭, 동작 뒤 상태 다시 맞추기(refreshDetail)
       ├─ manage/
@@ -113,7 +134,7 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 ## 화면
 
-- **Create**: 템플릿과 CSV로 batch를 게시하는 5단계 마법사입니다 (`Template` → `Data` → `Settings` → `Preview & Cost` → `Publish`). 각 단계의 선택지와 기본값, 다음 단계로 가는 조건은 [Create로 batch 게시하기](../docs/creating-a-batch.md)와 같습니다. `Template`에서는 저장된 템플릿을 고르거나(`Use a saved template`), HTML을 올리거나 붙여 넣어 저장하거나(`Upload or paste HTML`), 원본 데이터와 prompt로 agent job을 돌려 만듭니다(`Generate from raw data`). job이 성공하면 카드의 `Use this result`가 template.html을 job 이름으로 저장하고, hits.csv를 올린 것처럼 읽고, settings.json의 제목·설명·키워드·attention 규칙·자유 서술 접미어·대조 기준 컬럼을 Settings에 채운 뒤 `Data` 단계로 갑니다. `Data`는 CSV를 브라우저에서 읽어 placeholder를 검사하고 처음 5행을 보여 줍니다. `Settings`는 HIT 설정, Qualification 세 가지, pool 포함·제외, attention 규칙, 자유 서술 답, Review의 대조 기준을 받고 아래에 비용을 미리 보여 줍니다. attention 규칙은 두 방식 중 하나를 고릅니다. `Answer-name prefix + one expected value`는 이름이 접두어로 시작하는 답이 모두 같은 값이어야 하는 옛 템플릿용이고, `Expected answers column`은 행마다 `{답 이름: 기대 값}`이 든 CSV 컬럼(agent의 `attention_expected`)을 고르는 방식입니다. 이 방식에서는 attention 탭이 화면에서 다른 탭과 구별되지 않습니다. `Free-text answers`에는 자유 서술 답의 이름 접미어를 쉼표로 구분해 적으며, 그 답은 Review에서 글로 보이고 κ, majority, 일치율, 대조 기준에서 빠집니다. `Preview & Cost`는 고른 행으로 템플릿을 격리된 iframe에 그려 Submit을 가로채고, 템플릿이 `window.TASK_ANSWER_SCHEMA`를 두었으면 그것을, 아니면 화면의 라디오·체크박스·select를 문항 목록으로 보여 줍니다. 이 목록은 batch의 `answerSchema`로 저장되며, 기대 답 컬럼의 키와 값이 문항과 선택지에 있는지, 자유 서술 접미어가 text 문항과 맞는지 경고하는 데 씁니다. `Publish`는 요약을 확인한 뒤 `Publish N HITs`로 게시하고 새 batch의 Overview로 이동합니다. 입력은 CSV까지 브라우저(IndexedDB)에 임시 저장되어 새로고침해도 이어지고, `Start over`로 비웁니다.
+- **Create**: MTurk의 Requester 화면처럼 Project를 만들고 그 Project에 CSV를 올려 batch를 게시합니다. 위쪽의 `New Batch with an Existing Project`는 Project 목록(`Publish Batch`, `Edit`, `Copy`, `Delete`)이고, `New Project`는 starter 템플릿 9종, `Upload or paste HTML`, `Generate from raw data` 중에서 시작할 것을 고르는 화면입니다. Project 편집기는 `Enter Properties`(제목, 보상, 인원, 기간, worker 조건), `Design Layout`(HTML 편집기, `Insert element…`, 검사, 변수별 표본 값, 실시간 미리보기와 답 칸 목록), `Preview and Finish`(요약, `Download CSV template`, `Finish`) 세 탭이며, 저장하지 않은 편집은 Project마다 브라우저에 임시 저장됩니다. batch는 `Upload CSV` → `Preview tasks` → `Review settings`(attention 규칙, 자유 서술 답, 대조 기준) → `Confirm and publish`로 게시하고, 보상과 인원 같은 속성은 Project의 값을 그대로 씁니다. agent job의 `Use this result`는 template.html과 settings.json을 job 이름의 Project로 저장하고 hits.csv를 올린 상태로 Publish Batch를 엽니다. 화면별 선택지와 조건은 [Project로 batch 게시하기](../docs/create-projects.md)에, 템플릿 요소는 [`<ann-*>` 요소로 템플릿 쓰기](../docs/annotation-elements.md)에 정리되어 있습니다. 서버에서는 템플릿 레코드 하나가 Project 하나이며, 레코드의 선택 필드 `properties`와 `sampleRow`에 속성과 표본 값을 둡니다.
 - **Manage**: batch 목록과 batch 상세입니다. 상세의 `Overview`는 진행률, 응답 현황, 비용, 설정을 보여 주고, `Top up incomplete HITs`(부족한 HIT 수와 예상 비용을 확인한 뒤 재모집), `Expire now`(진행 중일 때만), `Export`(MTurk 결과 CSV, 라벨 JSON)를 제공합니다. `Review`는 응답 표에서 상태, attention 판정, WorkerId, 작업 시간으로 거르고 머리글로 정렬하며, 체크박스로 여러 건을 골라 `Approve selected`, `Reject selected…`(사유 필수, 프리셋 세 개, attention을 통과한 응답이 섞이면 경고), 반려된 건만 골랐을 때는 `Revert to approved…`를 실행합니다. `Select attention-failed`와 `Invert selection`(현재 페이지만 반전)도 있습니다. `Answers` 열은 worker의 답(W)과 대조 기준(R)을 약어 토큰으로 두 줄에 보여 주고(attention 답은 보라 테두리, 자유 서술 답은 짧게 자른 글이며 전문은 마우스를 올리면 보입니다. 어느 답이 attention인지는 서버가 준 `attentionNames`로 판단합니다), 행을 누르면 응답 상세가 열려 문항마다 이 worker의 답, 대조 기준, 같은 HIT의 다른 worker 답을 견주며 `Open task`로 worker가 본 화면을 sandbox iframe에 띄웁니다. 반려를 확정하면 부족해진 HIT를 재모집할지 곧바로 묻습니다. worker 상세에서 `?worker=<id>`로 넘어오면 그 worker의 응답만 보입니다. `HITs`는 HIT별 승인, 반려, 검수 대기, 남은 자리와 완료 여부를 보여 주고 `Incomplete only`로 거르며, 선택한 HIT에 `Add assignments…`(목표까지 채우기 또는 고정 수, 최대 8)로 응답을 더 모집합니다. 처음에 10개 미만으로 만든 HIT는 합계 9를 넘을 수 없으므로 넘는 요청은 이유와 함께 건너뜁니다. `Input`은 HIT의 전체 입력을, `Open task`는 task 화면을 엽니다. `Results`는 Fleiss' κ, 만장일치 비율, 투표가 있는 문항 수, 라벨 분포와 문항별 투표·majority 표(전체, 만장일치 아님, 동률, 표 부족 필터)를 보여 주고 `Export`로 내보냅니다.
 - **Worker Pool**: 오른쪽 위의 `Workers` / `Pools`로 화면을 오갑니다. worker 목록은 모든 batch를 합산한 지표를 머리글로 정렬하고, WorkerId 검색, pool 필터, `Blocked only`로 거르며, 여러 명을 골라 `Add to pool`, `Remove from pool`, `Block…`(기본 선택지는 "Add to Excluded pool instead", 차단하려면 사유 필수), `Unblock`을 실행합니다. worker 상세(`/workers/<WorkerId>`)는 지표 요약, batch별 이력(누르면 그 worker로 걸러진 Review), 메모(`Save`), assignment 이력을 보여 줍니다. `Pools`(`/workers/pools`)는 pool을 만들고(`New pool`), 인원을 보거나 빼고, `Fill by criteria…`로 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율, 최대 반려율)에 맞는 worker 수를 먼저 보여 준 뒤 확인하면 추가합니다. 조건 판정은 listWorkers로 받은 목록에 대해 화면에서 합니다.
 
@@ -127,13 +148,13 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 Create의 Generate 패널은 prompt 본문, 후보 이름, 모델 선택과 이전 raw 참조를 브라우저에 보존합니다. Prompt 파일을 가져오면 본문을 편집창에 채웁니다. 아직 제출하지 않은 로컬 파일은 새로고침 뒤 다시 선택해야 하며, 제출한 raw는 서버에 남아 재사용할 수 있습니다. `Reuse inputs`는 이전 job의 raw와 prompt를 복원합니다. API 호출 허용과 이전 spec 재사용은 자동으로 켜지지 않습니다. Spec을 올리거나 재사용하면 prompt 변경이 결과에 반영되지 않는다는 안내가 표시됩니다.
 
-성공한 job의 `Preview & evaluate`는 템플릿을 저장하거나 마법사 입력을 바꾸지 않고 결과를 엽니다. Prompt, spec, 행별 annotation 화면을 보고 데이터·라벨, 안내문, attention에 대한 평가와 메모를 서버에 저장합니다. 이 평가는 구조 검증과 별개입니다.
+성공한 job의 `Preview & evaluate`는 Project를 만들거나 Publish Batch의 입력을 바꾸지 않고 결과를 엽니다. Prompt, spec, 행별 annotation 화면을 보고 데이터·라벨, 안내문, attention에 대한 평가와 메모를 서버에 저장합니다. 이 평가는 구조 검증과 별개입니다.
 
 성공한 job 2~3개를 선택하고 `Compare selected`를 누르면 처리량, 누락, 샘플링·attention 조건과 비용을 비교합니다. 공통 일반 항목이 있으면 record/item ID로 같은 그룹의 미리보기를 맞추며, raw·모델·처리 조건이 다르면 알립니다. `Export comparison JSON`은 prompt, spec, 요약, 저장한 평가를 함께 내려받습니다. 내보내기 전에 편집한 평가를 저장해야 합니다.
 
-backend가 경로 표의 27개 경로를 모두 구현하므로, 프로토타입에서 되던 콘솔 기능은 이 화면에서도 모두 됩니다. Create의 세 가지 템플릿 방식과 게시, Manage의 검수·재모집·만료·export·결과, Worker Pool의 pool 편집·차단·worker 상세입니다. `API_UPSTREAM`을 프로토타입의 mock API로 바꾸면 Generate 패널만 잠기고 나머지는 같습니다.
+backend가 경로 표의 27개 경로를 모두 구현하므로, 프로토타입에서 되던 콘솔 기능은 이 화면에서도 모두 됩니다. Create의 Project 만들기와 게시, Manage의 검수·재모집·만료·export·결과, Worker Pool의 pool 편집·차단·worker 상세입니다. `API_UPSTREAM`을 프로토타입의 mock API로 바꾸면 Generate 패널만 잠기고 나머지는 같습니다.
 
-아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, Review와 Results는 시작 데이터의 batch 세 개로 확인합니다. 프로토타입의 Mock tools(가짜 응답 생성, Reset to fixtures)는 mock 전용이라 backend에 없습니다. 템플릿이 `assets.crowd.aws`의 스크립트를 불러오는 점도 그대로입니다.
+아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, Review와 Results는 시작 데이터의 batch 세 개로 확인합니다. 프로토타입의 Mock tools(가짜 응답 생성, Reset to fixtures)는 mock 전용이라 backend에 없습니다. 시작 데이터의 템플릿과 agent가 만드는 템플릿이 `assets.crowd.aws`의 스크립트를 불러오는 점도 그대로입니다. starter와 `<ann-*>` 요소로 쓴 템플릿은 이 스크립트에 의존하지 않습니다.
 
 ## 테스트
 
@@ -153,12 +174,16 @@ docker compose run --rm frontend-test
 - `manage-answerTokens.test.js`: `abbreviate`(첫 글자 약어, 겹치면 글자 늘리기, 값 전체, 표기 차이 묶기, 빈 값), `legendEntries`, `tokenWidthOf`, `normalizeLabel`을 확인합니다.
 - `manage-topup.test.js`: `planTopUp`의 9/10 규칙과 건너뜀 사유, `roomOf`/`maxAddable`, 수수료율과 `unitCostCents`, `planBatchTopUp`, `describeTopUp` 문구를 확인합니다.
 - `workers-criteria.test.js`: `matchesCriteria`(null 값은 불일치, % 비교), `eligibleWorkers`(pool 소속 제외, 차단 따로 집계, 승인 순), `createSelection`을 확인합니다.
-- `lib-csv.test.js`: 파서의 따옴표, 겹따옴표, 줄바꿈, CRLF, BOM, 빈 줄, 모자라거나 넘치는 셀, 빈 헤더, 중복 헤더, 따옴표 문제, 그리고 example/의 CSV(BOM 파일은 정상, CP949 파일은 "not valid UTF-8"로 거절)를 확인합니다.
+- `lib-csv.test.js`: 파서의 따옴표, 겹따옴표, 줄바꿈, CRLF, BOM, 빈 줄, 모자라거나 넘치는 셀, 빈 헤더, 중복 헤더, 따옴표 문제, 그리고 example/의 CSV(BOM 파일은 정상, CP949 파일은 "not valid UTF-8"로 거절)를 확인합니다. `Download CSV template`이 쓰는 `formatCsv`가 파서로 다시 읽어 같은 행이 되는지도 봅니다.
 - `lib-template.test.js`: placeholder 추출 규칙, `${}` 치환(escape 없음, `$&` 안전), TASK_DATA 주입 위치, 미리보기 스크립트 포함 여부, `window.TASK_ANSWER_SCHEMA`를 문항 목록으로 옮기는 `declaredAnswerSchema`와 그 함수가 미리보기 스크립트에 그대로 들어가는 것을 확인합니다.
 - `lib-answer-fields.test.js`: Preview의 문항 목록 검사(기대 답 컬럼의 키와 값, 접두어 방식의 경고, text 문항과 자유 서술 접미어)를 확인합니다.
 - `manage-shared.test.js`: Review가 attention 답과 자유 서술 답을 가리는 `answerKindsOf`(서버의 목록 우선, 없으면 접두어와 접미어)와 자유 서술 답을 줄이는 `freeTextPreview`를 확인합니다.
 - `lib-data-check.test.js`: README의 시나리오 1~4를 example/과 data/templates의 파일로 그대로 재현합니다 (`12/12 matched`, `WARN max 70.2 KB`, `row 3, 5`, 행 크기 중앙값·최대값 문구).
-- `lib-cost.test.js`, `lib-settings.test.js`: 견적과 수수료, 기본값의 MTurk 변환, Qualification, attention 규칙 두 모양, 자유 서술 접미어, 대조 기준 문구, 폼 검증 문구, agent settings.json 반영(옛 모양과 기대 답 컬럼 모양), 게시 요청 조립을 확인합니다.
-- `lib-draft.test.js`: 저장 형식과 복원, 가짜 store로 CSV가 바뀔 때만 쓰는지, 저장소가 깨져도 오류를 던지지 않는지 확인합니다.
+- `lib-cost.test.js`, `lib-settings.test.js`: 견적과 수수료, 기본값의 MTurk 변환, Qualification, attention 규칙 두 모양, 자유 서술 접미어, 대조 기준 문구, 폼 검증 문구, agent settings.json 반영(옛 모양과 기대 답 컬럼 모양), 게시 요청 조립, Project 속성과 검수 설정의 구분(`settingsFromProperties`, `validateProperties`, `validateQuality`)을 확인합니다.
+- `lib-draft.test.js`: Publish Batch의 네 단계, 저장 형식과 복원(Project 구조 이전의 저장본은 버림), 가짜 store로 CSV가 바뀔 때만 쓰는지, 저장소가 깨지거나 응답하지 않아도 오류를 던지지 않고 같은 탭에서는 메모리의 draft를 돌려주는지 확인합니다.
+- `lib-project-draft.test.js`: 저장된 Project와 starter에서 편집 값을 만드는 규칙, 표본 행을 layout이 읽는 컬럼으로 줄이는 것, 저장본과의 비교, 저장 요청, Project별 임시 저장을 확인합니다.
+- `elements.test.js`: `<ann-*>` 요소의 DOM 없는 부분(`core`)입니다. checklist 항목 읽기(JSON 배열, 줄 단위), 답 이름, `TASK_ANSWER_SCHEMA`의 모양, 제출할 `[{name, value}]`와 필수 문항·최소 글자 수로 막는 문구, 진행률을 확인합니다. 요소 자체의 동작은 브라우저에서 확인합니다.
+- `layout-lint.test.js`: Design Layout의 검사입니다. 태그와 속성 읽기, script 누락, 이름 없음·겹침, 선택지 없음, `<ann-form>` 밖의 문항, 모르는 요소, crowd 템플릿 안내를 확인합니다.
+- `starters.test.js`: starter 목록과 파일이 맞는지, 모든 starter가 검사에 오류·경고 없이 통과하는지, 표본 행이 placeholder를 모두 채우는지, 미리 채우는 속성이 폼의 키인지, 그리고 `example/5-project/passage-relevance.csv`가 `Passage relevance` starter와 맞는지(attention 행의 기대 답, gold 컬럼) 확인합니다.
 
 compose의 `frontend-test`는 이 테스트를 위해 `example/`과 `data/templates/`도 읽기 전용으로 mount합니다.

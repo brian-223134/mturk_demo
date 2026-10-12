@@ -1,6 +1,7 @@
 # Create로 batch 게시하기
 
 Create의 5단계에서 고를 수 있는 것과 기본값, 다음 단계로 넘어가는 조건을 정리했습니다.
+이 문서는 프로토타입 콘솔(http://localhost:8080) 기준입니다. production 콘솔(http://localhost:3000)의 Create는 Project 구조로 바뀌었으며 [Project로 batch 게시하기](create-projects.md)에 정리되어 있습니다.
 단계별 요약과 예시 파일로 따라 하는 방법은 [README의 Create: batch 게시](../README.md#create-batch-게시)와 [예시 파일로 mock 테스팅 해보기](../README.md#예시-파일로-mock-테스팅-해보기)에 있습니다.
 
 ## 다섯 단계에 공통인 것

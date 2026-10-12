@@ -14,9 +14,10 @@
 | | `large-rows.csv` | 경고 예시: 입력이 64KB를 넘는 행 |
 | `4-saved-templates/` | `chunk-fact-relevance-input.csv` (10행) | 콘솔에 미리 저장된 `Chunk-Fact Relevance` 템플릿에 넣을 입력 |
 | | `query-fact-coverage-input.csv` (8행) | 콘솔에 미리 저장된 `Query-Fact Coverage` 템플릿에 넣을 입력 |
+| `5-project/` | `passage-relevance.csv` (8행) | production 콘솔에서 `Passage relevance` starter로 만든 Project에 올릴 입력입니다. attention 행 2개와 기대 답 컬럼 `attention_expected`, 정답 컬럼 `gold`가 있습니다. 사용법은 [Project로 batch 게시하기](../docs/create-projects.md#따라-하기-starter로-attention-check가-있는-batch-게시하기)에 있습니다. |
 
 `3-data-checks/`의 CSV는 `1-task-data/template.html`과 함께 사용합니다.
 
-`1-task-data/`와 `2-placeholder/`의 파일은 직접 작성한 것이고, 나머지는 `python3 scripts/build_examples.py`로 만듭니다.
+`1-task-data/`, `2-placeholder/`, `5-project/`의 파일은 직접 작성한 것이고, 나머지는 `python3 scripts/build_examples.py`로 만듭니다.
 `3-data-checks/`는 `1-task-data/data.csv`를 바탕으로, `4-saved-templates/`는 `data/` 폴더의 HIT 입력을 바탕으로 생성합니다.
 본문은 모두 새로 지어낸 글이거나 익명화한 합성 텍스트입니다.

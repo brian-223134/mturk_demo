@@ -75,6 +75,8 @@ Docker 없이 띄우려면 가상환경에 `pip install -r backend/requirements.
 
 요청 본문은 pydantic 모델이 아니라 JSON 그대로 읽어 프로토타입의 `handlers.ts`와 같은 순서, 같은 문구로 검사합니다. 그래서 화면이 어느 서버에 붙어 있든 같은 오류 문구를 봅니다 (예: `Feedback is required when rejecting. Workers see it as the reason.`). 변경은 SQLite 트랜잭션 하나로 처리하므로, 여러 건 중 하나라도 처리할 수 없으면(없는 assignment, 잔액 부족) 아무것도 바뀌지 않습니다.
 
+화면은 템플릿 레코드 하나를 MTurk의 Project 하나로 보입니다 ([Project로 batch 게시하기](../docs/create-projects.md)). 그래서 `saveTemplate`은 프로토타입에 없는 선택 필드 두 개를 더 받습니다. `properties`는 Project의 속성(화면의 폼 값 그대로이며 객체인지만 검사합니다. batch를 게시할 때 `createBatch`가 값을 다시 검사합니다), `sampleRow`는 Design Layout 미리보기의 표본 값(`{컬럼: 문자열}`)입니다. 둘 다 JSON으로 64KB를 넘을 수 없고, 기존 템플릿을 고칠 때 키가 없으면 저장된 값을 두며 `null`이면 지웁니다. 경로 표는 그대로입니다.
+
 `GET /api/health`는 `{"status": "ok", "source": "seed" | "snapshot", "counts": {"templates", "batches", "hits", "assignments", "pools", "workers"}}`를 돌려줍니다. `source`는 이번 프로세스의 데이터가 방금 `data/`에서 올라온 것(`seed`)인지 DB에 있던 것(`snapshot`)인지입니다.
 
 batch 목록과 상세의 상태(`in_progress`, `completed`, `expired`), `needsReview`, 진행률, 비용은 프로토타입과 같은 규칙으로 계산합니다. 계산 규칙은 `app/domain/`에 옮겨 두었고, 각 모듈의 docstring에 프로토타입 테스트의 기대값을 적어 두었습니다.
@@ -283,7 +285,7 @@ docker compose run --rm backend-test pytest -q tests/test_console_api.py -k batc
 - `test_list_query.py`: ListQuery 의 필터(같음, 배열, 빈 값, custom), 정렬(숫자, boolean, 문자열, 없는 값은 맨 뒤, 안정), 페이지, 잘못된 값의 400 문구, query string 읽기를 확인합니다.
 - `test_seed_db.py`: `data/`로 seed 한 규모(templates 2, batches 3, hits 72, assignments 231, pools 2, workers 60), 처음 켤 때 `seed`이고 같은 DB 파일을 다시 열면 `snapshot`인 것, 깨진 seed 폴더(임시 사본에서 파일을 지운 것)에서 `SeedError`가 나는 것을 확인합니다.
 - `test_console_api.py`: health, 템플릿 목록과 상세, batch 목록과 상세의 상태·`needsReview`·진행률·비용, 계정, 없는 자원과 없는 경로의 404, 잘못된 입력의 400 봉투, 그리고 경로 표의 모든 경로가 구현되어 501 을 내는 경로가 없는 것을 확인합니다.
-- `test_create_api.py`: 템플릿 저장(새 id, `-2` 접미어, 덮어쓰기, placeholders)과 삭제(204, 게시된 batch 의 사본은 그대로), 게시(행마다 HIT, 열린 자리, 잔액 $496.40, 100KB 셀), attention 규칙 두 모양과 `freeTextSuffixes`의 저장, 게시 검증의 모든 문구, pool 목록을 확인합니다.
+- `test_create_api.py`: 템플릿 저장(새 id, `-2` 접미어, 덮어쓰기, placeholders, Project 필드 `properties`·`sampleRow`의 저장·유지·삭제와 검사 문구)과 삭제(204, 게시된 batch 의 사본은 그대로), 게시(행마다 HIT, 열린 자리, 잔액 $496.40, 100KB 셀), attention 규칙 두 모양과 `freeTextSuffixes`의 저장, 게시 검증의 모든 문구, pool 목록을 확인합니다.
 - `test_answer_kinds.py`: 기대 답 컬럼 방식의 판정과 셀 읽기, 답 분류(접두어·컬럼·자유 서술, attention 우선)를 확인하고, 새 출력 모양의 batch 두 개로 만든 임시 seed 폴더로 seed 판정, `listAssignments`의 `attentionNames`·`freeTextNames`·대조 기준·일치율, 결과와 κ·`labels-json`에서 빠지는 것, `mturk-csv`에 남는 것, worker 의 majority 일치율을 확인합니다.
 - `test_manage_api.py`: HIT 목록의 항목과 조회 조건, assignment 목록의 Row·Agree 열과 필터·기본 순서, column 과 majority 대조 기준, 승인·반려·번복의 상태 변화와 잔액($500.06 → $500.00), 전부 아니면 아무것도 바꾸지 않는 것, 재모집(fill-to-target, 만료 연장, 9개 상한, 잔액 부족), 만료, 결과와 κ, 두 export 형식을 확인합니다.
 - `test_workers_api.py`: worker 목록의 지표와 순서, 정렬(값이 없는 항목은 맨 뒤)과 조건 필터, worker 상세, pool 만들기·추가·제거, 차단(사유 필수)·메모·해제, 응답이 없는 worker 가 목록에 나오는 것을 확인합니다.

@@ -70,7 +70,8 @@ npm test && npm run typecheck
 production 뼈대에서 되는 것은 다음과 같습니다.
 
 - backend는 프로토타입 REST 경로 표의 경로를 모두 구현했고, 같은 시작 데이터에 대해 프로토타입 mock API와 같은 응답을 돌려줍니다.
-- 화면은 프로토타입의 세 탭을 모두 옮겼습니다. Create는 Template → Data → Settings → Preview & Cost → Publish 5단계 마법사이고, Template 단계에서 저장된 템플릿 선택, HTML 업로드·붙여넣기, **Generate from raw data** 세 방식 중 고릅니다. Generate는 원본 데이터(JSON, JSONL, CSV)와 prompt, 필요하면 task spec을 올리면 backend가 agent 파이프라인을 돌려 템플릿과 HIT CSV, 설정을 만들고, `Use this result`로 마법사에 채웁니다. spec 없이 LLM으로 spec을 만들려면 화면의 OpenRouter 스위치와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다.
+- 화면은 프로토타입의 세 탭을 모두 옮겼습니다. Create는 MTurk의 Requester 화면처럼 **Project**를 만들고 그 Project에 CSV를 올려 batch를 게시하는 구조입니다. Project는 `Enter Properties`(제목, 보상, 인원, 기간, worker 조건), `Design Layout`(템플릿 HTML 편집기와 실시간 미리보기), `Preview and Finish` 세 탭으로 만들고, batch는 `Upload CSV` → `Preview tasks` → `Review settings` → `Confirm and publish`로 게시합니다. 자세한 내용은 [Project로 batch 게시하기](docs/create-projects.md)에 있습니다.
+- 새 Project는 starter 템플릿 9종 중에서 고르거나, HTML을 올리거나, **Generate from raw data**로 만듭니다. starter는 콘솔이 제공하는 `<ann-*>` 요소로 쓴 짧은 HTML이며, 요소가 문항 그리기, 필수 문항 검사, Review가 읽는 형식의 제출을 맡습니다 ([`<ann-*>` 요소로 템플릿 쓰기](docs/annotation-elements.md)). Generate는 원본 데이터(JSON, JSONL, CSV)와 prompt, 필요하면 task spec을 올리면 backend가 agent 파이프라인을 돌려 템플릿과 HIT CSV, 설정을 만들고, `Use this result`로 Project를 저장한 뒤 Publish Batch를 엽니다. spec 없이 LLM으로 spec을 만들려면 화면의 OpenRouter 스위치와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다.
 - 아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, 검수 화면은 시작 데이터의 batch로 확인합니다.
 
 실행 방법과 API는 [backend/README.md](backend/README.md)에, 화면 구성은 [frontend/README.md](frontend/README.md)에 정리되어 있습니다. 테스트는 각 폴더의 `tests/`에 있으며 `docker compose run --rm backend-test`와 `docker compose run --rm frontend-test`로 실행합니다.
@@ -276,7 +277,8 @@ docker compose run --rm agent run <원본> --prompt @<prompt 파일> --spec <spe
 
 ```
 frontend/           실제 서비스용 화면 (vanilla JavaScript). src/ 를 nginx 가 그대로 서빙합니다
-├─ src/             index.html, main.js, router.js, api-client/(경로 표와 HTTP 클라이언트), pages/, components/, styles.css
+├─ src/             index.html, main.js, router.js, api-client/(경로 표와 HTTP 클라이언트), pages/, components/, styles.css,
+│                   elements/(템플릿이 불러오는 <ann-*> 요소와 starter 템플릿)
 ├─ nginx.conf.template  정적 파일과 /api 프록시
 └─ Dockerfile
 backend/            FastAPI 백엔드. 콘솔 REST 와 /api/agent job API
@@ -301,7 +303,7 @@ prototype/          프로토타입 콘솔(React + antd)과 mock API 서버. npm
 agent/              원본 데이터와 prompt로 HIT 단위 CSV와 템플릿을 만드는 파이프라인 (Python)
 data/               시작 데이터 (JSON + 템플릿 HTML)
 example/            Create에 올려 볼 예시 템플릿과 CSV
-docs/               Create의 사용 방법, 화면에 나오는 값을 읽는 방법
+docs/               Create의 사용 방법(프로토타입, production), <ann-*> 요소, 화면에 나오는 값을 읽는 방법
 environment/        agent의 모델 설정(models/)과 OpenRouter 키를 두는 .env
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
 docker-compose.yml  web, api, dev, test, web-mock, agent, backend, frontend 서비스

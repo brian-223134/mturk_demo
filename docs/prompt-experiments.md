@@ -11,7 +11,7 @@
 3. 다음 후보는 `Load prompt`로 바꾸거나 이전 job의 `Reuse inputs`로 복원합니다. 제출한 raw는 재사용할 수 있습니다. API 허용 상태와 이전 spec 재사용은 복원할 때 자동으로 켜지지 않습니다.
 4. 성공한 job의 `Preview & evaluate`에서 CSV를 주입한 HTML과 prompt/spec을 확인하고 데이터·안내문·attention 평가와 메모를 저장합니다.
 5. 성공한 job 2~3개를 선택하여 `Compare selected`를 누릅니다. 공통 record/item 그룹이 있으면 같은 일반 항목을 나란히 보여 줍니다. Raw hash·모델·처리 조건이 다르거나 공통 항목이 없으면 안내합니다.
-6. 평가 저장 후 `Export comparison JSON`으로 prompt·spec·요약·비용·평가를 함께 보관합니다. 선택한 결과는 `Use this result`로 마법사에 적용합니다.
+6. 평가 저장 후 `Export comparison JSON`으로 prompt·spec·요약·비용·평가를 함께 보관합니다. 선택한 결과는 `Use this result`로 Project를 만들어 Publish Batch에 올립니다.
 
 Prompt·후보 이름·모델·이전 raw 참조는 localStorage에 보존합니다. 아직 제출하지 않은 로컬 파일은 새로고침 뒤 다시 선택해야 합니다. `Clear inputs`로 초안을 비웁니다. API 호출 허용은 저장하지 않습니다.
 

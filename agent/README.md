@@ -21,7 +21,7 @@
    validate   ───▶ validation.json
             │
             ▼
-   콘솔 Create 탭:  Template ◀ template.html   Data ◀ hits.csv   Settings ◀ settings.json의 값
+   콘솔 Create 탭:  Project ◀ template.html, settings.json   Publish Batch ◀ hits.csv
 ```
 
 ## 코드 구성
@@ -147,17 +147,22 @@ python3 -m agent test
 | `hits.csv` | HIT 단위 CSV입니다. 콘솔의 `Data` 단계에 올립니다. 컬럼은 `hit_id, record_ids, item_ids, attention`, spec의 필드들, 대조 기준 컬럼(기본 `llm_label`), 이유 컬럼(있을 때), attention 컬럼(기본 `attention_expected`, attention이 있을 때) 순서입니다. 모든 셀은 JSON입니다. 대조 기준 컬럼에는 일반 탭의 답만, attention 컬럼에는 attention 탭의 기대 답만 `{답 이름: 값}`으로 들어갑니다. |
 | `summary.json` | 레코드·항목·HIT 수, attention 항목 수, target과 답 칸 수, 대조 기준 값의 분포(문항별 분포는 `questions`), 행 크기 같은 요약입니다. 경로가 풀리지 않거나 형이 맞지 않아 건너뛴 레코드는 `skipped_records`에 개수와 예(최대 10개, 레코드 ID와 이유)로 적힙니다. |
 | `settings.json` | 콘솔 `Settings`에 넣을 값입니다. 제목, 설명, 키워드, attention 규칙(`{"column": "attention_expected", "minCorrectRatio": 1}`), 대조 기준 컬럼, 자유 서술 답의 이름 접미어(`freeTextSuffixes`), 문항 목록, 답 이름 규칙이 들어 있습니다. |
-| `template.html` | MTurk crowd-form 템플릿입니다. 콘솔의 `Template` 단계에 올립니다. `${hit_id}`와 spec의 필드만 placeholder로 쓰고, 탭을 다 그린 뒤 답 칸 목록을 `window.TASK_ANSWER_SCHEMA`에 둡니다. Submit을 누르면 hidden `input_answers`에 `[{name, value}]` 배열을 넣어 제출합니다. |
+| `template.html` | MTurk crowd-form 템플릿입니다. 콘솔에서 Project의 layout으로 올립니다. `${hit_id}`와 spec의 필드만 placeholder로 쓰고, 탭을 다 그린 뒤 답 칸 목록을 `window.TASK_ANSWER_SCHEMA`에 둡니다. Submit을 누르면 hidden `input_answers`에 `[{name, value}]` 배열을 넣어 제출합니다. |
 | `validation.json` | 검증 결과입니다. `ok`, `errors`(게시 불가), `warnings`(참고), `stats`가 있습니다. 건너뛴 레코드가 있으면 경고로 알립니다. |
 
 ## 콘솔에 올리기
 
-결과를 콘솔의 **Create** 탭에서 순서대로 올립니다.
+production 콘솔(http://localhost:3000)의 **Create**에서 `New Project` → `Generate from raw data`로 job을 돌렸다면, job 카드의 `Use this result`가 아래 과정을 한 번에 합니다. template.html과 settings.json을 job 이름의 Project로 저장하고, hits.csv를 올린 상태로 그 Project의 Publish Batch를 엽니다.
+명령줄로 만든 결과는 다음 순서로 올립니다 (화면의 자세한 설명은 [Project로 batch 게시하기](../docs/create-projects.md)).
 
-1. `Template` 단계에서 `Upload or paste HTML`을 고르고 `template.html`을 올린 뒤 저장합니다. 템플릿이 쓰는 `${컬럼}` 목록이 표시됩니다.
-2. `Data` 단계에서 `hits.csv`를 올립니다. 템플릿의 컬럼이 모두 있는지 콘솔이 검사합니다.
-3. `Settings` 단계에서 `settings.json`의 값을 옮겨 적습니다. 제목·설명·키워드를 넣고, `Attention check`를 켠 뒤 `Expected answers column` 방식을 골라 `settings.json`의 `attentionRule.column`에 적힌 컬럼(기본 `attention_expected`)을 고릅니다. 자유 서술 문항이 있으면 `Free-text answers`에 `freeTextSuffixes`의 접미어(예: `_missing_info`)를 쉼표로 구분해 적습니다. `Review reference`에서는 `reference.column`에 적힌 컬럼(기본 `llm_label`)을 고릅니다. 그러면 Manage의 `Answers` 열에 worker의 답과 LLM 라벨이 나란히 보입니다.
-4. `Preview & Cost`에서 한 HIT를 열어 보고 `Publish`로 게시합니다.
+1. `New Project`에서 `Upload or paste HTML`을 고르고 `Create Project`를 누릅니다. `Design Layout`의 `Upload .html`로 `template.html`을 올리면 템플릿이 쓰는 `${컬럼}` 목록이 `Variables`에 표시됩니다.
+2. `Enter Properties`에 `settings.json`의 제목·설명·키워드를 적고, `Preview and Finish`의 `Finish and publish a batch`로 저장합니다.
+3. `Upload CSV`에 `hits.csv`를 올립니다. 템플릿의 컬럼이 모두 있는지 콘솔이 검사합니다.
+4. `Preview tasks`에서 HIT를 열어 봅니다.
+5. `Review settings`에서 `Attention check`를 켠 뒤 `Expected answers column` 방식을 골라 `settings.json`의 `attentionRule.column`에 적힌 컬럼(기본 `attention_expected`)을 고릅니다. 자유 서술 문항이 있으면 `Free-text answers`에 `freeTextSuffixes`의 접미어(예: `_missing_info`)를 쉼표로 구분해 적습니다. `Compare answers with`에서는 `reference.column`에 적힌 컬럼(기본 `llm_label`)을 고릅니다. 그러면 Manage의 `Answers` 열에 worker의 답과 LLM 라벨이 나란히 보입니다.
+6. `Confirm and publish`에서 비용을 확인하고 게시합니다.
+
+프로토타입 콘솔(http://localhost:8080)의 5단계 마법사에서는 `Template`, `Data`, `Settings` 단계에 같은 파일과 값을 넣습니다.
 
 ## prompt 쓰기
 
