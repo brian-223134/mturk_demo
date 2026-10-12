@@ -1,6 +1,9 @@
 """Create 화면의 REST: 템플릿 저장과 삭제, batch 게시, pool 목록. prototype/src/api/mock/handlers.ts 의 saveTemplate,
 deleteTemplate, createBatch, listPools 와 같은 검증(같은 문구, 같은 순서)과 같은 결과다.
 
+화면은 템플릿을 MTurk 의 Project 로 보인다 (layout = html). Project 의 속성과 미리보기 표본 행은 템플릿 레코드의 선택 필드
+properties, sampleRow 에 둔다. 경로 표(routes.ts)는 그대로이고, prototype 의 mock API 는 이 두 필드를 저장하지 않는다.
+
 게시할 때 서버가 다시 검사하는 것 (docs/creating-a-batch.md): 템플릿이 요구하는 컬럼, Title, MaxAssignments, 기간, 자동 승인 30일
 상한, 최소 보상, pool 이 실제로 있는지, 대조 기준 컬럼이 CSV 에 있는지, attention 규칙의 모양(기대 답 컬럼이 CSV 에 있는지),
 자유 서술 접미어, 잔액. 검증이 끝나면 행마다 HIT 를 만들고(게시 시점의 templateHtml 사본, answerSchema, inputColumns,
@@ -25,13 +28,37 @@ from app.routers.common import (adjust_balance, after_seconds, batch_id, db_of, 
 
 MAX_AUTO_APPROVAL_SECONDS = 30 * 24 * 3600
 DURATION_FIELDS = ("AssignmentDurationInSeconds", "LifetimeInSeconds", "AutoApprovalDelayInSeconds")
+# Project 필드(properties, sampleRow)의 JSON 길이 상한. HIT 행의 64KB 경고와 같은 크기다.
+PROJECT_FIELD_LIMIT = 64 * 1024
+PROJECT_FIELDS = ("properties", "sampleRow")
 
 
 # ---- Templates ------------------------------------------------------------------------------
 
 
+def project_field(name: str, value: Any) -> dict | None:
+    """템플릿을 MTurk 의 Project 로 쓸 때 함께 저장하는 값. null 이면 지운다.
+
+    - properties: Create 화면의 Enter Properties 폼 값 (제목, 보상, 인원, 기간, 자격, pool, 검수 설정의 기본값). 화면의 모양
+      그대로 저장하고 여기서는 객체인지만 본다. batch 를 게시할 때 createBatch 가 그 값을 다시 검사한다.
+    - sampleRow: Design Layout 미리보기에 넣는 표본 행 {컬럼: 문자열}.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise invalid(f'"{name}" must be a JSON object.')
+    if name == "sampleRow" and any(not isinstance(v, str) for v in value.values()):
+        raise invalid('"sampleRow" values must be strings.')
+    if len(json.dumps(value, ensure_ascii=False)) > PROJECT_FIELD_LIMIT:
+        raise invalid(f'"{name}" is too large (at most {PROJECT_FIELD_LIMIT // 1024} KB).')
+    return value
+
+
 async def save_template(request: Request) -> dict:
-    """새 템플릿(id 없음)이나 기존 템플릿(id)을 저장한다. placeholders 와 updatedAt 은 여기서 계산한다."""
+    """새 템플릿(id 없음)이나 기존 템플릿(id)을 저장한다. placeholders 와 updatedAt 은 여기서 계산한다.
+
+    properties 와 sampleRow 는 넣은 것만 바꾼다: 기존 템플릿을 고칠 때 키가 없으면 저장된 값을 두고, null 이면 지운다.
+    """
     body = await read_body(request)
     object_body(body, "template")
     name, html = body.get("name"), body.get("html")
@@ -42,7 +69,16 @@ async def save_template(request: Request) -> dict:
         raise invalid("Template name is required.")
     if not html.strip():
         raise invalid("Template HTML is empty.")
+    project = {key: project_field(key, body[key]) for key in PROJECT_FIELDS if key in body}
     fields = {"name": name, "html": html, "placeholders": extract_placeholders(html), "updatedAt": iso(now())}
+
+    def with_project(template: dict) -> dict:
+        for key, value in project.items():
+            if value is None:
+                template.pop(key, None)
+            else:
+                template[key] = value
+        return template
 
     with db_of(request).transaction(write=True) as store:
         id = body.get("id")
@@ -51,9 +87,9 @@ async def save_template(request: Request) -> dict:
             if existing is None:
                 raise not_found("Template", js_repr(id))
             existing.update(fields)
-            store.update_template(existing)
+            store.update_template(with_project(existing))
             return existing
-        created = {"id": unique_slug_id("tpl", slug(name) or "template", store.template_ids()), **fields}
+        created = with_project({"id": unique_slug_id("tpl", slug(name) or "template", store.template_ids()), **fields})
         store.insert_template(created)
         return created
 

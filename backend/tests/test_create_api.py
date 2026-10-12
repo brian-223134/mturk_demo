@@ -65,6 +65,36 @@ def test_save_template_validation(client: TestClient) -> None:
     assert client.get("/api/health").json()["counts"]["templates"] == 2
 
 
+def test_save_template_project_fields(client: TestClient) -> None:
+    """Project 로 쓰는 템플릿: properties 와 sampleRow 를 저장한다. 고칠 때 키가 없으면 그대로 두고, null 이면 지운다."""
+    properties = {"Title": "Rate the passage", "Reward": "0.05", "MaxAssignments": 3, "requiredPoolIds": [], "attentionEnabled": False}
+    sample = {"query": "who wrote it", "passage": "A short passage."}
+    created = client.post("/api/templates", json={"name": "Passage relevance", "html": "<p>${query} ${passage}</p>",
+                                                  "properties": properties, "sampleRow": sample}).json()
+    assert created["properties"] == properties and created["sampleRow"] == sample
+    assert client.get(f"/api/templates/{created['id']}").json() == created
+
+    kept = client.post("/api/templates", json={"id": created["id"], "name": "Passage relevance", "html": "<p>${query}</p>"}).json()
+    assert kept["properties"] == properties and kept["sampleRow"] == sample and kept["placeholders"] == ["query"]
+
+    changed = client.post("/api/templates", json={"id": created["id"], "name": "Passage relevance", "html": "<p>${query}</p>",
+                                                  "properties": {"Title": "New"}, "sampleRow": None}).json()
+    assert changed["properties"] == {"Title": "New"} and "sampleRow" not in changed
+
+    plain = client.post("/api/templates", json={"name": "Plain", "html": "<p>x</p>"}).json()
+    assert "properties" not in plain and "sampleRow" not in plain
+
+
+def test_save_template_project_field_validation(client: TestClient) -> None:
+    base = {"name": "x", "html": "<p>x</p>"}
+    assert error_of(client.post("/api/templates", json={**base, "properties": [1]})) == (400, "INVALID_REQUEST", '"properties" must be a JSON object.')
+    assert error_of(client.post("/api/templates", json={**base, "sampleRow": "a"})) == (400, "INVALID_REQUEST", '"sampleRow" must be a JSON object.')
+    assert error_of(client.post("/api/templates", json={**base, "sampleRow": {"a": 1}})) == (400, "INVALID_REQUEST", '"sampleRow" values must be strings.')
+    too_large = {"passage": "x" * (64 * 1024)}
+    assert error_of(client.post("/api/templates", json={**base, "sampleRow": too_large})) == (400, "INVALID_REQUEST", '"sampleRow" is too large (at most 64 KB).')
+    assert client.get("/api/health").json()["counts"]["templates"] == 2
+
+
 def test_delete_template(client: TestClient) -> None:
     """지우면 204, 없으면 404. 게시된 batch 의 templateHtml 사본은 그대로다."""
     request = sample_batch_request(client)
