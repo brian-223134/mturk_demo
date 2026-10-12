@@ -79,7 +79,7 @@ LLM은 task spec을 생성합니다. 전처리와 HTML 배치·상호작용은 [
 
 ## 조사에서 확인한 기존 기록과 후속 개선
 
-기존 `output/example-*`, `output/real-*`의 6건은 데이터군별 동일 prompt를 모델 3종에 전달한 과거 기록입니다. 새 4종 후보 실험과 구분합니다. 저장된 과거 비용 합계는 약 $0.0192입니다.
+기존 `output/example-*`, `output/real-*`의 6건은 데이터군별 동일 prompt를 모델 3종에 전달한 과거 기록입니다(2026-10-12에 아래 로컬 기록과 함께 저장소 밖 보관본으로 옮겼습니다). 새 4종 후보 실험과 구분합니다. 저장된 과거 비용 합계는 약 $0.0192입니다.
 
 기존 실제 데이터 실험은 400레코드 중 160개를 뽑았지만 seed가 7과 42로 갈려 공통 레코드가 68개뿐이었습니다. 그 범위의 일반 항목 680개는 필드 이름 차이를 제외하면 본문·target·라벨이 같았습니다. Mismatch 거리와 안내문은 달랐고 profile에는 경로 42개 생략 기록이 있었습니다. 이 때문에 새 비교에서는 입력·정책을 고정하고 의미상 같은 항목을 대조합니다.
 
@@ -106,6 +106,6 @@ DeepSeek의 baseline/instructions/combined는 재실행 후에도 산출물을 �
 
 개발 검증은 backend143개·frontend194개가 통과했습니다. 실제 산출물9개의54개 HIT 행·522개 답변에 대해 DOM에서 문항 생성·미응답 차단·제출 이름을 확인했습니다. 실제 LLM 결과3개를 비교 UI에 연결해6개 공통 그룹 선택도 확인했습니다. 외부 Crowd 컴포넌트와 실제 브라우저의 시각 검수는 별도입니다.
 
-로컬 기록은 gitignore된 `output/prompt-experiments/2026-09-28/`에 있습니다. `report.md`에12조합의 상태·산출물 링크·평가·개선안을, `credits.csv`에 호출별 토큰·provider·청구액을 기록합니다. `manifest.json`에는 입력 hash·모델 설정·job ID·재시도가 있고, `recommended/`에는 시연 입력과 정제 데이터·HTML을 모았습니다. 원본 요청/응답은 `output/jobs/<job-id>/`에 보존합니다. UI의 평가도 저장했습니다.
+로컬 기록은 gitignore된 `output/prompt-experiments/2026-09-28/`에 두었다가, 2026-10-12에 `output/`을 정리하며 저장소 밖의 압축 보관본으로 옮겼습니다(실제 원본의 복사본은 빼고 묶었으며, 되살리면 같은 경로로 풀립니다). `report.md`에12조합의 상태·산출물 링크·평가·개선안을, `credits.csv`에 호출별 토큰·provider·청구액을 기록합니다. `manifest.json`에는 입력 hash·모델 설정·job ID·재시도가 있고, `recommended/`에는 시연 입력과 정제 데이터·HTML을 모았습니다. 원본 요청/응답은 각 job 폴더(`output/jobs/<job-id>/`)에 있었고, 이 실험의 job도 같은 보관본에 들어 있습니다. UI의 평가도 저장했습니다.
 
 후속 우선순위는 provider 오류/finish_reason의 정확한 분류, 비용을 남기는 제한된 호출 복구, UI 동작 안내의 고정 문구화, few-shot에 없는 입력과 반복 실행 평가입니다. 이번 코드에서 핵심 planner·전처리·renderer는 변경하지 않았습니다.
