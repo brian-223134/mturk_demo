@@ -67,6 +67,19 @@ npm test && npm run typecheck
 | `frontend` | http://localhost:3000 | vanilla JavaScript 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api`를 `backend`로 전달합니다. |
 | `backend` | http://localhost:8000/api/health | FastAPI 백엔드입니다. 프로토타입의 REST 경로 표를 같은 경로, 같은 JSON으로 구현하고, `agent/`를 import해 `/api/agent/jobs`로 노출합니다. |
 
+이 두 서비스만 띄우려면 저장소 루트에서 다음을 실행하고 http://localhost:3000 을 엽니다. 처음 실행하면 이미지를 만들고, DB를 [data/](data/)의 시작 데이터로 채웁니다. 처음 써 보는 사람은 Create의 `Tutorial` 탭부터 보면 됩니다.
+
+```bash
+docker compose up -d --build frontend backend
+```
+
+원본 데이터에서 LLM으로 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. `environment/.env.example`을 `environment/.env`로 복사해 `OPENROUTER_KEY`를 적고, 호출을 허용해 다시 띄웁니다. 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
+
+```bash
+cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를 적는다
+AGENT_ALLOW_API=1 docker compose up -d frontend backend
+```
+
 production 뼈대에서 되는 것은 다음과 같습니다.
 
 - backend는 프로토타입 REST 경로 표의 경로를 모두 구현했고, 같은 시작 데이터에 대해 프로토타입 mock API와 같은 응답을 돌려줍니다.
