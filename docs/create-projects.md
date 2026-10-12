@@ -6,12 +6,35 @@ Project는 worker에게 보일 화면(layout)과 작업 속성(제목, 보상, �
 
 템플릿을 쓰는 요소와 속성은 [`<ann-*>` 요소로 템플릿 쓰기](annotation-elements.md)에 정리되어 있습니다.
 
-## Create의 화면
+## Create의 화면: Project와 batch
 
-Create 위쪽에는 MTurk와 같은 두 갈래가 있습니다.
+Create 위쪽에는 MTurk와 같은 두 갈래가 있습니다. 둘의 차이는 **무엇을 만드느냐**입니다.
 
-- **`New Batch with an Existing Project`**: 저장된 Project 목록입니다. 여기서 batch를 게시합니다.
-- **`New Project`**: 무엇으로 시작할지 고르는 화면입니다.
+| | `New Project` | `New Batch with an Existing Project` |
+|---|---|---|
+| 만드는 것 | **Project**: 어떤 작업인지 정한 틀 | **batch**: 그 틀에 실제 데이터를 넣어 worker에게 내보낸 한 번의 게시 |
+| 담는 것 | worker가 보는 화면(layout), 제목·설명, 보상, HIT당 응답 수, 기간, worker 조건, 검수 설정의 기본값, 미리보기용 표본 값 | CSV(한 행 = HIT 하나), 이번 게시의 검수 설정(attention, 자유 서술, 대조 기준), batch 이름 |
+| 하는 일 | 갤러리에서 시작 방법을 고르고 Enter Properties, Design Layout, Preview and Finish로 만듭니다 | Project 목록에서 `Publish Batch`를 눌러 CSV를 올리고 게시합니다. Project를 고치거나(`Edit`) 복사·삭제도 여기서 합니다 |
+| 횟수 | 작업 종류마다 한 번 | 같은 Project로 여러 번 (예: 파일럿 20개, 본 실험 400개) |
+| 결과 | 저장된 Project. 아직 worker에게는 아무것도 나가지 않습니다 | Manage에 나타나는 batch와 HIT. 비용이 잔액에서 빠집니다 |
+
+예를 들어 "passage가 fact를 지지하는지 판정하는 작업"은 Project 하나입니다. 그 Project로 이번 주 CSV를 올리면 batch 하나가 생기고, 다음 주에 다른 CSV를 올리면 batch가 하나 더 생깁니다.
+Project를 고쳐도 이미 게시한 batch는 게시할 때의 layout 사본을 갖고 있어서 바뀌지 않습니다.
+
+**원본 데이터에서 자동으로 만들 때**(`New Project` → `Generate from raw data`)는 두 단계가 이어집니다.
+
+1. agent **job**이 layout(`template.html`), HIT CSV(`hits.csv`), 설정(`settings.json`)을 만듭니다. job은 Project가 아니며, `Generate from raw data`의 job 목록에만 있습니다.
+2. job 카드의 `Use this result`가 layout과 설정을 **Project**로 저장하고, CSV를 올린 **Publish Batch**를 엽니다. 그 뒤로는 일반 Project와 같습니다.
+
+그래서 화면에 미리보기가 세 군데 있고, 보는 것이 다릅니다.
+
+| 어디서 | 화면 | 보는 것 |
+|---|---|---|
+| job 카드의 `Preview & evaluate` | New Project → Generate from raw data → job 목록 | LLM에 준 prompt, LLM이 쓴 명세(`Task spec`), HIT 한 행의 worker 화면, 평가 메모. 결과를 Project로 쓰기 전에 검토합니다 |
+| Project 편집기의 `Preview and Finish` | 목록의 `Edit` → 세 번째 탭 | Project의 속성 요약과, 표본 값으로 그린 worker 화면 |
+| Publish Batch의 `Preview tasks` | 목록의 `Publish Batch` → 두 번째 단계 | 올린 CSV의 행을 하나씩 넣은 실제 worker 화면 |
+
+자동 생성 job에서 만든 Project에는 `Preview & evaluate`가 없습니다. 그 Project의 명세와 prompt를 다시 보려면 Generate from raw data의 job 목록에서 같은 이름의 job을 찾습니다.
 
 ## Project 목록
 
