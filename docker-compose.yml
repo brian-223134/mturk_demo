@@ -167,8 +167,9 @@ services:
       - ./backend/app:/app/backend/app:ro
       - ./agent:/app/agent:ro
       - ./data:/app/data:ro
-      - ./environment/models:/app/environment/models:ro
-      - ./environment/.env:/app/environment/.env:ro
+      # 모델 설정(models/)과 OpenRouter 키(.env). .env 파일 하나만 mount 하면, 파일이 없는 새 clone 에서 Docker 가 그 자리에
+      # 빈 폴더를 만들어 나중에 .env 를 만들 수 없게 된다. 그래서 폴더째 mount 한다 (.env 가 없으면 backend 는 키 없이 뜬다)
+      - ./environment:/app/environment:ro
       # agent job 의 입력과 결과 (output/jobs/<job id>/), gitignore 됨
       - ./output:/app/output
       # SQLite. prototype 의 db volume 과 별개다
