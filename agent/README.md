@@ -144,15 +144,15 @@ python3 -m agent test
 | `plan_response.json` | OpenRouter가 돌려준 응답 원문입니다. 다시 물었을 때의 응답은 `plan_response_2.json`입니다. |
 | `task_spec.json` | 작업 명세입니다. 어떤 planner를 썼든 검증을 통과한 뒤 같은 형태로 저장됩니다. LLM이 만든 spec에는 planner가 자기 선택을 설명한 `planner_notes`가 들어 있습니다. |
 | `items.jsonl` | 항목(탭 하나) 단위의 중간 결과입니다. 레코드 ID, 필드 값, 판정 대상, 그리고 답 칸마다 답 이름·문항·대조 기준·이유·attention 기대 값이 한 줄에 하나씩 있습니다. |
-| `hits.csv` | HIT 단위 CSV입니다. 콘솔의 `Data` 단계에 올립니다. 컬럼은 `hit_id, record_ids, item_ids, attention`, spec의 필드들, 대조 기준 컬럼(기본 `llm_label`), 이유 컬럼(있을 때), attention 컬럼(기본 `attention_expected`, attention이 있을 때) 순서입니다. 모든 셀은 JSON입니다. 대조 기준 컬럼에는 일반 탭의 답만, attention 컬럼에는 attention 탭의 기대 답만 `{답 이름: 값}`으로 들어갑니다. |
+| `hits.csv` | HIT 단위 CSV입니다. 콘솔의 Publish Batch에서 `Upload CSV`에 올립니다. 컬럼은 `hit_id, record_ids, item_ids, attention`, spec의 필드들, 대조 기준 컬럼(기본 `llm_label`), 이유 컬럼(있을 때), attention 컬럼(기본 `attention_expected`, attention이 있을 때) 순서입니다. 모든 셀은 JSON입니다. 대조 기준 컬럼에는 일반 탭의 답만, attention 컬럼에는 attention 탭의 기대 답만 `{답 이름: 값}`으로 들어갑니다. |
 | `summary.json` | 레코드·항목·HIT 수, attention 항목 수, target과 답 칸 수, 대조 기준 값의 분포(문항별 분포는 `questions`), 행 크기 같은 요약입니다. 경로가 풀리지 않거나 형이 맞지 않아 건너뛴 레코드는 `skipped_records`에 개수와 예(최대 10개, 레코드 ID와 이유)로 적힙니다. |
-| `settings.json` | 콘솔 `Settings`에 넣을 값입니다. 제목, 설명, 키워드, attention 규칙(`{"column": "attention_expected", "minCorrectRatio": 1}`), 대조 기준 컬럼, 자유 서술 답의 이름 접미어(`freeTextSuffixes`), 문항 목록, 답 이름 규칙이 들어 있습니다. |
-| `template.html` | MTurk crowd-form 템플릿입니다. 콘솔에서 Project의 layout으로 올립니다. `${hit_id}`와 spec의 필드만 placeholder로 쓰고, 탭을 다 그린 뒤 답 칸 목록을 `window.TASK_ANSWER_SCHEMA`에 둡니다. Submit을 누르면 hidden `input_answers`에 `[{name, value}]` 배열을 넣어 제출합니다. |
+| `settings.json` | 콘솔의 Project 속성과 `Review settings`에 넣을 값입니다 (`Use this result`는 자동으로 채웁니다). 제목, 설명, 키워드, attention 규칙(`{"column": "attention_expected", "minCorrectRatio": 1}`), 대조 기준 컬럼, 자유 서술 답의 이름 접미어(`freeTextSuffixes`), 문항 목록, 답 이름 규칙이 들어 있습니다. |
+| `template.html` | MTurk crowd-form 템플릿입니다. 콘솔에서 Project의 layout으로 올립니다. `${hit_id}`와 spec의 필드만 placeholder로 쓰고, 탭을 다 그린 뒤 답 칸 목록을 `window.TASK_ANSWER_SCHEMA`에 둡니다. Submit을 누르면 hidden `input_answers`에 `[{name, value}]` 배열을 넣어 제출합니다. 다중 선택의 "해당 없음" 칸은 답이 아니지만 `none_<탭>_<문항 id>` 이름을 가집니다 (이름 없는 입력이 있으면 crowd-html-elements가 미리보기에 Potential errors 상자를 띄웁니다). |
 | `validation.json` | 검증 결과입니다. `ok`, `errors`(게시 불가), `warnings`(참고), `stats`가 있습니다. 건너뛴 레코드가 있으면 경고로 알립니다. |
 
 ## 콘솔에 올리기
 
-production 콘솔(http://localhost:3000)의 **Create**에서 `New Project` → `Generate from raw data`로 job을 돌렸다면, job 카드의 `Use this result`가 아래 과정을 한 번에 합니다. template.html과 settings.json을 job 이름의 Project로 저장하고, hits.csv를 올린 상태로 그 Project의 Publish Batch를 엽니다.
+production 콘솔(http://localhost:3000)의 **Create**에서 `New Project` → `Generate from raw data`로 job을 돌렸다면, job 카드의 `Use this result`가 아래 과정을 한 번에 합니다. template.html과 settings.json을 job 이름의 Project로 저장하고, hits.csv를 올린 상태로 그 Project의 Publish Batch를 엽니다. 화면에서 job을 돌리고 명세를 고쳐 다시 만드는 방법은 [원본 데이터에서 자동으로 만들기](../docs/create-projects.md#원본-데이터에서-자동으로-만들기)에 있습니다.
 명령줄로 만든 결과는 다음 순서로 올립니다 (화면의 자세한 설명은 [Project로 batch 게시하기](../docs/create-projects.md)).
 
 1. `New Project`에서 `Upload or paste HTML`을 고르고 `Create Project`를 누릅니다. `Design Layout`의 `Upload .html`로 `template.html`을 올리면 템플릿이 쓰는 `${컬럼}` 목록이 `Variables`에 표시됩니다.

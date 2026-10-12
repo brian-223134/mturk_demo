@@ -50,7 +50,64 @@ starter 템플릿은 아홉 가지입니다. 모두 `<ann-*>` 요소로 쓴 수�
 그 밖의 시작 방법이 두 가지 있습니다.
 
 - **`Upload or paste HTML`**: 빈 layout으로 시작해 Design Layout에서 파일을 올리거나 HTML을 붙여 넣습니다. `${컬럼명}`이나 `window.TASK_DATA`를 쓰는 기존 템플릿, `<crowd-form>`을 쓰는 MTurk 템플릿도 그대로 동작합니다.
-- **`Generate from raw data`**: 원본 데이터와 prompt로 agent job을 돌립니다 ([agent/README.md](../agent/README.md)). job이 성공하면 카드의 `Use this result`가 template.html과 settings.json을 job 이름의 Project로 저장하고(같은 이름이 있으면 덮어씁니다), hits.csv를 올린 상태로 그 Project의 Publish Batch를 엽니다. settings.json의 attention 규칙과 대조 기준 컬럼은 Project에 저장되어 `Review settings`에 미리 채워집니다.
+- **`Generate from raw data`**: 원본 데이터와 prompt로 agent가 layout과 HIT CSV를 만듭니다. 아래 [원본 데이터에서 자동으로 만들기](#원본-데이터에서-자동으로-만들기)에 정리되어 있습니다.
+
+## 원본 데이터에서 자동으로 만들기
+
+`New Project` → `Generate from raw data`는 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로 agent job을 돌립니다.
+job은 원본의 구조를 분석하고(`profile`), LLM이 작업 명세 `task_spec.json`을 쓰고(`plan`), 코드가 그 명세대로 데이터를 HIT로 자르고(`preprocess`), 템플릿을 그리고(`render`), 결과를 검사합니다(`validate`).
+LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나옵니다. 파이프라인과 출력 파일은 [agent/README.md](../agent/README.md)에 있습니다.
+
+### 입력
+
+| 항목 | 설명 |
+|---|---|
+| `Candidate name` | job의 이름입니다. `Use this result`를 누르면 이 이름으로 Project가 저장되고, 같은 이름의 Project가 있으면 덮어씁니다. 시도마다 다른 이름을 씁니다. |
+| `Raw data` | 원본 파일입니다. 구조를 미리 알려 줄 필요는 없습니다. |
+| `Import prompt file`, `Prompt text` | 무엇을 판정하게 할지 적습니다. "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개" 같은 한 문장도 되고, 절을 나눈 markdown도 됩니다 ([prompt 쓰기](../agent/README.md#prompt-쓰기)). |
+| `Model` | `environment/models/`의 모델 설정입니다. 기본은 `default`입니다. |
+| `Allow API calls (uses credits)` | LLM이 명세를 쓰게 하려면 체크합니다. 유료 호출이므로 서버도 `AGENT_ALLOW_API=1 docker compose up -d backend frontend`로 띄워져 있어야 하며, 그렇지 않으면 체크할 수 없습니다. |
+| `Optional task spec · offline replay` | `task_spec.json`을 올리면 LLM 없이 그 명세로 돌립니다(`plan` 단계는 `skipped`). `Reuse the saved task spec`은 `Reuse inputs`로 불러온 job의 명세를 그대로 씁니다. |
+| `Example prompt candidates` | 합성 예시 데이터와 prompt 후보 네 가지를 채웁니다 ([prompt 비교 실험](prompt-experiments.md)). |
+
+### job 카드
+
+`Generate`를 누르면 아래 `Jobs` 목록에 카드가 생기고, 단계 다섯 개의 진행 상황이 표시됩니다. 끝나면 카드에 다음이 보입니다.
+
+- `Summary`: 쓴 레코드 수, 항목 수, HIT 수, HIT당 항목 수, attention 항목 수, 정답 라벨의 분포
+- `Validation`: 구조 검사 결과 (`OK`면 게시할 수 있는 형태입니다. 문구나 라벨 대응이 원하는 대로인지는 사람이 봐야 합니다)
+- `LLM usage`: 호출 수, 토큰, 비용
+- `Files`: `task_spec.json`, `template.html`, `hits.csv`, `settings.json`, LLM에 보낸 요청과 받은 응답 등. 눌러서 내려받을 수 있습니다.
+- `Planner notes`: LLM이 명세를 그렇게 짠 이유
+
+카드의 버튼은 네 가지입니다.
+
+- `Reuse inputs`: 그 job의 원본과 prompt를 입력 칸에 다시 채웁니다. 원본은 서버에 남아 있으므로 다시 올리지 않아도 됩니다.
+- `Preview & evaluate`: 결과 요약표와 함께 `Requester prompt`, `Task spec`, HIT 한 행을 worker 화면으로 그린 미리보기를 엽니다. 평가 메모를 남길 수 있습니다.
+- `Compare`: 체크한 뒤 위쪽의 `Compare selected`를 누르면 성공한 job 2~3개를 나란히 비교합니다.
+- `Use this result`: Project를 저장하고, hits.csv를 올린 상태로 Publish Batch를 엽니다. 이후는 [Publish Batch](#publish-batch)와 같습니다. settings.json의 attention 규칙과 대조 기준 컬럼은 `Review settings`에 미리 채워집니다.
+
+### 명세를 고쳐 다시 만들기
+
+LLM이 요청과 다르게 명세를 쓰면, 명세를 고쳐 LLM 없이 다시 만듭니다. 비용이 들지 않고 몇 초면 끝납니다.
+
+1. 카드의 `Files`에서 `task_spec.json`을 내려받아 고칩니다.
+2. 같은 카드의 `Reuse inputs`를 누르고 `Candidate name`을 새 이름으로 바꿉니다.
+3. `Optional task spec · offline replay`의 `Task spec`에 고친 파일을 올리고, `Allow API calls`는 끈 채로 `Generate`를 누릅니다.
+
+예를 들어 "BM25 top-10, HIT 20개"라고 요청했을 때 LLM이 레코드 20개를 고른 뒤 레코드마다 passage 10개를 5개씩 두 HIT로 나눠(`"items_per_hit": 5`) HIT가 40개가 된 적이 있습니다.
+`hit.items_per_hit`만 10으로 고쳐 다시 만들면, 같은 항목 200개와 같은 정답 라벨로 HIT 20개가 됩니다.
+
+### 걸리는 시간과 실패
+
+실제 RAG 평가 원본(레코드 400개, 약 28MB)에 한 문장 prompt와 `default` 모델로 돌렸을 때, 성공한 job은 140초 동안 호출 3번에 $0.0036이 들었습니다. 명세가 검사에 걸리면 오류를 LLM에 돌려주고 다시 묻기 때문에 호출이 여러 번이 됩니다.
+LLM 호출은 실패할 수 있습니다. 같은 입력의 다른 시도는 응답이 공백으로 채워져 출력 상한에 닿아 217초 뒤에 실패했습니다($0.0083). 실패한 job도 카드에 이유와 비용이 남습니다.
+실패하면 같은 입력으로 다시 돌리거나 다른 모델을 고릅니다. 발표처럼 결과가 꼭 필요한 자리에서는 미리 만들어 둔 job을 씁니다.
+
+### job 목록 관리
+
+job의 입력과 결과는 `output/jobs/<job id>/`(gitignore)에 저장되고, backend는 시작할 때 이 폴더를 읽어 목록을 만듭니다. 화면에는 job을 지우는 버튼이 없습니다.
+목록에서 빼려면 job 폴더를 `output/jobs/` 밖(예: `output/jobs-archive/`)으로 옮기고 `docker compose restart backend`를 실행합니다. 다시 보이게 하려면 폴더를 되돌리고 같은 명령을 실행합니다.
 
 ## Project 편집기
 

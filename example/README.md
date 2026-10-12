@@ -1,11 +1,11 @@
 # example/: Create에 올려 볼 예시 파일
 
 콘솔의 **Create** 탭은 템플릿(`.html`) 하나와 데이터(`.csv`) 하나를 받습니다. 이 폴더에는 그 자리에 올려 볼 수 있는 파일이 들어 있습니다.
-어떤 파일을 올리면 화면에 무엇이 표시되는지는 저장소 루트의 [README.md](../README.md#예시-파일로-직접-해-보기)에 시나리오별로 정리되어 있습니다.
+어떤 파일을 올리면 화면에 무엇이 표시되는지는 저장소 루트의 [README.md](../README.md#예시-파일로-mock-테스팅-해보기)에 시나리오별로 정리되어 있습니다.
 
 | 폴더 | 파일 | 용도 |
 |---|---|---|
-| `1-task-data/` | `template.html`, `data.csv` (10행) | `window.TASK_DATA` 방식입니다. 새 템플릿에 권장합니다. 화면의 `Load sample template`과 `Load sample CSV` 버튼이 이 두 파일을 불러옵니다. |
+| `1-task-data/` | `template.html`, `data.csv` (10행) | `window.TASK_DATA` 방식입니다. 새 템플릿에 권장합니다. 프로토타입 콘솔의 `Load sample template`과 `Load sample CSV` 버튼이 이 두 파일을 불러옵니다. |
 | `2-placeholder/` | `template.html`, `data.csv` (8행) | `${컬럼명}` 방식입니다. MTurk Requester 웹사이트와 같은 방식으로 치환됩니다. |
 | | `data-missing-column.csv` | 오류 예시: 템플릿이 쓰는 `sentence_2` 컬럼이 없습니다. |
 | `3-data-checks/` | `empty-cells.csv` | 경고 예시: 빈 셀이 있는 행 |
