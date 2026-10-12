@@ -1,0 +1,26 @@
+<script src="/elements/ann-elements.js"></script>
+
+<style>
+  .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+
+<ann-form>
+  <ann-instructions>
+    <p>Two assistants answered the same request. Choose the response that serves the request better, then explain your choice in one or two sentences.</p>
+    <p>Choose <strong>About the same</strong> only when neither response is clearly better.</p>
+  </ann-instructions>
+
+  <ann-text label="Request">${prompt}</ann-text>
+  <div class="side-by-side">
+    <ann-text label="Response A">${response_a}</ann-text>
+    <ann-text label="Response B">${response_b}</ann-text>
+  </div>
+
+  <ann-choice name="preference" header="Which response is better?" required layout="horizontal">
+    <ann-option value="a">Response A</ann-option>
+    <ann-option value="b">Response B</ann-option>
+    <ann-option value="same">About the same</ann-option>
+  </ann-choice>
+
+  <ann-textarea name="reason" header="Why?" required minlength="20" rows="3"></ann-textarea>
+</ann-form>

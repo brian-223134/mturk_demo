@@ -1,0 +1,34 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>One query was sent to a search system, which returned three passages. Open each tab and decide whether that passage helps answer the query.</p>
+    <p>A number next to a tab title shows how many answers are left in that tab. Submit becomes possible when every tab shows a check mark.</p>
+  </ann-instructions>
+
+  <ann-text label="Query">${query}</ann-text>
+
+  <ann-tabs>
+    <ann-tab header="Passage 1">
+      <ann-text>${passage_1}</ann-text>
+      <ann-choice name="relevance_1" header="Does this passage help answer the query?" required layout="horizontal">
+        <ann-option value="relevant">Relevant</ann-option>
+        <ann-option value="not_relevant">Not relevant</ann-option>
+      </ann-choice>
+    </ann-tab>
+    <ann-tab header="Passage 2">
+      <ann-text>${passage_2}</ann-text>
+      <ann-choice name="relevance_2" header="Does this passage help answer the query?" required layout="horizontal">
+        <ann-option value="relevant">Relevant</ann-option>
+        <ann-option value="not_relevant">Not relevant</ann-option>
+      </ann-choice>
+    </ann-tab>
+    <ann-tab header="Passage 3">
+      <ann-text>${passage_3}</ann-text>
+      <ann-choice name="relevance_3" header="Does this passage help answer the query?" required layout="horizontal">
+        <ann-option value="relevant">Relevant</ann-option>
+        <ann-option value="not_relevant">Not relevant</ann-option>
+      </ann-choice>
+    </ann-tab>
+  </ann-tabs>
+</ann-form>

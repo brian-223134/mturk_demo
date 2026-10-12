@@ -1,0 +1,22 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>Read the query and the passage. Decide whether the passage helps answer the query.</p>
+    <ul>
+      <li><strong>Relevant</strong>: the passage answers the query.</li>
+      <li><strong>Partially relevant</strong>: the passage gives part of the answer or useful background.</li>
+      <li><strong>Not relevant</strong>: the passage does not help answer the query.</li>
+    </ul>
+    <p>Judge only from the passage. Do not use outside knowledge.</p>
+  </ann-instructions>
+
+  <ann-text label="Query">${query}</ann-text>
+  <ann-text label="Passage">${passage}</ann-text>
+
+  <ann-choice name="relevance" header="Does the passage help answer the query?" required>
+    <ann-option value="relevant">Relevant</ann-option>
+    <ann-option value="partially_relevant">Partially relevant</ann-option>
+    <ann-option value="not_relevant">Not relevant</ann-option>
+  </ann-choice>
+</ann-form>

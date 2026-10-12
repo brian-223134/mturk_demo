@@ -1,0 +1,20 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>Read the review and choose the sentiment it expresses overall.</p>
+    <ul>
+      <li><strong>Mixed</strong>: the review clearly praises some things and criticizes others.</li>
+      <li><strong>Neutral</strong>: the review only states facts, without an opinion.</li>
+    </ul>
+  </ann-instructions>
+
+  <ann-text label="Review">${text}</ann-text>
+
+  <ann-choice name="sentiment" header="What sentiment does the review express?" required>
+    <ann-option value="positive">Positive</ann-option>
+    <ann-option value="negative">Negative</ann-option>
+    <ann-option value="mixed">Mixed</ann-option>
+    <ann-option value="neutral">Neutral</ann-option>
+  </ann-choice>
+</ann-form>

@@ -1,0 +1,17 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>Read the question and the answer an assistant wrote. Rate how helpful the answer is for the person who asked.</p>
+    <p>1 means the answer does not help at all. 5 means it fully answers the question, correctly and clearly.</p>
+  </ann-instructions>
+
+  <ann-text label="Question">${question}</ann-text>
+  <ann-text label="Answer">${answer}</ann-text>
+
+  <ann-likert name="helpfulness" header="How helpful is the answer?" required
+              min="1" max="5" min-label="Not helpful" max-label="Very helpful"></ann-likert>
+
+  <ann-textarea name="comment" header="Comment (optional)" rows="2"
+                placeholder="Anything that is wrong or missing in the answer"></ann-textarea>
+</ann-form>

@@ -1,0 +1,12 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>Read the passage and write a one-sentence summary of its main point in your own words.</p>
+    <p>Do not copy whole sentences from the passage.</p>
+  </ann-instructions>
+
+  <ann-text label="Passage">${passage}</ann-text>
+
+  <ann-textarea name="summary" header="One-sentence summary" required minlength="30" rows="3"></ann-textarea>
+</ann-form>

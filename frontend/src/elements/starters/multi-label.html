@@ -1,0 +1,17 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>Read the customer message and check every topic it talks about. A message can have several topics.</p>
+  </ann-instructions>
+
+  <ann-text label="Customer message">${text}</ann-text>
+
+  <ann-checklist name="topic" header="Which topics does the message talk about?" required
+                 none-label="None of these topics">
+    <ann-item key="delivery">Delivery or shipping</ann-item>
+    <ann-item key="price">Price or billing</ann-item>
+    <ann-item key="quality">Product quality</ann-item>
+    <ann-item key="support">Customer support</ann-item>
+  </ann-checklist>
+</ann-form>

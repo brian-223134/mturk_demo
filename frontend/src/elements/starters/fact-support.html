@@ -1,0 +1,20 @@
+<script src="/elements/ann-elements.js"></script>
+
+<ann-form>
+  <ann-instructions>
+    <p>Read the passage, then check every statement that the passage supports.</p>
+    <ul>
+      <li>A statement is <strong>supported</strong> when the passage states it, or says the same thing in other words.</li>
+      <li>A statement that the passage does not mention, or only partly mentions, is <strong>not supported</strong>.</li>
+      <li>If the passage supports none of the statements, check the last box.</li>
+    </ul>
+  </ann-instructions>
+
+  <ann-text label="Passage">${passage}</ann-text>
+
+  <ann-checklist name="supported" header="Which statements does the passage support?" required numbered
+                 checked-value="supported" unchecked-value="not_supported"
+                 none-label="The passage supports none of these statements">
+    <script type="application/json">${facts}</script>
+  </ann-checklist>
+</ann-form>
