@@ -9,6 +9,7 @@ Project는 worker에게 보일 화면(layout)과 작업 속성(제목, 보상, �
 ## Create의 화면: Project와 batch
 
 Create 위쪽에는 MTurk와 같은 두 갈래가 있습니다. 둘의 차이는 **무엇을 만드느냐**입니다.
+그 옆의 `Tutorial` 탭(`/create/tutorial`)은 이 문서의 내용을 따라 하기 순서로 줄인 한국어 안내이며, 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
 
 | | `New Project` | `New Batch with an Existing Project` |
 |---|---|---|

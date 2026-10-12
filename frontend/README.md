@@ -44,7 +44,7 @@ frontend/
 └─ src/
    ├─ index.html           루트 요소 하나와 <script type="module" src="/main.js">
    ├─ main.js              레이아웃을 그리고 라우터에 페이지를 등록합니다
-   ├─ router.js            history API 라우터. 경로는 main.js 에서 등록합니다 (/create, /create/new, /create/project/:projectId(/:tab),
+   ├─ router.js            history API 라우터. 경로는 main.js 에서 등록합니다 (/create, /create/new, /create/tutorial, /create/project/:projectId(/:tab),
    │                       /create/publish/:projectId, /manage, /manage/:batchId(/:tab), /workers, /workers/pools, /workers/:workerId). / 는 /create 로 보냅니다
    ├─ router-match.js      경로 패턴 → 정규식(compilePattern), 경로에 맞는 route 찾기(matchRoute). DOM 을 쓰지 않아 Node 에서 테스트합니다
    ├─ styles.css           밝은 테마. 배지 색은 mock 회색, sandbox 파랑, production 빨강
@@ -96,6 +96,7 @@ frontend/
       │  ├─ properties-form.js  Enter Properties 의 폼
       │  ├─ layout-tab.js    Design Layout: 편집기, Insert element, 검사, 표본 값, 미리보기, 답 칸
       │  ├─ publish-batch.js  Publish Batch 의 틀: draft, 자동 저장, 단계 이동 조건, Start over
+      │  ├─ tutorial.js      /create/tutorial: 처음 쓰는 사람을 위한 한국어 따라 하기 안내 (화면으로 바로 가는 버튼)
       │  ├─ data-step.js, preview-step.js, quality-step.js, publish-step.js  Upload CSV, Preview tasks, Review settings, Confirm and publish
       │  └─ generate.js, generate-form.js, job-results.js, common.js  agent job 패널과 공용 조각
       ├─ manage.js         batch 목록
@@ -134,7 +135,7 @@ agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/
 
 ## 화면
 
-- **Create**: MTurk의 Requester 화면처럼 Project를 만들고 그 Project에 CSV를 올려 batch를 게시합니다. 위쪽의 `New Batch with an Existing Project`는 Project 목록(`Publish Batch`, `Edit`, `Copy`, `Delete`)이고, `New Project`는 starter 템플릿 9종, `Upload or paste HTML`, `Generate from raw data` 중에서 시작할 것을 고르는 화면입니다. Project 편집기는 `Enter Properties`(제목, 보상, 인원, 기간, worker 조건), `Design Layout`(HTML 편집기, `Insert element…`, 검사, 변수별 표본 값, 실시간 미리보기와 답 칸 목록), `Preview and Finish`(요약, `Download CSV template`, `Finish`) 세 탭이며, 저장하지 않은 편집은 Project마다 브라우저에 임시 저장됩니다. batch는 `Upload CSV` → `Preview tasks` → `Review settings`(attention 규칙, 자유 서술 답, 대조 기준) → `Confirm and publish`로 게시하고, 보상과 인원 같은 속성은 Project의 값을 그대로 씁니다. agent job의 `Use this result`는 template.html과 settings.json을 job 이름의 Project로 저장하고 hits.csv를 올린 상태로 Publish Batch를 엽니다. 화면별 선택지와 조건은 [Project로 batch 게시하기](../docs/create-projects.md)에, 템플릿 요소는 [`<ann-*>` 요소로 템플릿 쓰기](../docs/annotation-elements.md)에 정리되어 있습니다. 서버에서는 템플릿 레코드 하나가 Project 하나이며, 레코드의 선택 필드 `properties`와 `sampleRow`에 속성과 표본 값을 둡니다.
+- **Create**: MTurk의 Requester 화면처럼 Project를 만들고 그 Project에 CSV를 올려 batch를 게시합니다. 위쪽의 `New Batch with an Existing Project`는 Project 목록(`Publish Batch`, `Edit`, `Copy`, `Delete`)이고, `Tutorial`은 한국어 따라 하기 안내이며, `New Project`는 starter 템플릿 9종, `Upload or paste HTML`, `Generate from raw data` 중에서 시작할 것을 고르는 화면입니다. Project 편집기는 `Enter Properties`(제목, 보상, 인원, 기간, worker 조건), `Design Layout`(HTML 편집기, `Insert element…`, 검사, 변수별 표본 값, 실시간 미리보기와 답 칸 목록), `Preview and Finish`(요약, `Download CSV template`, `Finish`) 세 탭이며, 저장하지 않은 편집은 Project마다 브라우저에 임시 저장됩니다. batch는 `Upload CSV` → `Preview tasks` → `Review settings`(attention 규칙, 자유 서술 답, 대조 기준) → `Confirm and publish`로 게시하고, 보상과 인원 같은 속성은 Project의 값을 그대로 씁니다. agent job의 `Use this result`는 template.html과 settings.json을 job 이름의 Project로 저장하고 hits.csv를 올린 상태로 Publish Batch를 엽니다. 화면별 선택지와 조건은 [Project로 batch 게시하기](../docs/create-projects.md)에, 템플릿 요소는 [`<ann-*>` 요소로 템플릿 쓰기](../docs/annotation-elements.md)에 정리되어 있습니다. 서버에서는 템플릿 레코드 하나가 Project 하나이며, 레코드의 선택 필드 `properties`와 `sampleRow`에 속성과 표본 값을 둡니다.
 - **Manage**: batch 목록과 batch 상세입니다. 상세의 `Overview`는 진행률, 응답 현황, 비용, 설정을 보여 주고, `Top up incomplete HITs`(부족한 HIT 수와 예상 비용을 확인한 뒤 재모집), `Expire now`(진행 중일 때만), `Export`(MTurk 결과 CSV, 라벨 JSON)를 제공합니다. `Review`는 응답 표에서 상태, attention 판정, WorkerId, 작업 시간으로 거르고 머리글로 정렬하며, 체크박스로 여러 건을 골라 `Approve selected`, `Reject selected…`(사유 필수, 프리셋 세 개, attention을 통과한 응답이 섞이면 경고), 반려된 건만 골랐을 때는 `Revert to approved…`를 실행합니다. `Select attention-failed`와 `Invert selection`(현재 페이지만 반전)도 있습니다. `Answers` 열은 worker의 답(W)과 대조 기준(R)을 약어 토큰으로 두 줄에 보여 주고(attention 답은 보라 테두리, 자유 서술 답은 짧게 자른 글이며 전문은 마우스를 올리면 보입니다. 어느 답이 attention인지는 서버가 준 `attentionNames`로 판단합니다), 행을 누르면 응답 상세가 열려 문항마다 이 worker의 답, 대조 기준, 같은 HIT의 다른 worker 답을 견주며 `Open task`로 worker가 본 화면을 sandbox iframe에 띄웁니다. 반려를 확정하면 부족해진 HIT를 재모집할지 곧바로 묻습니다. worker 상세에서 `?worker=<id>`로 넘어오면 그 worker의 응답만 보입니다. `HITs`는 HIT별 승인, 반려, 검수 대기, 남은 자리와 완료 여부를 보여 주고 `Incomplete only`로 거르며, 선택한 HIT에 `Add assignments…`(목표까지 채우기 또는 고정 수, 최대 8)로 응답을 더 모집합니다. 처음에 10개 미만으로 만든 HIT는 합계 9를 넘을 수 없으므로 넘는 요청은 이유와 함께 건너뜁니다. `Input`은 HIT의 전체 입력을, `Open task`는 task 화면을 엽니다. `Results`는 Fleiss' κ, 만장일치 비율, 투표가 있는 문항 수, 라벨 분포와 문항별 투표·majority 표(전체, 만장일치 아님, 동률, 표 부족 필터)를 보여 주고 `Export`로 내보냅니다.
 - **Worker Pool**: 오른쪽 위의 `Workers` / `Pools`로 화면을 오갑니다. worker 목록은 모든 batch를 합산한 지표를 머리글로 정렬하고, WorkerId 검색, pool 필터, `Blocked only`로 거르며, 여러 명을 골라 `Add to pool`, `Remove from pool`, `Block…`(기본 선택지는 "Add to Excluded pool instead", 차단하려면 사유 필수), `Unblock`을 실행합니다. worker 상세(`/workers/<WorkerId>`)는 지표 요약, batch별 이력(누르면 그 worker로 걸러진 Review), 메모(`Save`), assignment 이력을 보여 줍니다. `Pools`(`/workers/pools`)는 pool을 만들고(`New pool`), 인원을 보거나 빼고, `Fill by criteria…`로 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율, 최대 반려율)에 맞는 worker 수를 먼저 보여 준 뒤 확인하면 추가합니다. 조건 판정은 listWorkers로 받은 목록에 대해 화면에서 합니다.
 
@@ -170,7 +171,7 @@ docker compose run --rm frontend-test
 - `client.test.js`: `globalThis.fetch`를 가짜로 바꿔 `call()`과 `api.<route>()`가 보내는 메서드, URL, 헤더, body를 확인하고, 200 JSON, 204, 오류 봉투(501 `NOT_IMPLEMENTED`, 404 `NOT_FOUND`, 모르는 code), JSON이 아닌 502, fetch 자체의 실패가 각각 어떤 값이나 `ApiError`가 되는지 봅니다. `isApiError`, `createJob(formData)`(multipart, JSON Content-Type 없음), `fileUrl`도 확인합니다.
 - `format.test.js`: `formatCents`, `formatPercent`, `formatDateTime`/`formatDate`(TZ를 UTC로 고정), `formatDurationSeconds`, `formatElapsed`, `EMPTY` 등 표시 도우미를 확인합니다.
 - `dom.test.js`: `escapeHtml`, `join`과, 아주 작은 가짜 `document`를 넣은 `el`/`append`/`clear`의 속성과 자식 처리를 확인합니다.
-- `router.test.js`: `router-match.js`의 `compilePattern`과 `matchRoute`가 main.js의 패턴(`/manage/:batchId/:tab` 등)에 경로를 맞추고 params를 뽑는지, 맞지 않는 경로는 null인지 확인합니다.
+- `router.test.js`: `router-match.js`의 `compilePattern`과 `matchRoute`가 main.js의 패턴(`/manage/:batchId/:tab`, Create 의 `/create/project/:projectId/:tab` 등)에 경로를 맞추고 params를 뽑는지, 맞지 않는 경로는 null인지 확인합니다.
 - `manage-answerTokens.test.js`: `abbreviate`(첫 글자 약어, 겹치면 글자 늘리기, 값 전체, 표기 차이 묶기, 빈 값), `legendEntries`, `tokenWidthOf`, `normalizeLabel`을 확인합니다.
 - `manage-topup.test.js`: `planTopUp`의 9/10 규칙과 건너뜀 사유, `roomOf`/`maxAddable`, 수수료율과 `unitCostCents`, `planBatchTopUp`, `describeTopUp` 문구를 확인합니다.
 - `workers-criteria.test.js`: `matchesCriteria`(null 값은 불일치, % 비교), `eligibleWorkers`(pool 소속 제외, 차단 따로 집계, 승인 순), `createSelection`을 확인합니다.
