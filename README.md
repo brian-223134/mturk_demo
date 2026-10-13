@@ -332,6 +332,7 @@ docs/               Create의 사용 방법(production, 프로토타입), <ann-*
 environment/        agent의 모델 설정(models/)과, OpenRouter 키를 두는 .env (.env 는 저장소에 들어가지 않습니다)
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
 docker-compose.yml  frontend, backend, agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
+.github/workflows/  main 으로의 push 와 pull request 마다 테스트를 돌리는 GitHub Actions (test.yml)
 
 저장소에 들어가지 않는 폴더 (.gitignore)
 output/             자동 생성 job 의 입력과 결과 (output/jobs/<job id>/). 실행하면 저절로 생깁니다
@@ -340,3 +341,4 @@ var/                프로토타입 mock API 서버의 SQLite, agent 명령줄 �
 ```
 
 - 테스트는 `frontend/tests/`(node:test), `backend/tests/`(pytest), `agent/tests/`(unittest), `prototype/`(Vitest)에 있습니다. 계산 규칙의 기대값(κ, 비용, 진행률)은 프로토타입의 테스트에서 시작해 backend 테스트로 옮겨 고정했습니다.
+- `main`에 push하거나(merge 포함) `main`을 향한 pull request를 열면 GitHub Actions(`.github/workflows/test.yml`)가 네 묶음을 각각 돌립니다. OpenRouter는 부르지 않으며 secret도 쓰지 않습니다.
