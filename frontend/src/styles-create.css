@@ -931,3 +931,6 @@ a.btn:hover {
 .choose-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
 .choose-error { flex-basis: 100%; }
 @media (max-width: 900px) { .candidate-models, .candidate-grid { grid-template-columns: 1fr; } }
+.tutorial-subtitle { margin: 16px 0 4px; font-size: 14px; }
+.tutorial-example { max-width: 640px; }
+.tutorial-example select { width: 100%; }

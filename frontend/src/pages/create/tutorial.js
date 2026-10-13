@@ -1,9 +1,13 @@
 // Create → Tutorial (/create/tutorial): Create 를 처음 쓰는 사람이 순서대로 따라 하는 안내 페이지. 읽는 사람이 연구실 구성원이라
 // 설명은 한국어로 쓰고, 버튼·탭 같은 화면 글자는 영어 그대로 적는다 (docs/create-projects.md 와 같은 방식).
 // 단계마다 그 화면으로 바로 가는 버튼이 있다: 갤러리의 항목을 미리 골라 두고(presetChoice) 이동하거나, 예시 파일을 내려받는다.
+// 자동 생성의 예시 prompt(합성 예시 원본과 함께)도 여기서 골라 Generate from raw data 로 넘긴다 (lib/experiments.js).
 // 화면별 자세한 설명은 저장소의 docs/create-projects.md 에 있다.
 
+import { agent } from '../../api-client/client.js';
 import { el } from '../../components/dom.js';
+import { muted } from '../../components/notice.js';
+import { requestGenerateExample } from '../../lib/experiments.js';
 import { navigate } from '../../router.js';
 import { createSubnav } from './common.js';
 import { presetChoice } from './new-project.js';
@@ -28,6 +32,48 @@ function openGallery(choice, label) {
     },
     label,
   );
+}
+
+/**
+ * 예시 prompt 를 골라 Generate from raw data 로 넘기는 상자. 예시 목록은 backend 의 /api/agent/models 에서 받는다
+ * (prototype 의 mock API 에는 없으므로 그때는 안내만 보인다).
+ */
+function exampleLoader() {
+  const holder = el('div', { className: 'tutorial-example', id: 'tutorial-example' }, muted('Loading example prompts…'));
+  agent.listModels().then(
+    (models) => {
+      if (!holder.isConnected) return; // 그 사이 다른 화면으로 갔다
+      const examples = models.prompt_candidates ?? [];
+      if (examples.length === 0) {
+        holder.replaceChildren(muted('이 서버에는 예시 prompt가 없습니다.'));
+        return;
+      }
+      const choice = el('select', { id: 'tutorial-example-prompt', 'aria-label': 'Example prompts' }, examples.map((c) => el('option', { value: c.id }, c.name)));
+      const info = muted(examples[0].description || '');
+      const status = el('div', { className: 'tutorial-example-status' });
+      choice.addEventListener('change', () => { info.textContent = examples.find((c) => c.id === choice.value)?.description || ''; });
+      const open = (withData) => {
+        const example = examples.find((c) => c.id === choice.value);
+        let ok = false;
+        try { ok = requestGenerateExample(window.localStorage, window.sessionStorage, example, withData); } catch { ok = false; }
+        if (!ok) {
+          status.replaceChildren(muted('브라우저 저장소를 쓸 수 없어 예시를 넘기지 못했습니다. Generate from raw data에서 prompt를 직접 붙여 넣으세요.'));
+          return;
+        }
+        presetChoice('generate');
+        navigate('/create/new');
+      };
+      holder.replaceChildren(
+        el('div', { className: 'field' }, el('label', { for: choice.id }, 'Example prompts'), choice, info),
+        el('div', { className: 'tutorial-actions' },
+          el('button', { type: 'button', className: 'btn btn-small', id: 'tutorial-load-prompt', onClick: () => open(false) }, 'Load prompt'),
+          el('button', { type: 'button', className: 'btn btn-small btn-primary', id: 'tutorial-load-example', onClick: () => open(true) }, 'Load prompt + example data')),
+        status,
+      );
+    },
+    () => holder.replaceChildren(muted('예시 prompt는 backend(FastAPI)에 붙었을 때만 불러올 수 있습니다.')),
+  );
+  return holder;
 }
 
 function section(id, number, title, ...children) {
@@ -139,6 +185,9 @@ export function renderTutorial(root) {
         { title: 'Project + Publish Batch', text: 'CSV가 올라간 상태', accent: true },
       ]),
       el('div', { className: 'tutorial-actions' }, openGallery('generate', 'Generate from raw data 열기')),
+      el('h4', { className: 'tutorial-subtitle' }, '예시로 해 보기'),
+      el('p', {}, '처음이라면 예시 prompt로 시작합니다. 네 가지 모두 합성 예시 데이터 6개 레코드와 같은 HIT 구성을 쓰고, 판정 기준과 데이터 설명을 적는 방식만 다릅니다(', code('docs/prompt-experiments.md'), '). ', ui('Load prompt'), '는 prompt와 이름만, ', ui('Load prompt + example data'), '는 합성 예시 원본까지 채운 채로 Generate from raw data를 엽니다. 이미 적어 둔 prompt와 이름은 예시로 바뀝니다.'),
+      exampleLoader(),
       steps([
         [ui('Name'), '에 이름을 적고, ', ui('Raw data'), '에 원본을, ', ui('Prompt text'), '에 무엇을 판정하게 할지 적습니다. 예: "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개"'],
         [ui('Models for the candidates'), '에서 후보 A, B, C가 쓸 모델을 고릅니다. 처음에는 서로 다른 모델 세 개가 골라져 있습니다. 모든 모델이 temperature 0이라 같은 모델을 두 번 고르면 거의 같은 후보가 나옵니다.'],

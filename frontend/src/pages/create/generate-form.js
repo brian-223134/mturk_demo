@@ -1,9 +1,10 @@
 // Generate from raw data 의 입력 폼. prompt 로 만들면 후보 3개(모델만 다른 job 묶음, POST /api/agent/job-groups)를 한꺼번에 접수하고,
 // task spec 을 주면 planner 를 건너뛰므로 job 하나(POST /api/agent/jobs)만 만든다.
+// 예시 prompt 를 불러오는 버튼은 Tutorial 에 있다. Tutorial 이 초안과 표시를 남기면 폼이 열릴 때 읽어 채운다 (lib/experiments.js).
 import { agent } from '../../api-client/client.js';
 import { el } from '../../components/dom.js';
 import { errorNotice, muted, notice } from '../../components/notice.js';
-import { normalizeGenerateDraft, readGenerateDraft, saveGenerateDraft } from '../../lib/experiments.js';
+import { normalizeGenerateDraft, readGenerateDraft, saveGenerateDraft, takeGenerateExampleRequest } from '../../lib/experiments.js';
 import { CANDIDATE_COUNT, candidateLetter, defaultCandidateModels, repeatedModels, restoreCandidateModels } from '../../lib/job-groups.js';
 
 function field(label, control, hint) {
@@ -42,15 +43,7 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
   const storageStatus = el('div', { className: 'muted small' });
   const submit = el('button', { type: 'submit', id: 'generate-submit', className: 'btn btn-primary' }, 'Generate');
   const reset = el('button', { type: 'button', className: 'btn', id: 'gen-clear' }, 'Clear inputs');
-  const examples = models.prompt_candidates || [];
-  const example = el('select', { id: 'gen-candidate' }, examples.map((c) => el('option', { value: c.id }, c.name)));
-  const exampleInfo = muted(examples[0]?.description || '');
-  example.addEventListener('change', () => { exampleInfo.textContent = examples.find((c) => c.id === example.value)?.description || ''; });
-  const loadCandidate = el('button', { type: 'button', className: 'btn btn-small', id: 'gen-load-candidate', onClick: () => applyCandidate(examples.find((c) => c.id === example.value)) }, 'Load prompt');
-  const loadExample = el('button', { type: 'button', className: 'btn btn-small', id: 'gen-load-example' }, 'Load prompt + example data');
   const fields = el('fieldset', { className: 'generate-fields' },
-    examples.length ? el('div', { className: 'field' }, el('label', { for: example.id }, 'Example prompts'), example, exampleInfo,
-      el('div', { className: 'form-actions' }, loadCandidate, loadExample), muted('All four example prompts use the same six-record example and HIT policy. Loading one replaces the prompt and clears any task spec.')) : null,
     field('Name', name, 'The candidates share this name. The project you create from the chosen candidate gets it too, replacing a project with the same name.'),
     field('Raw data', raw, 'JSON, JSONL or CSV. A selected file replaces any reused raw data.'), rawStatus,
     field('Prompt text', prompt),
@@ -65,24 +58,28 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
 
   const specMode = () => Boolean(spec.files[0] || (reuseSpec.checked && source?.has_spec));
 
-  function applyCandidate(value, rawFile = null) {
-    if (!value || busy || fields.disabled) return;
-    prompt.value = value.prompt_text; name.value = value.name;
-    spec.value = ''; reuseSpec.checked = false;
-    if (rawFile) { raw.value = ''; importedRaw = rawFile; source = null; }
-    errorSlot.replaceChildren(); refresh();
-  }
-  loadExample.addEventListener('click', async () => {
-    const value = examples.find((c) => c.id === example.value);
+  /** Tutorial 에서 예시를 골라 왔으면 알리고, 원본까지 고른 경우 합성 예시 원본을 받아 둔다. */
+  async function loadTutorialExample() {
+    let session;
+    try { session = window.sessionStorage; } catch { return; }
+    const request = takeGenerateExampleRequest(session);
+    if (!request) return;
+    if (request === 'prompt') {
+      errorSlot.replaceChildren(notice('info', 'Example prompt loaded', 'The prompt and name come from the Tutorial. Choose raw data, or reuse an earlier run, then generate.'));
+      return;
+    }
     fields.disabled = true;
     try {
       const response = await fetch(agent.exampleRawUrl);
       if (!response.ok) throw new Error(`Example data: HTTP ${response.status}`);
       const rawFile = new File([await response.blob()], 'raw.json', { type: 'application/json' });
-      if (!gone()) { fields.disabled = false; applyCandidate(value, rawFile); }
+      if (gone()) return;
+      raw.value = ''; importedRaw = rawFile; source = null;
+      refresh();
+      errorSlot.replaceChildren(notice('info', 'Example prompt and data loaded', 'The prompt, name and the six-record synthetic raw data come from the Tutorial. Allow API calls and generate.'));
     } catch (error) { if (!gone()) errorSlot.replaceChildren(errorNotice(error, 'Example')); }
     finally { if (!gone()) fields.disabled = busy; }
-  });
+  }
 
   function persist() {
     draft = { name: name.value, prompt_text: prompt.value, model_configs: modelSelects.map((s) => s.value), source };
@@ -151,6 +148,7 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
     finally { busy = false; if (!gone()) { fields.disabled = false; refresh(); } }
   });
   refresh();
+  void loadTutorialExample();
   return {
     async reuse(job) {
       if (busy || fields.disabled) return;
@@ -166,6 +164,5 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
       } catch (error) { if (!gone()) errorSlot.replaceChildren(errorNotice(error, 'Restore inputs')); }
       finally { if (!gone()) fields.disabled = false; }
     },
-    applyCandidate,
   };
 }

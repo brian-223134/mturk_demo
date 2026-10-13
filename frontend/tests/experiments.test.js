@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { normalizeGenerateDraft, readGenerateDraft, saveGenerateDraft, generalRowKey, sharedRows, comparisonWarnings, experimentReport } from '../src/lib/experiments.js';
+import { EXAMPLE_REQUEST_KEY, draftWithExample, requestGenerateExample, takeGenerateExampleRequest, normalizeGenerateDraft, readGenerateDraft, saveGenerateDraft, generalRowKey, sharedRows, comparisonWarnings, experimentReport } from '../src/lib/experiments.js';
 
 const row = (id, position = 1) => ({ record_ids: JSON.stringify(position ? [id, 'attention'] : ['attention', id]), item_ids: JSON.stringify(position ? [`${id}-p1`, 'attention'] : ['attention', `${id}-p1`]), attention: JSON.stringify(position ? [0, 1] : [1, 0]) });
 const bundle = (rows, overrides = {}) => ({ job: { id: 'j1', name: 'candidate', provenance: { raw_sha256: 'raw' }, planner: { mode: 'openrouter', model_config: 'default' }, review: {} }, spec: { source: { sample: null }, hit: { items_per_hit: 4 } }, inputs: { prompt_text: 'Judge support.' }, data: { rows }, ...overrides });
@@ -22,6 +22,36 @@ test('Generate draft keeps at most three candidate models and reads an older sin
   assert.deepEqual(normalizeGenerateDraft({ model_config: 'qwen3-235b' }).model_configs, ['qwen3-235b']);
   assert.deepEqual(normalizeGenerateDraft({ model_configs: ['a', 7, 'b', 'c', 'd'] }).model_configs, ['a', '', 'b']);
   assert.deepEqual(normalizeGenerateDraft(null).model_configs, []);
+});
+
+const memoryStorage = () => {
+  const map = new Map();
+  return { getItem: (k) => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k), map };
+};
+
+test('Tutorial example replaces the prompt and name, keeps the models, and drops reused raw only with example data', () => {
+  const draft = { name: 'mine', prompt_text: 'old', model_configs: ['qwen3-235b', 'default', 'deepseek-v3.2'], source: { source_job_id: 'j1', raw_name: 'raw.json', has_spec: false } };
+  const example = { name: 'Groundedness · Baseline', prompt_text: '# Annotation goal' };
+  assert.deepEqual(draftWithExample(draft, example, false), { ...draft, name: example.name, prompt_text: example.prompt_text });
+  assert.equal(draftWithExample(draft, example, true).source, null);
+  assert.deepEqual(draftWithExample(draft, example, true).model_configs, draft.model_configs);
+});
+
+test('Tutorial example request is saved once and read once by the Generate form', () => {
+  const local = memoryStorage();
+  const session = memoryStorage();
+  assert.equal(requestGenerateExample(local, session, { name: 'Ex', prompt_text: 'P' }, true), true);
+  assert.equal(readGenerateDraft(local).prompt_text, 'P');
+  assert.equal(session.getItem(EXAMPLE_REQUEST_KEY), 'prompt+data');
+  assert.equal(takeGenerateExampleRequest(session), 'prompt+data');
+  assert.equal(takeGenerateExampleRequest(session), null);
+  requestGenerateExample(local, session, { name: 'Ex', prompt_text: 'P' }, false);
+  assert.equal(takeGenerateExampleRequest(session), 'prompt');
+  session.setItem(EXAMPLE_REQUEST_KEY, 'something else');
+  assert.equal(takeGenerateExampleRequest(session), null);
+  const broken = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() {} };
+  assert.equal(requestGenerateExample(broken, session, { name: 'Ex', prompt_text: 'P' }, false), false);
+  assert.equal(takeGenerateExampleRequest(broken), null);
 });
 
 test('Common groups align the actual item IDs, not CSV row position or attention position', () => {

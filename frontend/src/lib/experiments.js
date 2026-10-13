@@ -25,6 +25,39 @@ export function saveGenerateDraft(storage, value) {
   catch { return false; }
 }
 
+// Tutorial 의 예시 prompt 버튼 → Generate 폼. prompt 와 이름은 Generate 초안(localStorage)에 쓰고, 무엇을 불러왔는지는
+// sessionStorage 에 한 번만 읽히는 표시로 남긴다. 'prompt' 면 prompt 만, 'prompt+data' 면 합성 예시 원본도 폼이 불러온다.
+export const EXAMPLE_REQUEST_KEY = 'mturk-console:generate-example';
+const EXAMPLE_REQUESTS = ['prompt', 'prompt+data'];
+
+/** 예시 prompt 를 초안에 넣는다. 원본까지 바꿀 때는 이전 job 의 원본 참조(source)를 지운다. */
+export function draftWithExample(draft, example, withData) {
+  const current = normalizeGenerateDraft(draft);
+  return { ...current, name: String(example.name ?? ''), prompt_text: String(example.prompt_text ?? ''), source: withData ? null : current.source };
+}
+
+/** Tutorial 에서 부른다. 초안을 저장하고 표시를 남겼으면 true. */
+export function requestGenerateExample(local, session, example, withData) {
+  try {
+    if (!saveGenerateDraft(local, draftWithExample(readGenerateDraft(local), example, withData))) return false;
+    session.setItem(EXAMPLE_REQUEST_KEY, withData ? 'prompt+data' : 'prompt');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Generate 폼이 열릴 때 부른다. 남은 표시를 지우고 돌려준다 ('prompt' | 'prompt+data' | null). */
+export function takeGenerateExampleRequest(session) {
+  try {
+    const value = session.getItem(EXAMPLE_REQUEST_KEY);
+    session.removeItem(EXAMPLE_REQUEST_KEY);
+    return EXAMPLE_REQUESTS.includes(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function generalRowKey(row) {
   try {
     const ids = JSON.parse(row.record_ids), items = JSON.parse(row.item_ids), attention = JSON.parse(row.attention);
