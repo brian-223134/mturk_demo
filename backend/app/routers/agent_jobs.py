@@ -7,10 +7,16 @@
     PUT  /api/agent/jobs/{id}/review       품질 평가 저장
     GET  /api/agent/jobs/{id}              Job
     GET  /api/agent/jobs/{id}/files/{name} 결과 파일 (job.files 에 있는 이름만)
+    POST /api/agent/job-groups             multipart/form-data → 202 {"group": {"id", "size"}, "jobs": [Job, …]}
+    PUT  /api/agent/job-groups/{id}/choice {"job_id"} → {"jobs": [Job, …]} 비교한 뒤 고른 후보를 기록
 
 POST 의 필드: raw(파일, source_job_id로 재사용 가능), prompt(파일) 또는 prompt_text(문자열), spec(파일, task_spec.json), model_config(문자열),
 allow_api("true"/"false"), name(문자열). spec 이 있으면 LLM 없이(file planner) 돌고 prompt 는 선택이다. spec 이 없으면
 prompt 가 필수이고, 요청의 allow_api=true 와 서버의 AGENT_ALLOW_API=1 이 모두 있어야 한다 (둘 중 무엇이 빠졌는지 400 으로 알린다).
+
+job-groups 는 같은 필드에서 model_config 대신 model_configs 를 1~3번 보내 후보마다 job 하나씩을 만든다 (같은 모델을 여러 번 써도
+된다). 후보는 LLM 이 쓴 명세를 비교하려는 것이라 spec 과 reuse_spec 은 받지 않는다. job 들은 이름이 같고 group 으로 묶이며,
+runner 가 동시에 돌린다.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ import hashlib
 import logging
 import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -29,7 +36,8 @@ from agent.config import ConfigError, load_model_config, selected_model_name
 from agent.spec import SpecError, load_spec
 from agent.prompt_variants import EXAMPLE_RAW, prompt_candidates
 
-from app.agent_jobs.models import INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, Job, JobInput, PlannerInfo, now_iso
+from app.agent_jobs.models import (INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, Job, JobInput, PlannerInfo, group_info,
+                                   new_group_id, now_iso)
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
 from app.errors import ApiError, invalid
 from app.settings import ALLOW_API_VARIABLE, Settings
@@ -38,6 +46,7 @@ log = logging.getLogger("backend")
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 TRUE_VALUES = ("true", "1", "yes", "on")
+MAX_GROUP_SIZE = 3
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 MEDIA_TYPES = {
     ".csv": "text/csv",
@@ -136,12 +145,35 @@ async def example_raw() -> FileResponse:
 # ---- jobs -----------------------------------------------------------------------------------
 
 
-@router.post("/jobs", status_code=202)
-async def create_job(request: Request) -> dict:
-    settings = _settings(request)
-    runner = _runner(request)
-    form = await request.form()
+@dataclass
+class JobForm:
+    """POST /jobs 와 /job-groups 가 함께 쓰는 multipart 필드. 업로드는 아직 job 폴더에 저장하기 전이다."""
 
+    source_id: str | None
+    raw: UploadFile | None
+    raw_source: Path | None          # raw 를 올리지 않았을 때 source job 에 저장된 원본
+    prompt: UploadFile | None
+    prompt_text: str | None
+    spec: UploadFile | None
+    spec_source: Path | None         # reuse_spec 일 때 source job 에 저장된 명세
+    allow_api: bool
+    name: str
+
+    @property
+    def has_prompt(self) -> bool:
+        return self.prompt is not None or (isinstance(self.prompt_text, str) and self.prompt_text.strip() != "")
+
+    @property
+    def has_spec(self) -> bool:
+        return self.spec is not None or self.spec_source is not None
+
+    async def close(self) -> None:
+        for upload in (self.raw, self.prompt, self.spec):
+            if upload is not None:
+                await upload.close()
+
+
+def read_job_form(form, runner: JobRunner) -> JobForm:
     source_id = form.get("source_job_id")
     source_job = None
     if source_id:
@@ -166,52 +198,57 @@ async def create_job(request: Request) -> dict:
         if source_job is None or spec is not None:
             raise invalid('"reuse_spec" requires a source job and no uploaded spec.')
         spec_source = saved_input(runner, source_job, "spec")
-    allow_api = parse_bool(form.get("allow_api"))
-    model_config = form.get("model_config")
-    model_config = model_config.strip() if isinstance(model_config, str) else ""
     name = form.get("name")
-    name = name.strip() if isinstance(name, str) else ""
+    return JobForm(source_id=source_id or None, raw=raw, raw_source=raw_source, prompt=prompt,
+                   prompt_text=prompt_text if isinstance(prompt_text, str) else None, spec=spec, spec_source=spec_source,
+                   allow_api=parse_bool(form.get("allow_api")), name=name.strip() if isinstance(name, str) else "")
 
-    has_prompt = isinstance(prompt, UploadFile) or (isinstance(prompt_text, str) and prompt_text.strip() != "")
-    if spec is None and spec_source is None:
-        if not has_prompt:
-            raise invalid('Either "spec" (a task_spec.json file, no LLM call) or "prompt" (a file) / "prompt_text" is required.')
-        if not allow_api and not settings.api_allowed:
-            raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false and the server was started "
-                          f"without {ALLOW_API_VARIABLE}=1 in environment/.env or the shell (both are required). Upload a \"spec\" file to run without an LLM.")
-        if not allow_api:
-            raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false (send allow_api=true; "
-                          f"the server has {ALLOW_API_VARIABLE}=1).")
-        if not settings.api_allowed:
-            raise invalid("Calling OpenRouter is not allowed: the server was started without "
-                          f"{ALLOW_API_VARIABLE}=1 in environment/.env or the shell (allow_api=true in the request is not enough).")
-        model_config = model_config or selected_model_name(settings.env_file)
-        if not MODEL_NAME_RE.match(model_config):
-            raise invalid(f'"model_config" must be the name of a file in the models folder without .yaml (got {model_config!r}).')
-        try:
-            load_model_config(model_config, settings.models_dir)
-        except ConfigError as error:
-            raise invalid(f"model config: {error}") from None
-        planner = PlannerInfo(mode="openrouter", model_config=model_config, allow_api=allow_api)
-    else:
-        planner = PlannerInfo(mode="file", model_config=None, allow_api=allow_api)
 
+def check_llm_allowed(fields: JobForm, settings: Settings) -> None:
+    """spec 없이 LLM 이 명세를 쓰는 job 의 조건: prompt 가 있고, 요청과 서버가 모두 호출을 허용한다."""
+    if not fields.has_prompt:
+        raise invalid('Either "spec" (a task_spec.json file, no LLM call) or "prompt" (a file) / "prompt_text" is required.')
+    if not fields.allow_api and not settings.api_allowed:
+        raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false and the server was started "
+                      f"without {ALLOW_API_VARIABLE}=1 in environment/.env or the shell (both are required). Upload a \"spec\" file to run without an LLM.")
+    if not fields.allow_api:
+        raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false (send allow_api=true; "
+                      f"the server has {ALLOW_API_VARIABLE}=1).")
+    if not settings.api_allowed:
+        raise invalid("Calling OpenRouter is not allowed: the server was started without "
+                      f"{ALLOW_API_VARIABLE}=1 in environment/.env or the shell (allow_api=true in the request is not enough).")
+
+
+def openrouter_planner(model_config: str, fields: JobForm, settings: Settings) -> PlannerInfo:
+    model_config = model_config or selected_model_name(settings.env_file)
+    if not MODEL_NAME_RE.match(model_config):
+        raise invalid(f'"model_config" must be the name of a file in the models folder without .yaml (got {model_config!r}).')
+    try:
+        load_model_config(model_config, settings.models_dir)
+    except ConfigError as error:
+        raise invalid(f"model config: {error}") from None
+    return PlannerInfo(mode="openrouter", model_config=model_config, allow_api=fields.allow_api)
+
+
+def build_job(runner: JobRunner, fields: JobForm, planner: PlannerInfo, group: dict | None = None) -> Job:
+    """job 폴더를 만들고 입력을 저장한 Job (아직 큐에 넣지 않았다). 실패하면 폴더를 지운다."""
+    raw, prompt, spec = fields.raw, fields.prompt, fields.spec
     job_id, directory = runner.allocate()
     input_dir = directory / INPUT_DIR
     try:
-        raw_name = save_upload(raw, input_dir, "raw.json") if raw is not None else copy_input(raw_source, input_dir)
+        raw_name = save_upload(raw, input_dir, "raw.json") if raw is not None else copy_input(fields.raw_source, input_dir)
         if (input_dir / raw_name).stat().st_size == 0:
             raise invalid('"raw" is empty.')
         prompt_name: str | None = None
-        if isinstance(prompt, UploadFile):
+        if prompt is not None:
             prompt_name = save_upload(prompt, input_dir, "prompt.md")
-        elif isinstance(prompt_text, str) and prompt_text.strip():
+        elif isinstance(fields.prompt_text, str) and fields.prompt_text.strip():
             prompt_path = unique_path(input_dir, PROMPT_TEXT_FILE)
-            prompt_path.write_text(prompt_text.strip() + "\n", encoding="utf-8")
+            prompt_path.write_text(fields.prompt_text.strip() + "\n", encoding="utf-8")
             prompt_name = PROMPT_TEXT_MARKER if prompt_path.name == PROMPT_TEXT_FILE else prompt_path.name
         spec_name: str | None = None
-        if isinstance(spec, UploadFile) or spec_source is not None:
-            spec_name = save_upload(spec, input_dir, "task_spec.json") if spec is not None else copy_input(spec_source, input_dir)
+        if fields.has_spec:
+            spec_name = save_upload(spec, input_dir, "task_spec.json") if spec is not None else copy_input(fields.spec_source, input_dir)
             shutil.copyfile(input_dir / spec_name, directory / SPEC_FILE)
             try:
                 load_spec(directory / SPEC_FILE)
@@ -226,22 +263,81 @@ async def create_job(request: Request) -> dict:
             raise invalid("The prompt is empty.")
         provenance = {"raw_sha256": file_hash(input_dir / raw_name),
                       "prompt_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                      "source_job_id": source_id or None}
-    except ApiError:
-        runner.discard(job_id)
-        raise
+                      "source_job_id": fields.source_id}
     except Exception:
         runner.discard(job_id)
         raise
-    finally:
-        for upload in (raw, prompt, spec):
-            if isinstance(upload, UploadFile):
-                await upload.close()
+    return Job(id=job_id, name=fields.name or (raw.filename if raw is not None else None) or raw_name,
+               input=JobInput(raw=raw_name, prompt=prompt_name, spec=spec_name), planner=planner,
+               provenance=provenance, group=group)
 
-    job = Job(id=job_id, name=name or (raw.filename if raw is not None else None) or raw_name,
-              input=JobInput(raw=raw_name, prompt=prompt_name, spec=spec_name), planner=planner,
-              provenance=provenance)
+
+@router.post("/jobs", status_code=202)
+async def create_job(request: Request) -> dict:
+    settings = _settings(request)
+    runner = _runner(request)
+    form = await request.form()
+    fields = read_job_form(form, runner)
+    try:
+        if fields.has_spec:
+            planner = PlannerInfo(mode="file", model_config=None, allow_api=fields.allow_api)
+        else:
+            check_llm_allowed(fields, settings)
+            model_config = form.get("model_config")
+            planner = openrouter_planner(model_config.strip() if isinstance(model_config, str) else "", fields, settings)
+        job = build_job(runner, fields, planner)
+    finally:
+        await fields.close()
     return {"job": runner.submit(job)}
+
+
+@router.post("/job-groups", status_code=202)
+async def create_job_group(request: Request) -> dict:
+    """같은 원본과 prompt 로 모델만 바꾼 후보 job 을 model_configs 수만큼 만들어 한꺼번에 큐에 넣는다."""
+    settings = _settings(request)
+    runner = _runner(request)
+    form = await request.form()
+    fields = read_job_form(form, runner)
+    jobs: list[Job] = []
+    try:
+        if fields.has_spec:
+            raise invalid("A job group compares the task specs the LLM writes, so it does not take \"spec\" or \"reuse_spec\". "
+                          "Use POST /api/agent/jobs to run a task spec without an LLM.")
+        model_configs = [value.strip() if isinstance(value, str) else "" for value in form.getlist("model_configs")]
+        if not 1 <= len(model_configs) <= MAX_GROUP_SIZE:
+            raise invalid(f'Send "model_configs" 1 to {MAX_GROUP_SIZE} times, once per candidate (got {len(model_configs)}).')
+        check_llm_allowed(fields, settings)
+        planners = [openrouter_planner(name, fields, settings) for name in model_configs]
+        group_id = new_group_id()
+        for index, planner in enumerate(planners):
+            jobs.append(build_job(runner, fields, planner, group_info(group_id, index, len(planners))))
+    except Exception:
+        for job in jobs:
+            runner.discard(job.id)
+        raise
+    finally:
+        await fields.close()
+    return {"group": {"id": group_id, "size": len(jobs)}, "jobs": [runner.submit(job) for job in jobs]}
+
+
+@router.put("/job-groups/{group_id}/choice")
+async def choose_group_candidate(request: Request, group_id: str) -> dict:
+    runner = _runner(request)
+    members = runner.group_snapshots(group_id)
+    if not members:
+        raise ApiError("NOT_FOUND", f"Job group not found: {group_id}")
+    try:
+        body = await request.json()
+    except ValueError:
+        raise invalid("The choice must be a JSON object.") from None
+    if not isinstance(body, dict) or set(body) != {"job_id"} or not isinstance(body["job_id"], str):
+        raise invalid('The choice must be {"job_id": "<id of a job in the group>"}.')
+    chosen = next((job for job in members if job["id"] == body["job_id"]), None)
+    if chosen is None:
+        raise invalid(f"Job {body['job_id']} is not in group {group_id}.")
+    if chosen["status"] != "succeeded":
+        raise invalid(f"Only a succeeded candidate can be chosen ({chosen['id']} is {chosen['status']}).")
+    return {"jobs": runner.choose(group_id, chosen["id"])}
 
 
 @router.get("/jobs")

@@ -1,4 +1,6 @@
-"""agent job 의 큐와 worker 스레드. job 은 한 번에 하나씩(FIFO) 돈다.
+"""agent job 의 큐와 worker 스레드. job 은 접수한 순서(FIFO)로 꺼내 settings.job_workers 개(기본 3)까지 동시에 돈다.
+그래서 후보 3개를 한 그룹으로 접수하면(POST /api/agent/job-groups) 셋이 함께 LLM 을 부른다. job 마다 폴더와 상태가 따로라
+스레드끼리 나누는 것은 self._jobs 와 job 상태뿐이고, 둘 다 self._lock 안에서만 바꾼다.
 
 job 폴더는 <OUTPUT_DIR>/jobs/<job id>/ 다. 업로드는 그 안의 input/ 에, 파이프라인 결과(profile.json, task_spec.json,
 hits.csv, template.html, validation.json …)는 폴더에 바로 쓴다. agent 의 각 단계에는 이 절대 경로를 out_dir 로 넘기므로
@@ -86,18 +88,21 @@ class JobRunner:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.RLock()
         self._queue: queue.Queue[str | None] = queue.Queue()
-        self._thread: threading.Thread | None = None
+        self._threads: list[threading.Thread] = []
 
     # ---- 수명 -------------------------------------------------------------------------------
 
     def start(self) -> None:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         self._load_from_disk()
-        self._thread = threading.Thread(target=self._worker, name="agent-jobs", daemon=True)
-        self._thread.start()
+        for n in range(max(1, self.settings.job_workers)):
+            thread = threading.Thread(target=self._worker, name=f"agent-jobs-{n + 1}", daemon=True)
+            thread.start()
+            self._threads.append(thread)
 
     def stop(self) -> None:
-        self._queue.put(None)
+        for _ in self._threads:
+            self._queue.put(None)
 
     def _load_from_disk(self) -> None:
         loaded: list[Job] = []
@@ -180,7 +185,9 @@ class JobRunner:
     def submit(self, job: Job) -> dict:
         with self._lock:
             self._jobs[job.id] = job
-            line = job.add_log(f"queued ({job.planner.mode} planner)")
+            group = job.group
+            where = f", candidate {group['index'] + 1} of {group['size']} in {group['id']}" if group else ""
+            line = job.add_log(f"queued ({job.planner.mode} planner{where})")
             self._refresh_files(job)
             self._save(job)
             snapshot = job.to_dict()
@@ -207,6 +214,21 @@ class JobRunner:
         with self._lock:
             jobs = sorted(self._jobs.values(), key=lambda j: (j.created_at, j.id), reverse=True)
             return [job.to_dict() for job in jobs]
+
+    def group_snapshots(self, group_id: str) -> list[dict]:
+        """그룹의 job 들을 후보 순서(index)대로. 없는 그룹이면 빈 목록."""
+        with self._lock:
+            members = [job for job in self._jobs.values() if job.group and job.group.get("id") == group_id]
+            return [job.to_dict() for job in sorted(members, key=lambda j: j.group.get("index", 0))]
+
+    def choose(self, group_id: str, job_id: str) -> list[dict]:
+        """그룹에서 고른 후보를 모든 job 의 group.chosen_job_id 에 적는다. 검사는 부르는 쪽(router)이 한다."""
+        with self._lock:
+            for job in self._jobs.values():
+                if job.group and job.group.get("id") == group_id:
+                    job.group["chosen_job_id"] = job_id
+                    self._save(job)
+        return self.group_snapshots(group_id)
 
     # ---- worker -----------------------------------------------------------------------------
 

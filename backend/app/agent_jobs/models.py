@@ -6,7 +6,11 @@
      "planner": {"mode": file|openrouter, "model_config": 이름 | null, "allow_api": bool},
      "steps": [{"name": profile|plan|preprocess|render|validate, "status": pending|running|succeeded|failed|skipped,
                 "started_at", "finished_at", "error"}],
-     "log": ["<ISO 시각> <메시지>", …], "planner_notes", "summary", "validation", "usage", "files", "error"}
+     "log": ["<ISO 시각> <메시지>", …], "planner_notes", "summary", "validation", "usage", "files", "error",
+     "provenance", "review", "group": null | {"id": "grp-…", "index": 0부터, "size": 후보 수, "chosen_job_id": id | null}}
+
+group 은 POST /api/agent/job-groups 로 같은 원본과 prompt 를 모델만 바꿔 한꺼번에 접수한 후보 job 들을 묶는다.
+chosen_job_id 는 그룹의 모든 job 에 같은 값으로 적는다 (사용자가 비교한 뒤 고른 후보).
 """
 
 from __future__ import annotations
@@ -32,6 +36,15 @@ def now_iso() -> str:
 def new_job_id(now: datetime | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     return f"job-{now.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2)}"
+
+
+def new_group_id(now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    return f"grp-{now.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2)}"
+
+
+def group_info(group_id: str, index: int, size: int) -> dict:
+    return {"id": group_id, "index": index, "size": size, "chosen_job_id": None}
 
 
 @dataclass
@@ -78,6 +91,7 @@ class Job:
 
     provenance: dict = field(default_factory=dict)
     review: dict = field(default_factory=dict)
+    group: dict | None = None
 
     def step(self, name: str) -> Step:
         for step in self.steps:
@@ -110,6 +124,7 @@ class Job:
             "error": self.error,
             "provenance": dict(self.provenance),
             "review": dict(self.review),
+            "group": dict(self.group) if self.group else None,
         }
 
     @classmethod
@@ -141,6 +156,7 @@ class Job:
             error=data.get("error"),
             provenance=dict(data.get("provenance") or {}),
             review=dict(data.get("review") or {}),
+            group=dict(data["group"]) if isinstance(data.get("group"), dict) else None,
         )
 
 
