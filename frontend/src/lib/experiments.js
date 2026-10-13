@@ -1,4 +1,6 @@
 // 실험 결과 비교와 Generate 초안. 원본 데이터와 API 허용 상태는 localStorage에 저장하지 않는다.
+import { CANDIDATE_COUNT } from './job-groups.js';
+
 export const GENERATE_DRAFT_KEY = 'mturk-console:generate-draft:v1';
 
 export function normalizeGenerateDraft(value) {
@@ -7,7 +9,10 @@ export function normalizeGenerateDraft(value) {
   const source = v.source && typeof v.source.source_job_id === 'string' ? {
     source_job_id: v.source.source_job_id, raw_name: String(v.source.raw_name || ''), has_spec: Boolean(v.source.has_spec),
   } : null;
-  return { name: text('name'), prompt_text: text('prompt_text'), model_config: text('model_config'), source };
+  // 후보마다 고른 모델 설정 이름. 예전 초안의 model_config(하나)는 첫 후보의 모델로 읽는다
+  const models = Array.isArray(v.model_configs) ? v.model_configs : text('model_config') ? [v.model_config] : [];
+  const model_configs = models.slice(0, CANDIDATE_COUNT).map((name) => (typeof name === 'string' ? name : ''));
+  return { name: text('name'), prompt_text: text('prompt_text'), model_configs, source };
 }
 
 export function readGenerateDraft(storage) {
@@ -50,17 +55,24 @@ export function comparisonWarnings(bundles) {
   const raw = bundles.map(({ job }) => job.provenance?.raw_sha256);
   if (raw.some((v) => !v)) warnings.push('Some runs have no raw-data fingerprint; identical input cannot be confirmed.');
   else if (new Set(raw).size > 1) warnings.push('These runs used different raw data.');
+  // 한 묶음의 후보는 일부러 모델만 바꿔 만든 것이라 모델 차이를 경고하지 않는다
+  const groupId = bundles[0].job.group?.id;
+  const sameGroup = Boolean(groupId) && bundles.every(({ job }) => job.group?.id === groupId);
   const planners = bundles.map(({ job }) => `${job.planner?.mode}:${job.planner?.model_config}`);
-  if (new Set(planners).size > 1) warnings.push('Planner or model settings differ between runs.');
+  if (!sameGroup && new Set(planners).size > 1) warnings.push('Planner or model settings differ between runs.');
   const policies = bundles.map(({ spec }) => JSON.stringify({ source: spec.source, limits: spec.item?.iterate?.map((v) => v.limit), hit: spec.hit }));
-  if (new Set(policies).size > 1) warnings.push('Sampling, grouping or attention settings differ. Check the task specs before judging prompt quality.');
+  if (new Set(policies).size > 1) {
+    warnings.push(sameGroup
+      ? 'The candidates sample, group or check attention differently. Compare their task specs as well as the previews.'
+      : 'Sampling, grouping or attention settings differ. Check the task specs before judging prompt quality.');
+  }
   if (bundles.some(({ job }) => job.planner?.mode === 'file')) warnings.push('A run used a saved spec: it does not measure the effect of its prompt.');
   return warnings;
 }
 
 export function experimentReport(bundles, createdAt = new Date().toISOString()) {
   return { version: 1, created_at: createdAt, warnings: comparisonWarnings(bundles), runs: bundles.map(({ job, spec, inputs }) => ({
-    job_id: job.id, name: job.name, status: job.status, planner: job.planner, provenance: job.provenance,
+    job_id: job.id, name: job.name, group: job.group ?? null, status: job.status, planner: job.planner, provenance: job.provenance,
     prompt_text: inputs.prompt_text, summary: job.summary, validation: job.validation, usage: job.usage,
     review: job.review ?? {}, task_spec: spec,
   })) };

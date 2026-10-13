@@ -52,6 +52,8 @@ export const AGENT_ROUTES = {
   getJobFile: { method: 'GET', path: '/agent/jobs/:id/files/:name', args: ['id', 'name'] },
   getJobInputs: { method: 'GET', path: '/agent/jobs/:id/inputs', args: ['id'] },
   reviewJob: { method: 'PUT', path: '/agent/jobs/:id/review', args: ['id', 'body'] },
+  createJobGroup: { method: 'POST', path: '/agent/job-groups', args: ['form'], encoding: 'multipart' },
+  chooseCandidate: { method: 'PUT', path: '/agent/job-groups/:id/choice', args: ['id', 'job_id'] },
 };
 
 const PARAM = /:([A-Za-z]+)/g;

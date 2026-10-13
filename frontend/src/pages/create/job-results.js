@@ -1,4 +1,5 @@
 import { agent } from '../../api-client/client.js';
+import { tag } from '../../components/badges.js';
 import { el } from '../../components/dom.js';
 import { openModal } from '../../components/modal.js';
 import { errorNotice, loading, muted, notice } from '../../components/notice.js';
@@ -6,6 +7,7 @@ import { previewFrame } from '../../components/preview-frame.js';
 import { downloadFile } from '../../components/download.js';
 import { parseCsv, decodeUtf8 } from '../../lib/csv.js';
 import { comparisonWarnings, sharedRows, experimentReport } from '../../lib/experiments.js';
+import { candidateLabel } from '../../lib/job-groups.js';
 
 async function resultFile(job, name, type, signal) {
   const response = await fetch(agent.fileUrl(job.id, name), { signal });
@@ -68,16 +70,42 @@ function metrics(bundles) {
     ['LLM calls', (b) => b.job.usage?.calls ?? 0], ['Cost (USD)', (b) => b.job.usage?.cost ?? '—'],
   ];
   return el('div', { className: 'table-scroll' }, el('table', { className: 'experiment-table' },
-    el('thead', {}, el('tr', {}, el('th', {}, 'Measure'), bundles.map((b) => el('th', {}, b.job.name)))),
+    el('thead', {}, el('tr', {}, el('th', {}, 'Measure'), bundles.map((b) => el('th', {}, candidateLabel(b.job))))),
     el('tbody', {}, rows.map(([label, value]) => el('tr', {}, el('th', {}, label), bundles.map((b) => el('td', {}, String(value(b) ?? '—'))))))));
 }
 
-export function openJobResults(jobs, onSaved = () => {}) {
+/** 후보를 고르는 버튼. onChoose(job) 이 끝나면(Project 저장 뒤 Publish Batch 로 이동) 창을 닫고, 실패하면 이유를 보인다. */
+function chooseBlock(job, onChoose, close) {
+  const chosen = job.group?.chosen_job_id === job.id;
+  const status = el('div', { className: 'choose-error' });
+  const button = el('button', { type: 'button', className: 'btn btn-primary choose-candidate', dataset: { jobId: job.id } }, chosen ? 'Choose again' : 'Choose this template');
+  button.addEventListener('click', async () => {
+    status.replaceChildren();
+    button.disabled = true;
+    button.textContent = 'Saving the project…';
+    try {
+      await onChoose(job);
+      close();
+    } catch (error) {
+      status.replaceChildren(errorNotice(error, 'Choose'));
+      button.disabled = false;
+      button.textContent = 'Choose this template';
+    }
+  });
+  return el('div', { className: 'choose-row' }, button, chosen ? tag('Chosen', 'green') : null, status);
+}
+
+/**
+ * 결과를 나란히 보는 창. jobs 가 하나면 그 결과, 여럿이면 비교다. { onChoose } 를 주면(후보 묶음) 후보마다 `Choose this template` 이 있다.
+ */
+export function openJobResults(jobs, onSaved = () => {}, { onChoose } = {}) {
   const controller = new AbortController();
   let closed = false;
   const frames = new Map();
   const body = el('div', {}, loading());
-  openModal({ title: jobs.length > 1 ? 'Compare prompt candidates' : `Result · ${jobs[0].name}`, width: jobs.length > 1 ? 1440 : 1160,
+  const name = jobs[0].name || jobs[0].id;
+  const title = onChoose ? `Choose a template · ${name}` : jobs.length > 1 ? 'Compare templates' : `Result · ${candidateLabel(jobs[0])}`;
+  const modal = openModal({ title, width: jobs.length > 1 ? 1440 : 1160,
     className: 'modal-experiments', content: body,
     onClose: () => { closed = true; controller.abort(); frames.forEach((frame) => frame.destroy()); },
   });
@@ -98,11 +126,12 @@ export function openJobResults(jobs, onSaved = () => {}) {
     }
     bundles.forEach((b, i) => {
       const rows = b.data.rows.map((row, index) => [String(index), `Row ${index + 1} · ${String(row.record_ids || '').slice(0, 95)}`]);
-      rowControls[i] = select(rows, '0', `Preview row for ${b.job.name}`);
+      rowControls[i] = select(rows, '0', `Preview row for ${candidateLabel(b.job)}`);
       rowControls[i].addEventListener('change', () => { if (common) common.value = ''; showRow(i, Number(rowControls[i].value)); });
       previews[i] = el('div', { className: 'job-preview' });
-      panels.push(el('section', { className: 'experiment-candidate', dataset: { jobId: b.job.id } }, el('h4', {}, b.job.name),
+      panels.push(el('section', { className: 'experiment-candidate', dataset: { jobId: b.job.id } }, el('h4', {}, candidateLabel(b.job)),
         muted(b.job.id),
+        onChoose ? chooseBlock(b.job, onChoose, () => modal.close()) : null,
         el('details', {}, el('summary', {}, 'Requester prompt'), el('pre', { className: 'pre experiment-spec' }, b.inputs.prompt_text || '(No prompt)')),
         el('details', {}, el('summary', {}, 'Task spec'), el('pre', { className: 'pre experiment-spec' }, JSON.stringify(b.spec, null, 2))),
         el('label', { className: 'field' }, 'Preview row', rowControls[i]), previews[i], reviewForm(b, onSaved, gone)));
@@ -111,6 +140,7 @@ export function openJobResults(jobs, onSaved = () => {}) {
     if (common) common.addEventListener('change', () => { if (common.value !== '') shared[Number(common.value)].indexes.forEach((index, i) => showRow(i, index)); });
     const download = el('button', { type: 'button', className: 'btn btn-small', onClick: () => downloadFile({ filename: 'prompt-comparison.json', mimeType: 'application/json', content: JSON.stringify(experimentReport(bundles), null, 2) }) }, 'Export comparison JSON');
     body.replaceChildren(
+      ...(onChoose ? [notice('info', 'Choose one candidate', `All candidates used the same raw data and prompt; only the model that wrote the task spec differs. Choosing one saves its layout and settings as the project "${name}" (replacing a project with that name) and opens Publish Batch with its hits.csv.`)] : []),
       notice('info', 'Structural validation and quality are separate', 'Inspect the data, instructions and attention checks. Preview submissions are displayed here; worker responses are not stored.'),
       ...warnings.map((warning) => notice('warning', warning)), metrics(bundles),
       el('div', { className: 'form-actions' }, download, muted('Export includes saved evaluations and prompts. Save notes before exporting.')),

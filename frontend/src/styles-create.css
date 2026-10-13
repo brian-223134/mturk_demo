@@ -905,3 +905,29 @@ a.btn:hover {
 .evaluation-checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .evaluation-checks .field { flex: 1; min-width: 130px; }
 @media (max-width: 1000px) { .experiment-grid { grid-template-columns: 1fr !important; } }
+
+/* Generate from raw data: 후보 묶음 */
+.field-label { font-weight: 600; font-size: 13px; }
+.candidate-models { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.candidate-model-field { display: grid; gap: 4px; min-width: 0; }
+.candidate-model-field select { width: 100%; }
+.candidate-letter { font-size: 12px; color: var(--muted); }
+.job-group { border-left-color: var(--neutral); }
+.job-group.group-running { border-left-color: var(--blue); }
+.job-group.group-ready { border-left-color: var(--good); }
+.job-group.group-failed { border-left-color: var(--critical); }
+.candidate-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.candidate-tile { min-width: 0; display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-top: 3px solid var(--neutral); border-radius: var(--radius); background: #fcfcfb; }
+.candidate-tile.job-running { border-top-color: var(--blue); }
+.candidate-tile.job-succeeded { border-top-color: var(--good); }
+.candidate-tile.job-failed { border-top-color: var(--critical); }
+.candidate-tile.candidate-chosen { box-shadow: 0 0 0 2px var(--good); }
+.candidate-tile .steps { margin-bottom: 0; }
+.candidate-tile .job-details { margin-top: 0; }
+.candidate-tile .job-details[open] { overflow-wrap: anywhere; }
+.candidate-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.group-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+.group-message { flex: 1; min-width: 200px; }
+.choose-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.choose-error { flex-basis: 100%; }
+@media (max-width: 900px) { .candidate-models, .candidate-grid { grid-template-columns: 1fr; } }

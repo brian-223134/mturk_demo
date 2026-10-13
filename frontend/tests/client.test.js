@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it } from 'node:test';
 
-import { ApiError, BASE_URL, agent, api, call, createJob, fileUrl, isApiError } from '../src/api-client/client.js';
+import { ApiError, BASE_URL, agent, api, call, createJob, createJobGroup, fileUrl, isApiError } from '../src/api-client/client.js';
 import { API_ROUTES } from '../src/api-client/routes.js';
 
 let originalFetch;
@@ -184,6 +184,25 @@ describe('agent job API', () => {
     assert.equal(calls[0].init.body, form);
     assert.deepEqual(calls[0].init.headers, {});
     assert.equal(agent.createJob, createJob);
+  });
+
+  it('createJobGroup(formData) 은 /api/agent/job-groups 로 multipart 를 보내고, chooseCandidate 는 job_id 를 JSON 으로 PUT 한다', async () => {
+    const form = new FormData();
+    form.append('model_configs', 'default');
+    form.append('model_configs', 'qwen3-235b');
+    const result = { group: { id: 'grp-1', size: 2 }, jobs: [{ id: 'j1' }, { id: 'j2' }] };
+    const calls = stubFetch((url) => (url.endsWith('/choice') ? json(200, { jobs: result.jobs }) : json(202, result)));
+
+    assert.deepEqual(await createJobGroup(form), result);
+    assert.deepEqual(await agent.chooseCandidate('grp 1', 'j2'), { jobs: result.jobs });
+    assert.equal(calls[0].url, '/api/agent/job-groups');
+    assert.equal(calls[0].init.method, 'POST');
+    assert.equal(calls[0].init.body, form);
+    assert.deepEqual(calls[0].init.headers, {});
+    assert.equal(calls[1].url, '/api/agent/job-groups/grp%201/choice');
+    assert.equal(calls[1].init.method, 'PUT');
+    assert.deepEqual(JSON.parse(calls[1].init.body), { job_id: 'j2' });
+    assert.equal(agent.createJobGroup, createJobGroup);
   });
 
   it('agent.listModels, listJobs, getJob 은 /api/agent/… 를 GET 한다', async () => {

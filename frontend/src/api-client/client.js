@@ -72,6 +72,11 @@ export function createJob(formData) {
   return call('createJob', [formData]);
 }
 
+/** POST /api/agent/job-groups (multipart/form-data, model_configs 를 후보마다 한 번씩). 202 면 { group, jobs } 를 돌려준다. */
+export function createJobGroup(formData) {
+  return call('createJobGroup', [formData]);
+}
+
 /** job 의 결과 파일을 내려받는 주소. job.files 에 있는 이름만 backend 가 허용한다. */
 export function fileUrl(jobId, name) {
   return `${BASE_URL}${encodeRequest(AGENT_ROUTES.getJobFile, [jobId, name]).url}`;
@@ -85,6 +90,8 @@ export const agent = {
   getJob: (id) => call('getJob', [id]),
   getJobInputs: (id) => call('getJobInputs', [id]),
   reviewJob: (id, body) => call('reviewJob', [id, body]),
+  chooseCandidate: (groupId, jobId) => call('chooseCandidate', [groupId, jobId]),
   createJob,
+  createJobGroup,
   fileUrl,
 };

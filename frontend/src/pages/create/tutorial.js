@@ -134,20 +134,21 @@ export function renderTutorial(root) {
       el('p', {}, '원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt만 주면 agent가 화면과 HIT CSV를 만듭니다. LLM은 작업 명세(', code('task_spec.json'), ') 하나만 쓰고, 데이터를 HIT로 자르고 HTML을 그리는 일은 코드가 합니다.'),
       flow([
         { title: '원본 + prompt', text: '한 문장이어도 됩니다' },
-        { title: 'job', text: 'profile → plan → preprocess → render → validate', accent: true },
-        { title: 'Use this result', text: '' },
+        { title: '후보 3개', text: '모델만 바꿔 동시에 profile → plan → preprocess → render → validate', accent: true },
+        { title: 'Compare and choose', text: '나란히 비교하고 하나를 고릅니다' },
         { title: 'Project + Publish Batch', text: 'CSV가 올라간 상태', accent: true },
       ]),
       el('div', { className: 'tutorial-actions' }, openGallery('generate', 'Generate from raw data 열기')),
       steps([
-        [ui('Candidate name'), '에 이름을 적고, ', ui('Raw data'), '에 원본을, ', ui('Prompt text'), '에 무엇을 판정하게 할지 적습니다. 예: "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개"'],
-        [ui('Allow API calls (uses credits)'), '를 체크하고 ', ui('Generate'), '를 누릅니다. 유료 호출이라 ', code('environment/.env'), '에 ', code('AGENT_ALLOW_API=1'), '을 적고 backend를 다시 시작해 둬야 체크할 수 있습니다. 한 번에 1센트 안팎이 들고 2~4분 걸리며, 실패할 수도 있습니다.'],
-        ['아래 ', ui('Templates'), ' 목록의 카드에서 진행 상황을 봅니다. 끝나면 HIT 수, 정답 라벨 분포, 검증 결과, LLM 비용이 보입니다.'],
-        [ui('Preview & evaluate'), '로 LLM이 쓴 명세(', ui('Task spec'), ')와 worker 화면을 검토합니다. 안내문의 기준이 정답 라벨과 맞는지, HIT 구성이 요청대로인지 봅니다.'],
-        ['명세를 고쳐야 하면 카드의 ', ui('Files'), '에서 ', code('task_spec.json'), '을 내려받아 고치고, ', ui('Reuse inputs'), '를 누른 뒤 ', ui('Optional task spec · offline replay'), '에 고친 파일을 올려 다시 ', ui('Generate'), '합니다. LLM을 부르지 않으므로 비용이 없고 몇 초면 끝납니다.'],
-        ['결과가 마음에 들면 ', ui('Use this result'), '를 누릅니다. job 이름으로 Project가 저장되고, CSV가 올라간 Publish Batch가 열립니다. attention과 대조 기준 설정도 채워져 있습니다.'],
+        [ui('Name'), '에 이름을 적고, ', ui('Raw data'), '에 원본을, ', ui('Prompt text'), '에 무엇을 판정하게 할지 적습니다. 예: "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개"'],
+        [ui('Models for the candidates'), '에서 후보 A, B, C가 쓸 모델을 고릅니다. 처음에는 서로 다른 모델 세 개가 골라져 있습니다. 모든 모델이 temperature 0이라 같은 모델을 두 번 고르면 거의 같은 후보가 나옵니다.'],
+        [ui('Allow API calls (uses credits)'), '를 체크하고 ', ui('Generate 3 candidates'), '를 누릅니다. 유료 호출이라 ', code('environment/.env'), '에 ', code('AGENT_ALLOW_API=1'), '을 적고 backend를 다시 시작해 둬야 체크할 수 있습니다. 후보 세 개가 동시에 돌기 때문에 비용은 후보마다 1센트 안팎씩 들고, 시간은 가장 늦은 후보만큼(2~4분) 걸립니다. 일부 후보는 실패할 수도 있습니다.'],
+        ['아래 ', ui('Templates'), ' 목록에 후보 세 개가 카드 하나로 묶여 보입니다. 후보마다 진행 단계, HIT 수, 비용이 보이고, ', ui('Details'), '에서 검증 결과와 파일을 봅니다.'],
+        ['모두 끝나면 ', ui('Compare and choose'), '를 누릅니다. 성공한 후보의 명세(', ui('Task spec'), ')와 worker 화면이 나란히 열립니다. 안내문의 기준이 정답 라벨과 맞는지, HIT 구성이 요청대로인지 비교합니다.'],
+        ['마음에 드는 후보의 ', ui('Choose this template'), '을 누릅니다. 이름으로 Project가 저장되고, CSV가 올라간 Publish Batch가 열립니다. attention과 대조 기준 설정도 채워져 있습니다. 고른 후보에는 ', ui('Chosen'), '이 표시됩니다.'],
+        ['명세를 고쳐야 하면 후보의 ', ui('Details'), ' → ', ui('Files'), '에서 ', code('task_spec.json'), '을 내려받아 고치고, ', ui('Reuse inputs'), '를 누른 뒤 ', ui('Optional task spec · offline replay'), '에 고친 파일을 올려 다시 ', ui('Generate'), '합니다. LLM을 부르지 않으므로 후보 없이 job 하나만 만들어지고, 비용이 없으며 몇 초면 끝납니다. 그 카드의 ', ui('Use this result'), '로 Project를 만듭니다.'],
       ]),
-      el('p', { className: 'muted' }, 'job은 Project가 아닙니다. job 목록은 Generate from raw data 안에만 있고, 같은 이름의 Project가 있으면 Use this result가 그 Project를 덮어씁니다. 시도마다 다른 이름을 쓰세요.'),
+      el('p', { className: 'muted' }, 'Templates 목록의 후보는 Project가 아닙니다. 목록은 Generate from raw data 안에만 있고, 같은 이름의 Project가 있으면 후보를 고를 때 그 Project를 덮어씁니다. 시도마다 다른 이름을 쓰세요.'),
     ),
 
     section(
@@ -158,7 +159,7 @@ export function renderTutorial(root) {
       simpleTable(
         ['어디서', '화면', '보는 것'],
         [
-          [ui('Preview & evaluate'), 'New Project → Generate from raw data → job 카드', 'LLM에 준 prompt, LLM이 쓴 명세, HIT 한 행의 worker 화면. Project로 쓰기 전에 검토합니다'],
+          [ui('Compare and choose'), 'New Project → Generate from raw data → Templates의 후보 카드', '후보마다 LLM에 준 prompt, LLM이 쓴 명세, HIT 한 행의 worker 화면. 나란히 비교하고 Project로 쓸 후보를 고릅니다'],
           [ui('Preview and Finish'), 'Project 목록의 Edit → 세 번째 탭', 'Project의 속성 요약과, 표본 값으로 그린 worker 화면'],
           [ui('Preview tasks'), 'Project 목록의 Publish Batch → 두 번째 단계', '올린 CSV의 행을 하나씩 넣은 실제 worker 화면'],
         ],
@@ -194,7 +195,7 @@ export function renderTutorial(root) {
         el('dd', {}, 'CSV에 attention 행을 섞고, 그 행의 기대 답을 ', code('{"답 이름": "기대 값"}'), ' 모양으로 한 컬럼에 적습니다. Review settings에서 그 컬럼을 고르면 Review가 통과 여부를 판정합니다. 자동 생성 결과에는 이 컬럼(', code('attention_expected'), ')이 이미 들어 있습니다.'),
         el('dt', {}, '정답이나 LLM 라벨과 비교하려면?'),
         el('dd', {}, 'Review settings의 ', ui('Compare answers with'), '에서 그 값이 든 컬럼을 고릅니다. 고르지 않으면 같은 HIT를 한 다른 worker들의 majority와 비교합니다.'),
-        el('dt', {}, 'job 목록에서 오래된 job을 빼려면?'),
+        el('dt', {}, 'Templates 목록에서 오래된 후보를 빼려면?'),
         el('dd', {}, '화면에는 지우는 버튼이 없습니다. ', code('output/jobs/'), '의 job 폴더를 다른 곳(예: ', code('output/jobs-archive/'), ')으로 옮기고 backend를 다시 시작합니다.'),
         el('dt', {}, '더 자세한 설명은?'),
         el('dd', {}, '저장소의 ', code('docs/create-projects.md'), '(화면별 설명)와 ', code('docs/annotation-elements.md'), '(요소 설명)를 봅니다.'),
