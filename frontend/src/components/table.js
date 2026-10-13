@@ -1,5 +1,6 @@
 // 표 도우미. columns: { title, tooltip, align: 'right'|'center', width, render(row, index) → Node|string|number, className,
-//   sortKey (있으면 머리글을 눌러 정렬), sortDefault: 'asc'|'desc' (처음 누를 때의 방향) }
+//   sortKey (있으면 머리글을 눌러 정렬), sortDefault: 'asc'|'desc' (처음 누를 때의 방향),
+//   span(row, index) → 숫자 (있으면 rowspan. 0 이면 그 행에는 칸을 만들지 않는다. 위 행의 칸이 덮는다) }
 // 선택적으로 정렬(sort, onSort), 체크박스 선택(selection), 행 클릭(onRowClick)을 붙인다. 없으면 예전과 같은 표다.
 // 데이터 행에는 data-row="<키>" 가 붙고, 비어 있을 때의 안내 행에는 붙지 않는다 (행 수를 셀 때 구분).
 
@@ -68,9 +69,11 @@ export function table({ columns, rows, rowKey, rowAttrs, empty = 'No data', clas
       });
     }
     for (const c of cols) {
+      const span = c.span ? c.span(row, index) : 1;
+      if (span === 0) continue;
       const value = c.render ? c.render(row, index) : row[c.key];
       const classes = [c.align ? `align-${c.align}` : '', c.className ?? ''].filter(Boolean).join(' ') || null;
-      tr.append(el('td', { className: classes }, value === undefined || value === null ? '' : value));
+      tr.append(el('td', { className: classes, rowspan: span > 1 ? String(span) : null }, value === undefined || value === null ? '' : value));
     }
     body.append(tr);
   });
