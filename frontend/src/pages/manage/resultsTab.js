@@ -1,5 +1,5 @@
-// Results 탭: 문항별 투표와 majority, 만장일치 비율, Fleiss κ, 라벨 분포, export.
-// Approved assignment 의 실제 문항만 센다. 계산은 서버가 하고 화면은 보여주기만 한다.
+// Results 탭: annotator 간 일치도(IAA: 제출 전체와 승인만의 Fleiss' κ, Krippendorff's α), 문항별 투표와 majority, 만장일치 비율,
+// 라벨 분포, export. 문항 표와 분포는 Approved assignment 의 실제 문항만 센다. 계산은 서버가 하고 화면은 보여주기만 한다.
 
 import { api } from '../../api-client/client.js';
 import { tag } from '../../components/badges.js';
@@ -13,7 +13,10 @@ import { CATEGORY_COLORS, stackedBar } from '../../components/stackedBar.js';
 import { num, pager, table } from '../../components/table.js';
 import { toast } from '../../components/toast.js';
 import { replace } from '../../components/render.js';
+import { IAA_SCOPES, formatChange, iaaChange, iaaRow, kappaBand } from './iaa.js';
 import { errorText } from './shared.js';
+
+export { kappaBand };
 
 const PAGE_SIZES = [25, 50, 100];
 
@@ -21,16 +24,6 @@ export const EXPORT_FORMATS = [
   { key: 'labels-json', label: 'Labels JSON (votes, majority, workers per item)' },
   { key: 'mturk-csv', label: 'MTurk results CSV (same columns as the Requester website export)' },
 ];
-
-/** Landis & Koch (1977) 의 구간. 해석을 돕는 관례일 뿐 기준은 아니다. */
-export function kappaBand(kappa) {
-  if (kappa < 0) return 'poor';
-  if (kappa <= 0.2) return 'slight';
-  if (kappa <= 0.4) return 'fair';
-  if (kappa <= 0.6) return 'moderate';
-  if (kappa <= 0.8) return 'substantial';
-  return 'almost perfect';
-}
 
 export async function exportBatchAs(batchId, format) {
   try {
@@ -52,6 +45,40 @@ function card(title, ...children) {
 
 function stat(label, value, attrs = {}) {
   return el('div', { className: 'stat', ...attrs }, el('div', { className: 'stat-label' }, label), el('div', { className: 'stat-value tabular' }, value));
+}
+
+/** 범위(행) × 지표(열) 표. 아래 행은 승인만 − 제출 전체로, 검수로 일치도가 얼마나 바뀌었는지 보인다. */
+function iaaCard(iaa, target) {
+  const metric = (value, band, coverage) =>
+    el('div', { className: 'iaa-metric' }, el('span', { className: 'iaa-value tabular' }, value), el('span', { className: 'muted small' }, band), el('div', { className: 'muted small' }, coverage));
+  const rows = IAA_SCOPES.map(({ key, label, detail }) => {
+    const row = iaaRow(iaa[key], target);
+    return el(
+      'tr',
+      { dataset: { scope: key } },
+      el('th', { scope: 'row' }, el('div', {}, label), el('div', { className: 'muted small' }, detail)),
+      el('td', { className: 'iaa-kappa' }, metric(row.kappa, row.kappaBand, row.kappaCoverage)),
+      el('td', { className: 'iaa-alpha' }, metric(row.alpha, row.alphaBand, row.alphaCoverage)),
+      el('td', { className: 'muted' }, row.responses),
+    );
+  });
+  const change = (m) => el('span', { className: 'iaa-change tabular' }, formatChange(iaaChange(iaa, m)));
+  return el(
+    'section',
+    { className: 'card iaa-card', id: 'iaa' },
+    el('h4', { className: 'card-title' }, 'Inter-annotator agreement'),
+    el(
+      'table',
+      { className: 'table iaa-table' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Responses counted'), el('th', { title: 'Items with exactly the target number of votes' }, "Fleiss' κ"), el('th', { title: 'Every item with two or more votes (nominal)' }, "Krippendorff's α"), el('th', {}, ''))),
+      el('tbody', {}, rows, el('tr', { className: 'iaa-change-row' }, el('th', { scope: 'row' }, 'Change after review', el('div', { className: 'muted small' }, 'approved − all submitted')), el('td', {}, change('fleissKappa')), el('td', {}, change('krippendorffAlpha')), el('td', {}, ''))),
+    ),
+    muted(
+      `κ counts only items with exactly ${target} votes, so HITs that got an extra vote after a rejection and top-up are left out of it. ` +
+        'α counts every item with two or more votes, so it is the fairer before/after comparison. Attention and free-text items are excluded from both. ' +
+        'Bands: κ after Landis & Koch (1977); α after Krippendorff (reliable ≥ 0.800, tentative ≥ 0.667).',
+    ),
+  );
 }
 
 export async function renderResults(panel, ctx) {
@@ -127,15 +154,20 @@ export async function renderResults(panel, ctx) {
     );
   }
 
-  replace(panel, 
-    el(
-      'div',
-      { className: 'cards cards-4' },
-      card(
+  // iaa 는 backend 에만 있다. prototype 의 mock API 처럼 없으면 예전처럼 승인 응답의 κ 카드만 보인다
+  const kappaCard = data.iaa
+    ? null
+    : card(
         null,
         stat("Fleiss' κ", formatFixed(data.fleissKappa), { id: 'kappa', title: 'Computed only on items with exactly the target number of approved votes' }),
         muted(`${data.fleissKappa === null || data.fleissKappa === undefined ? '' : `${kappaBand(data.fleissKappa)} agreement · `}${data.kappaItemCount} items × ${data.target} raters`),
-      ),
+      );
+  replace(panel,
+    data.iaa ? iaaCard(data.iaa, data.target) : null,
+    el(
+      'div',
+      { className: 'cards cards-4' },
+      kappaCard,
       card(null, stat('Unanimous items', formatPercent(data.unanimousRatio), { id: 'unanimous' }), muted(`of items with ${data.target} votes`)),
       card(null, stat('Items with votes', String(items.length), { id: 'items-with-votes' }), muted(`${items.length - data.kappaItemCount} not at ${data.target} votes · ${tied} tied`)),
       card('Label distribution (approved votes)', labels.length === 0 ? muted('No approved votes yet.') : stackedBar(labels.map((label) => ({ key: label, label, value: data.labelDistribution[label], color: colorOf(label) })))),

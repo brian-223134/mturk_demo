@@ -534,6 +534,10 @@ details.menu-disabled > summary {
 .two-col + .card {
   margin-top: 16px;
 }
+/* 격자 안의 카드는 간격을 grid 가 맡는다 (위 규칙이 둘째 카드부터 아래로 밀지 않게) */
+.cards > .card + .card {
+  margin-top: 0;
+}
 #worker-history-card {
   margin-bottom: 16px;
 }
@@ -732,4 +736,37 @@ details.menu-disabled > summary {
   background: #c9c8c2;
   border-radius: 5px;
   border: 2px solid #f5f5f4;
+}
+
+/* Results 의 IAA 표 */
+.iaa-card {
+  margin-bottom: 16px;
+}
+.iaa-table {
+  margin: 4px 0 10px;
+}
+.iaa-table th[scope='row'] {
+  width: 220px;
+  font-weight: 600;
+  white-space: normal;
+}
+.iaa-metric {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.iaa-metric > div {
+  flex-basis: 100%;
+}
+.iaa-value {
+  font-size: 20px;
+  font-weight: 600;
+}
+.iaa-change-row th,
+.iaa-change-row td {
+  background: #fafaf9;
+}
+.iaa-change {
+  font-weight: 600;
 }
