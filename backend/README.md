@@ -117,6 +117,8 @@ MTurk 처럼 HIT 를 만들 때 비용을 미리 잡아 두고, 반려하면 돌
 
 `getResults`는 Approved 응답의 라벨(attention 과 자유 서술 답 제외)만 모아 문항(`<rowIndex>:<answerName>`)마다 `votes`, `workers`, `majority`(동률이면 `null`), `unanimous`를 내고, 투표 수가 정확히 `target`(batch 의 MaxAssignments)인 문항만으로 `unanimousRatio`와 Fleiss' κ(`fleissKappa`, `kappaItemCount`)를 계산합니다 (`app/domain/agreement.py`). 시작 데이터의 κ 는 statsmodels 의 값과 같습니다: batch-1000001 0.730594 (420 문항), batch-1000003 0.938407 (241), batch-1000002 0.856749 (326). `labelDistribution`은 전체 표의 값별 수입니다.
 
+`iaa`는 backend 에만 있는 필드입니다 (프로토타입의 경로 표에는 없고, 화면은 없으면 예전처럼 κ 카드만 보입니다). `submitted`(제출 전체: Submitted, Approved, Rejected)와 `approved`(Approved 만) 두 범위마다 `statuses`, `assignments`, `workers`, `items`, `fleissKappa`·`kappaItemCount`(투표 수가 정확히 `target`인 문항), `krippendorffAlpha`·`alphaItemCount`(nominal, 투표 2개 이상인 문항 모두)를 냅니다. `approved`의 κ 는 위의 `fleissKappa`와 같습니다. 시작 데이터의 값은 krippendorff·statsmodels 패키지로 따로 계산한 값과 같고 `test_manage_api.py`에 고정되어 있습니다 (예: batch-1000001 제출 전체 κ 0.598084 / α 0.411499, 승인 κ 0.730594 / α 0.730808).
+
 `exportBatch?format=`은 `{"filename", "mimeType", "content"}`(ExportFile)를 돌려줍니다. `mturk-csv`는 MTurk Requester 웹사이트의 결과 CSV 와 같은 컬럼(`HITId … Input.<컬럼> Answer.taskAnswers Approve Reject`, 시각은 `Thu Oct 09 07:30:20 UTC 2025` 형식, `Answer.taskAnswers`는 `[{"input_answers": "<JSON>"}]`)이고, `labels-json`은 `{"<rowIndex>:<answerName>": {votes, majority, workers}}`입니다 (`app/domain/export_formats.py`). `mturk-csv`에는 attention 답과 자유 서술 답을 포함한 모든 답이 들어가고, `labels-json`에는 `getResults`와 같은 라벨만 들어갑니다. 파일 이름은 batch 이름의 slug 에 `-results.csv`, `-labels.json`을 붙인 것입니다.
 
 ### worker 와 pool
@@ -270,7 +272,7 @@ backend/
    ├─ seed.py            data/ 폴더 읽기 (placeholders 와 attention 판정은 여기서 계산)
    ├─ domain/            프로토타입 계산 규칙의 이식. progress.py (진행률, 재모집 계획), cost.py (수수료, 단가), attention.py
    │                     (두 규칙 모양의 판정), answer_kinds.py (attention·자유 서술·라벨 구분),
-   │                     template.py (placeholder), agreement.py (majority, Fleiss' κ), reference.py (대조 기준),
+   │                     template.py (placeholder), agreement.py (majority, Fleiss' κ, Krippendorff's α), reference.py (대조 기준),
    │                     worker_stats.py (worker 지표), export_formats.py (CSV, 라벨 JSON), list_query.py (ListQuery),
    │                     js.py (JS 와 같은 숫자·문자열·정렬 규칙)
    ├─ routers/
@@ -301,13 +303,13 @@ docker compose run --rm backend-test pytest -q tests/test_console_api.py -k batc
 
 - `test_routes_table.py`: `app/routes.py`의 경로 표가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나(이름, 메서드, 경로, 인자 순서) 같은지, 표의 모든 경로가 앱에 등록되어 있고 어느 것도 501 을 내지 않는지, `MOCK_ROUTES`는 등록되어 있지 않은지 확인합니다.
 - `test_domain.py`: `app/domain/`의 진행률, 비용, attention, 대조 기준(`reference.py`), worker 지표, export 형식, 재모집 계획, JS 호환 규칙(`js.py`)이 프로토타입 테스트(`prototype/src/domain/*.test.ts`)의 기대값과 같은지 확인합니다.
-- `test_domain_agreement.py`: majority(동률은 `null`), Fleiss' κ(Fleiss 1971 예제 0.210, 정의되지 않는 경우), 문항 묶기와 자연 순서 정렬, 그리고 `data/`의 세 batch 에서 κ 가 statsmodels 의 값(0.730594, 0.938407, 0.856749)과 소수 여섯째 자리까지 같은지 확인합니다.
+- `test_domain_agreement.py`: majority(동률은 `null`), Fleiss' κ(Fleiss 1971 예제 0.210, 정의되지 않는 경우), 문항 묶기와 자연 순서 정렬, 그리고 `data/`의 세 batch 에서 κ 가 statsmodels 의 값(0.730594, 0.938407, 0.856749)과 소수 여섯째 자리까지 같은지 확인합니다. Krippendorff's α 는 Krippendorff (2011) 의 nominal 예시 0.743 과 경계 경우(완전 일치, 한 범주, 짝 없음), 범위별 IAA 가 κ 와 α 에 서로 다른 문항을 쓰는 것을 확인합니다.
 - `test_list_query.py`: ListQuery 의 필터(같음, 배열, 빈 값, custom), 정렬(숫자, boolean, 문자열, 없는 값은 맨 뒤, 안정), 페이지, 잘못된 값의 400 문구, query string 읽기를 확인합니다.
 - `test_seed_db.py`: `data/`로 seed 한 규모(templates 2, batches 3, hits 72, assignments 231, pools 2, workers 60), 처음 켤 때 `seed`이고 같은 DB 파일을 다시 열면 `snapshot`인 것, 깨진 seed 폴더(임시 사본에서 파일을 지운 것)에서 `SeedError`가 나는 것을 확인합니다.
 - `test_console_api.py`: health, 템플릿 목록과 상세, batch 목록과 상세의 상태·`needsReview`·진행률·비용, 계정, 없는 자원과 없는 경로의 404, 잘못된 입력의 400 봉투, 그리고 경로 표의 모든 경로가 구현되어 501 을 내는 경로가 없는 것을 확인합니다.
 - `test_create_api.py`: 템플릿 저장(새 id, `-2` 접미어, 덮어쓰기, placeholders, Project 필드 `properties`·`sampleRow`의 저장·유지·삭제와 검사 문구)과 삭제(204, 게시된 batch 의 사본은 그대로), 게시(행마다 HIT, 열린 자리, 잔액 $496.40, 100KB 셀), attention 규칙 두 모양과 `freeTextSuffixes`의 저장, 게시 검증의 모든 문구, pool 목록을 확인합니다.
 - `test_answer_kinds.py`: 기대 답 컬럼 방식의 판정과 셀 읽기, 답 분류(접두어·컬럼·자유 서술, attention 우선)를 확인하고, 새 출력 모양의 batch 두 개로 만든 임시 seed 폴더로 seed 판정, `listAssignments`의 `attentionNames`·`freeTextNames`·대조 기준·일치율, 결과와 κ·`labels-json`에서 빠지는 것, `mturk-csv`에 남는 것, worker 의 majority 일치율을 확인합니다.
-- `test_manage_api.py`: HIT 목록의 항목과 조회 조건, assignment 목록의 Row·Agree 열과 필터·기본 순서, column 과 majority 대조 기준, 승인·반려·번복의 상태 변화와 잔액($500.06 → $500.00), 전부 아니면 아무것도 바꾸지 않는 것, 재모집(fill-to-target, 만료 연장, 9개 상한, 잔액 부족), 만료, 결과와 κ, 두 export 형식을 확인합니다.
+- `test_manage_api.py`: HIT 목록의 항목과 조회 조건, assignment 목록의 Row·Agree 열과 필터·기본 순서, column 과 majority 대조 기준, 승인·반려·번복의 상태 변화와 잔액($500.06 → $500.00), 전부 아니면 아무것도 바꾸지 않는 것, 재모집(fill-to-target, 만료 연장, 9개 상한, 잔액 부족), 만료, 결과와 κ, 두 export 형식을 확인합니다. Results 의 `iaa`(세 batch 의 두 범위 값, 검수 대기 응답을 승인·반려한 뒤의 변화)도 확인합니다.
 - `test_workers_api.py`: worker 목록의 지표와 순서, 정렬(값이 없는 항목은 맨 뒤)과 조건 필터, worker 상세, pool 만들기·추가·제거, 차단(사유 필수)·메모·해제, 응답이 없는 worker 가 목록에 나오는 것을 확인합니다.
 - `test_agent_jobs_api.py`: 모델 목록, 예시(`agent/examples/groundedness/`)로 접수한 job 이 `succeeded`까지 가는 것(단계, 파일 9개, 검증, 요약)과 결과 파일 내려받기, 400 조건들(raw 없음, spec 도 prompt 도 없음, LLM 호출 불허, 잘못된 spec), spec 이 원본과 맞지 않을 때 `preprocess`에서 `failed`가 되는 것, `prompt_text`, 다른 앱이 같은 출력 폴더를 열어도 job 이 남는 것을 확인합니다.
 - `test_agent_job_groups_api.py`: 후보 묶음의 접수(후보마다 job, 같은 이름과 원본, `group`의 index), planner를 가짜로 바꾼 mock 으로 세 후보가 실제로 동시에 도는 것(모두 plan 에 들어와야 풀리는 Barrier), 실패한 후보가 섞인 묶음에서 고르기와 재시작 뒤에도 남는 선택, 잘못된 선택과 없는 묶음, 이전 job 의 원본 재사용, 400 조건들(모델 수, 없는 모델, 빈 prompt, 호출 불허, spec)에서 폴더가 남지 않는 것, `AGENT_JOB_WORKERS` 읽기를 확인합니다.

@@ -141,7 +141,29 @@ Review에서 행을 누르면 열리는 화면입니다. `Answers` 표의 한 �
 
 ## Results 읽기
 
-Results는 **승인된 응답의 실제 문항**만 집계합니다. attention 문항은 제외합니다. 문항 하나는 "행(HIT) × 문항 이름"입니다.
+맨 위의 `Inter-annotator agreement`는 annotator 간 일치도를 두 범위로 나누어 보여 줍니다 (production 콘솔에만 있습니다. 프로토타입은 승인 응답의 `Fleiss' κ` 카드 하나입니다).
+
+- **`All submitted`**: worker가 제출한 응답 전부입니다. 검수 대기, 승인, 반려를 모두 셉니다. 검수하기 전의 일치도입니다.
+- **`Approved only`**: 승인된 응답만입니다. 검수한 뒤의 일치도이며, 아래의 문항 표와 같은 응답을 셉니다.
+- **`Change after review`**: 승인만에서 제출 전체를 뺀 값입니다. 반려로 일치도가 얼마나 바뀌었는지 봅니다.
+
+지표는 두 가지이고, 계산에 쓰는 문항이 다릅니다. attention 문항과 자유 서술 문항은 둘 다 제외합니다.
+
+- **`Fleiss' κ`**: 표 수가 HIT당 응답 수(3)와 정확히 같은 문항만 씁니다. 기존 분석 스크립트(statsmodels의 `fleiss_kappa`)와 같은 기준입니다. 그래서 반려한 뒤 다시 모집해 표가 4개가 된 HIT는 `All submitted`의 κ에서 빠집니다. 반려가 있었던 HIT가 바로 그런 HIT이므로, 제출 전체의 κ는 실제보다 높게 나올 수 있습니다.
+- **`Krippendorff's α`**(nominal): 표가 2개 이상인 문항을 모두 씁니다. 문항마다 표 수가 달라도 되므로 검수 전후를 비교할 때는 α가 더 공정합니다. krippendorff 패키지의 값과 소수 여섯째 자리까지 같고, 테스트로 고정되어 있습니다. 옆의 구간 이름은 Krippendorff의 권고입니다: 0.800 이상 reliable, 0.667 이상 tentative(잠정적인 결론에만 사용), 그 아래 unreliable.
+
+| batch | 범위 | `Fleiss' κ` (계산에 쓴 문항) | `Krippendorff's α` (계산에 쓴 문항) | 응답 수 |
+|---|---|---|---|---|
+| `pilot close-ended chunk-fact` | All submitted | 0.598 (310 / 520) | 0.411 (520) | 132 |
+| | Approved only | 0.731 (420 / 420) | 0.731 (420) | 108 |
+| `open-ended query-fact coverage (model B)` | All submitted | 0.868 (274 / 326) | 0.741 (326) | 51 |
+| | Approved only | 0.857 (326 / 326) | 0.857 (326) | 48 |
+| `close-ended query-fact coverage (model A)` | All submitted | 0.938 (241 / 241) | 0.938 (241) | 48 |
+| | Approved only | 0.938 (241 / 241) | 0.938 (241) | 48 |
+
+model B batch에서는 검수한 뒤 κ가 0.868에서 0.857로 내려가지만 α는 0.741에서 0.857로 올라갑니다. 제출 전체의 κ가 반려 3건이 있었던 HIT의 문항 52개를 빼고 계산되었기 때문입니다. model A batch는 반려가 없어 두 범위가 같습니다.
+
+그 아래 카드와 문항 표는 **승인된 응답의 실제 문항**만 집계합니다. attention 문항은 제외합니다. 문항 하나는 "행(HIT) × 문항 이름"입니다.
 `Fleiss' κ`와 `Unanimous items`는 표 수가 HIT당 응답 수(3)와 정확히 같은 문항만으로 계산합니다.
 
 | batch | `Fleiss' κ` | 계산에 쓴 문항 | `Unanimous items` | `Label distribution` (표 수) |
