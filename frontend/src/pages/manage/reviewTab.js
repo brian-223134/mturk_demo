@@ -97,7 +97,6 @@ export async function renderReview(panel, ctx) {
     const allRejected = chosen.length > 0 && chosen.every((a) => a.AssignmentStatus === 'Rejected');
     replace(actions, 
       el('button', { type: 'button', className: 'btn', id: 'select-attention-failed', onClick: () => void selectAttentionFailed() }, 'Select attention-failed'),
-      el('button', { type: 'button', className: 'btn', id: 'invert-selection', disabled: items.length === 0, onClick: () => selection.invert(items) }, 'Invert selection'),
       el('button', { type: 'button', className: 'btn btn-primary', id: 'approve-selected', disabled: !allSubmitted, onClick: () => startAction('approve', chosen) }, 'Approve selected'),
       el('button', { type: 'button', className: 'btn btn-danger', id: 'reject-selected', disabled: !allSubmitted, onClick: () => startAction('reject', chosen) }, 'Reject selected…'),
       allRejected ? el('button', { type: 'button', className: 'btn', id: 'revert-selected', onClick: () => startAction('revert', chosen) }, 'Revert to approved…') : null,

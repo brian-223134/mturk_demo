@@ -43,15 +43,6 @@ export function createSelection(keyOf) {
       }
       notify();
     },
-    /** 이 행들의 선택만 반전한다. 다른 페이지의 선택은 그대로 둔다 */
-    invert(rows) {
-      for (const row of rows) {
-        const key = keyOf(row);
-        if (items.has(key)) items.delete(key);
-        else items.set(key, row);
-      }
-      notify();
-    },
     replace(rows) {
       items.clear();
       for (const row of rows) items.set(keyOf(row), row);

@@ -55,7 +55,7 @@ describe('eligibleWorkers', () => {
 
 describe('createSelection', () => {
   const rows = [{ id: 'a', s: 'Submitted' }, { id: 'b', s: 'Submitted' }, { id: 'c', s: 'Approved' }];
-  it('toggle, setAll, invert, clear 가 키로 행을 관리하고 구독자에게 알린다', () => {
+  it('toggle, setAll, remove, clear 가 키로 행을 관리하고 구독자에게 알린다', () => {
     const sel = createSelection((r) => r.id);
     let calls = 0;
     sel.subscribe(() => (calls += 1));
@@ -65,7 +65,7 @@ describe('createSelection', () => {
     sel.setAll(rows, true);
     assert.equal(sel.size, 3);
     assert.ok(sel.allSelected(rows));
-    sel.invert(rows.slice(0, 2)); // a, b 해제
+    sel.remove(rows.slice(0, 2)); // a, b 해제
     assert.deepEqual(sel.keys(), ['c']);
     assert.ok(sel.someSelected(rows) && !sel.allSelected(rows));
     sel.replace([rows[1]]);
