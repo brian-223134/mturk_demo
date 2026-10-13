@@ -16,7 +16,6 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
   let importedRaw = null;
   const name = el('input', { id: 'gen-name', name: 'name', type: 'text', value: draft.name });
   const raw = el('input', { id: 'gen-raw', name: 'raw', type: 'file', accept: '.json,.jsonl,.csv' });
-  const promptFile = el('input', { id: 'gen-prompt', name: 'prompt', type: 'file', accept: '.md,.txt' });
   const prompt = el('textarea', { id: 'gen-prompt-text', name: 'prompt_text', rows: 12, value: draft.prompt_text });
   const spec = el('input', { id: 'gen-spec', name: 'spec', type: 'file', accept: '.json' });
   const model = el('select', { id: 'gen-model', name: 'model_config' }, models.models.map((m) => el('option', { value: m.name }, `${m.name} — ${m.model}`)));
@@ -41,7 +40,6 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
       el('div', { className: 'form-actions' }, loadCandidate, loadExample), muted('All four candidates use the same six-record example and HIT policy. Loading a candidate replaces the prompt and clears any task spec.')) : null,
     field('Candidate name', name, 'Use a distinct name for each prompt version.'),
     field('Raw data', raw, 'JSON, JSONL or CSV. A selected file replaces any reused raw data.'), rawStatus,
-    field('Import prompt file', promptFile, 'Loads the file into the editable prompt below.'),
     field('Prompt text', prompt),
     field('Model', model),
     el('label', { className: 'checkbox' }, allow, ' Allow API calls (uses credits)'),
@@ -87,16 +85,8 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
   raw.addEventListener('change', () => { importedRaw = null; refresh(); });
   spec.addEventListener('change', () => { reuseSpec.checked = false; refresh(); });
   reuseSpec.addEventListener('change', refresh);
-  promptFile.addEventListener('change', async () => {
-    const file = promptFile.files[0];
-    if (!file) return;
-    fields.disabled = true;
-    try { const text = await file.text(); if (!gone()) { prompt.value = text; persist(); } }
-    catch (error) { if (!gone()) errorSlot.replaceChildren(errorNotice(error, 'Prompt')); }
-    finally { if (!gone()) { promptFile.value = ''; fields.disabled = busy; } }
-  });
   reset.addEventListener('click', () => {
-    name.value = ''; prompt.value = ''; raw.value = ''; promptFile.value = ''; spec.value = '';
+    name.value = ''; prompt.value = ''; raw.value = ''; spec.value = '';
     source = null; importedRaw = null; reuseSpec.checked = false; allow.checked = false;
     errorSlot.replaceChildren(); refresh();
   });

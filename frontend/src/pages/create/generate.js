@@ -1,4 +1,4 @@
-// New Project 의 `Generate from raw data`: 원본 데이터와 prompt 로 HIT 묶음을 만드는 agent job 패널과 job 목록, 진행 카드.
+// New Project 의 `Generate from raw data`: 원본 데이터와 prompt 로 HIT 묶음을 만드는 agent job 패널과 Templates 목록, 진행 카드.
 // job API 는 backend 에만 있다. prototype 의 mock API 는 /api/agent/models 에 404 로 답하므로 그때는 안내를 보이고 폼을 잠근다.
 // queued / running 인 job 은 2초마다 getJob 으로 다시 받아 카드를 갱신한다. 패널을 떠나면(stop) 타이머를 멈춘다.
 // 성공한 job 의 카드에는 `Use this result` 가 있어 template.html 과 settings.json 을 Project 로 저장하고 hits.csv 를 그 Project 의
@@ -54,7 +54,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
       muted('Upload the raw annotation data and a prompt that says what to judge. The pipeline profiles the data, plans a task spec (LLM, or your own task_spec.json), and produces hits.csv and template.html for a batch. When a job succeeds, "Use this result" saves the layout as a project and opens Publish Batch with hits.csv.'),
       generateBody,
     ),
-    el('div', { className: 'jobs-panel', id: 'jobs-panel' }, el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Jobs'), el('span', { className: 'muted small' }, 'Select 2–3 successful runs'), compare, refresh), jobsBody),
+    el('div', { className: 'jobs-panel', id: 'jobs-panel' }, el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Templates'), el('span', { className: 'muted small' }, 'Select 2–3 successful runs'), compare, refresh), jobsBody),
   );
 
   // 폴링 상태. cards 는 job id → 카드 요소, timer 는 다음 폴링 예약
@@ -112,7 +112,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
       result = await agent.listJobs();
     } catch (error) {
       if (gone()) return;
-      jobsBody.replaceChildren(errorNotice(error, 'Jobs'));
+      jobsBody.replaceChildren(errorNotice(error, 'Templates'));
       return;
     }
     if (gone()) return;
@@ -121,7 +121,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
     updateCompare();
     state.cards.clear();
     if (state.jobs.length === 0) {
-      jobsBody.replaceChildren(muted('No jobs yet. Submit the form above to start one.'));
+      jobsBody.replaceChildren(muted('No templates yet. Submit the form above to start one.'));
     } else {
       const list = el('div', { className: 'job-list' });
       for (const job of state.jobs) {
@@ -156,11 +156,11 @@ async function renderGenerate(body, jobsBody, upsertJob, loadJobs, gone) {
           `${error.message} — the agent job API (/api/agent/…) exists only in the FastAPI backend. If the frontend is pointed at the prototype mock API (API_UPSTREAM=http://api:8787), start it against the backend instead.`,
         ),
       );
-      jobsBody.replaceChildren(muted('The job list needs the same API and is not available here.'));
+      jobsBody.replaceChildren(muted('The template list needs the same API and is not available here.'));
       return;
     }
     body.replaceChildren(errorNotice(error, 'Models'));
-    jobsBody.replaceChildren(muted('The job list could not be loaded because the agent API did not answer.'));
+    jobsBody.replaceChildren(muted('The template list could not be loaded because the agent API did not answer.'));
     return;
   }
   if (gone()) return;
