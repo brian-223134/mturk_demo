@@ -681,3 +681,55 @@ details.menu-disabled > summary {
 .cell-decision {
   white-space: nowrap;
 }
+
+/* Review 표의 좌우 스크롤. 앞의 두 열(Row, Decision)은 왼쪽에 붙어 있다 */
+.review-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  --sticky-2-left: 190px;
+}
+.review-scroll > .assignment-table {
+  width: max-content;
+  min-width: 100%;
+  border: none;
+  /* collapse 면 붙어 있는 칸의 테두리가 표와 함께 밀려나므로 칸마다 테두리를 그린다 */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.assignment-table td {
+  white-space: nowrap;
+}
+.assignment-table td.cell-hit {
+  white-space: normal;
+}
+.assignment-table .cell-sticky {
+  position: sticky;
+  z-index: 1;
+  background: var(--panel);
+}
+.assignment-table th.cell-sticky {
+  z-index: 2;
+  background: #fafafa;
+}
+.assignment-table .cell-sticky-1 {
+  left: 0;
+}
+.assignment-table .cell-sticky-2 {
+  left: var(--sticky-2-left);
+  box-shadow: inset -1px 0 0 var(--border), 4px 0 6px -4px rgba(0, 0, 0, 0.12);
+}
+.assignment-table-grouped td.cell-hit.cell-sticky {
+  background: #fafaf9;
+}
+/* macOS 의 겹치는 스크롤바는 스크롤할 때만 보이므로, 좌우로 넘길 수 있다는 것이 늘 보이게 막대를 그린다 */
+.review-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+.review-scroll::-webkit-scrollbar-track {
+  background: #f5f5f4;
+}
+.review-scroll::-webkit-scrollbar-thumb {
+  background: #c9c8c2;
+  border-radius: 5px;
+  border: 2px solid #f5f5f4;
+}

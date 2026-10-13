@@ -140,7 +140,8 @@ export async function renderReview(panel, ctx) {
     legend.textContent =
       `Answers — W: this worker, R: reference (${describeReferenceSource(batch.reference)})` +
       legendEntries(tokens).map((entry) => ` · ${entry.token} = ${entry.values.join(' / ')}`).join('') +
-      ' · purple outline = attention item · italic = free text (hover for the full text) · "·" = no reference';
+      ' · purple outline = attention item · italic = free text (hover for the full text) · "·" = no reference' +
+      ' · the table scrolls sideways (Shift + wheel) while Row and Decision stay in place';
   }
 
   /** HIT 칸: Row 번호, 남은 검수 수, HIT 단위 라디오. 그 HIT 의 응답 행을 rowspan 으로 덮는다. */
@@ -196,14 +197,15 @@ export async function renderReview(panel, ctx) {
   function columnsFor() {
     const tokenWidth = tokenWidthOf(tokens);
     const startAt = groupStarts();
+    // 앞의 두 열(Row, Decision)은 표를 좌우로 넘겨도 왼쪽에 붙어 있다 (cell-sticky). 둘째 열의 left 는 renderTable 이 첫 열 폭으로 맞춘다
     const rowColumn = grouped()
-      ? { title: 'Row', tooltip: 'One HIT. Approve all / Reject all applies to every worker of the HIT', width: 190, sortKey: 'rowIndex', className: 'cell-hit no-row-click', span: (a, i) => (startAt.has(i) ? startAt.get(i).items.length : 0), render: (a, i) => hitCell(startAt.get(i)) }
-      : { title: 'Row', width: 60, align: 'right', sortKey: 'rowIndex', render: (a) => num(a.rowIndex) };
+      ? { title: 'Row', tooltip: 'One HIT. Approve all / Reject all applies to every worker of the HIT', width: 190, sortKey: 'rowIndex', className: 'cell-hit cell-sticky cell-sticky-1 no-row-click', headClassName: 'cell-sticky cell-sticky-1', span: (a, i) => (startAt.has(i) ? startAt.get(i).items.length : 0), render: (a, i) => hitCell(startAt.get(i)) }
+      : { title: 'Row', width: 60, align: 'right', sortKey: 'rowIndex', className: 'cell-sticky cell-sticky-1', headClassName: 'cell-sticky cell-sticky-1', render: (a) => num(a.rowIndex) };
     return [
       rowColumn,
-      { title: 'Decision', tooltip: "This worker's assignment. Click the chosen option again to clear it", width: 150, className: 'cell-decision', render: (a) => decisionCell(a) },
+      { title: 'Decision', tooltip: "This worker's assignment. Click the chosen option again to clear it", width: 150, className: 'cell-decision cell-sticky cell-sticky-2', headClassName: 'cell-sticky cell-sticky-2', render: (a) => decisionCell(a) },
       { title: 'Worker', width: 150, sortKey: 'WorkerId', render: (a) => el('a', { href: workerPath(a.WorkerId), className: 'worker-link' }, el('code', { className: 'worker-id' }, a.WorkerId)) },
-      { title: 'Answers', tooltip: 'W: this worker, R: reference. One token per question, in submission order', render: (a) => answersCell(a, tokens, tokenWidth, answerKindsOf(a, batch)) },
+      { title: 'Answers', tooltip: 'W: this worker, R: reference. One token per question, in submission order. Scroll the table sideways when the answers are wide', className: 'cell-answers', render: (a) => answersCell(a, tokens, tokenWidth, answerKindsOf(a, batch)) },
       { title: 'Attention', width: 100, render: (a) => attentionTag(a.attention) },
       { title: 'Agree', tooltip: "Share of this worker's answers (attention and free-text items excluded) that match the reference", width: 70, align: 'right', sortKey: 'agreement', render: (a) => num(formatPercent(a.agreement)) },
       { title: 'Time', width: 70, align: 'right', sortKey: 'workTimeInSeconds', render: (a) => num(formatSeconds(a.workTimeInSeconds)) },
@@ -220,7 +222,8 @@ export async function renderReview(panel, ctx) {
 
   function renderTable() {
     const starts = groupStarts();
-    replace(tableSlot, 
+    // 답이 길면 줄을 바꾸지 않고 표 전체를 좌우로 넘긴다 (W/R 두 줄이 문항별로 위아래 맞은 채로 남는다)
+    const scroller = el('div', { className: 'review-scroll', id: 'review-scroll' },
       table({
         columns: columnsFor(),
         rows: items,
@@ -236,6 +239,9 @@ export async function renderReview(panel, ctx) {
         },
         onRowClick: (a) => openDrawer(a),
       }),
+    );
+    replace(tableSlot,
+      scroller,
       pager({
         page: query.page,
         pageSize: query.pageSize,
@@ -246,6 +252,14 @@ export async function renderReview(panel, ctx) {
         onPageSize: (size) => { query.pageSize = size; query.page = 1; void load(); },
       }),
     );
+    pinSecondColumn(scroller);
+  }
+
+  /** 붙어 있는 둘째 열(Decision)의 left 를 첫 열(Row)의 실제 폭으로 맞춘다. 폭은 내용에 따라 조금 달라진다 */
+  function pinSecondColumn(scroller) {
+    const head = scroller.querySelector('th.cell-sticky-1');
+    if (!head) return;
+    scroller.style.setProperty('--sticky-2-left', `${head.getBoundingClientRect().width}px`);
   }
 
   async function load() {

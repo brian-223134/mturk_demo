@@ -1,6 +1,7 @@
 // 표 도우미. columns: { title, tooltip, align: 'right'|'center', width, render(row, index) → Node|string|number, className,
 //   sortKey (있으면 머리글을 눌러 정렬), sortDefault: 'asc'|'desc' (처음 누를 때의 방향),
-//   span(row, index) → 숫자 (있으면 rowspan. 0 이면 그 행에는 칸을 만들지 않는다. 위 행의 칸이 덮는다) }
+//   span(row, index) → 숫자 (있으면 rowspan. 0 이면 그 행에는 칸을 만들지 않는다. 위 행의 칸이 덮는다),
+//   headClassName (머리글 칸에만 붙는 class. className 은 데이터 칸에만 붙는다) }
 // 선택적으로 정렬(sort, onSort), 체크박스 선택(selection), 행 클릭(onRowClick)을 붙인다. 없으면 예전과 같은 표다.
 // 데이터 행에는 data-row="<키>" 가 붙고, 비어 있을 때의 안내 행에는 붙지 않는다 (행 수를 셀 때 구분).
 
@@ -14,7 +15,7 @@ function headerCell(c, sort, onSort) {
   const th = el(
     'th',
     {
-      className: [c.align ? `align-${c.align}` : '', sortable ? 'sortable' : '', active ? 'sorted' : ''].filter(Boolean).join(' ') || null,
+      className: [c.align ? `align-${c.align}` : '', sortable ? 'sortable' : '', active ? 'sorted' : '', c.headClassName ?? ''].filter(Boolean).join(' ') || null,
       title: c.tooltip,
       style: c.width ? { width: `${c.width}px` } : null,
       'aria-sort': active ? (sort.order === 'asc' ? 'ascending' : 'descending') : null,

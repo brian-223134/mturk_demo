@@ -610,11 +610,12 @@ p.muted {
   flex-direction: column;
   gap: 2px;
 }
+/* 줄을 바꾸지 않는다: 윗줄 W 와 아랫줄 R 의 토큰이 문항별로 위아래 맞아야 한 눈에 비교된다 (넓으면 표를 좌우로 넘긴다) */
 .answers-line {
   display: flex;
   gap: 2px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .answers-label {
   width: 14px;
