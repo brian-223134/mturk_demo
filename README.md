@@ -104,12 +104,12 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 
 - **`Overview`**: 진행률, 응답 현황, 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
 - **`Review`**: 응답을 검수하는 화면입니다.
-  - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 여러 건을 한 번에 승인하거나 반려할 수 있습니다. `Select attention-failed`는 attention check를 틀린 검수 대기 응답을 한 번에 선택합니다.
+  - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 검수합니다. 검수 대기 응답마다 `Approve` / `Reject` 라디오가 있고, 기본 정렬(`Row`)에서는 같은 HIT의 응답이 하나로 묶여 HIT 칸의 `Approve all` / `Reject all`로 그 HIT의 worker 전원을 한 번에 정할 수 있습니다. 고른 결정은 페이지를 넘겨도 남으며, 표 위의 `Submit … decisions…`로 한 번에 제출합니다. `Reject attention-failed`는 attention check를 틀린 검수 대기 응답을 모두 `Reject`로 골라 둡니다.
   - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 batch를 게시할 때 `Review settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
   - 행을 누르면 응답 상세가 열립니다. 문항마다 이 worker의 답, 같은 HIT를 수행한 다른 worker들의 답, 대조 기준을 나란히 보여 줍니다. `Open task`를 누르면 worker가 실제로 본 화면을 그대로 띄웁니다.
   - 반려할 때는 사유를 반드시 입력해야 하며, 자주 쓰는 문구 세 가지를 바로 고를 수 있습니다. attention check를 통과한 응답을 반려하려고 하면 경고가 표시됩니다.
   - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
-  - 반려한 응답은 30일 안에 승인으로 되돌릴 수 있습니다 (`Revert to approved…`).
+  - 반려한 응답은 30일 안에 승인으로 되돌릴 수 있습니다 (반려된 행의 `Revert…`).
 - **`HITs`**: HIT별로 승인, 반려, 검수 대기, 남은 자리 수와 완료 여부를 보여 줍니다. 미완료 HIT만 골라 볼 수 있고, 선택한 HIT의 응답을 추가로 모집할 수 있습니다. 처음에 응답 수를 10개 미만으로 만든 HIT는 합계를 9개보다 늘릴 수 없다는 MTurk의 제약도 반영되어 있어, 이를 넘는 요청은 이유와 함께 건너뜁니다.
 - **`Results`**: 문항별 투표와 majority, 만장일치 비율, Fleiss' κ, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
 

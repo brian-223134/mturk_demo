@@ -93,7 +93,7 @@ Review 표의 `Answers` 열에는 응답마다 답이 두 줄로 항상 보입�
 - 칸에 마우스를 올리면 문항 이름과 두 값의 원래 문자열이 표시됩니다.
 - 표 위의 범례 한 줄에 이 batch의 대조 기준 출처와 약어의 뜻이 적혀 있습니다.
 - 기본 정렬은 `Row`이므로 같은 HIT의 응답 3건이 위아래로 붙어 있고, 세 줄을 나란히 견주어 볼 수 있습니다.
-- `Invert selection`은 현재 페이지에서 선택을 반전합니다. 정상으로 보이는 몇 건만 체크한 뒤 반전해서 나머지를 한 번에 반려하는 식으로 씁니다.
+- production 콘솔(3000)에서는 Row 순일 때 같은 HIT의 응답이 하나로 묶이고, 왼쪽 HIT 칸의 `Approve all` / `Reject all`이 그 HIT의 worker 전원에게 같은 결정을 넣습니다. 그 뒤 어긋난 worker만 행의 `Approve` / `Reject`로 바꾸면 됩니다. worker마다 결정이 다르면 HIT 칸에 `Mixed decisions`가 표시됩니다. 한 HIT가 페이지 경계에 걸리면 HIT 칸에 다른 페이지에 있는 응답 수가 표시되고, `Approve all` / `Reject all`은 그 응답까지 함께 정합니다. 고른 결정은 표 위의 `Submit … decisions…`를 누르기 전에는 서버에 반영되지 않습니다. 프로토타입 콘솔(8080)은 예전처럼 체크박스로 골라 `Approve selected` / `Reject selected…`를 누릅니다.
 
 ### 대조 기준의 출처
 
