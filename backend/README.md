@@ -1,6 +1,6 @@
 # backend: FastAPI 백엔드
 
-`backend/`는 콘솔 화면(`frontend/`)이 부르는 REST API와, agent 파이프라인(`agent/`)을 화면에서 돌리기 위한 job API를 제공하는 FastAPI 서버입니다. 콘솔 REST는 프로토타입의 경로 표 `prototype/src/api/http/routes.ts`를 계약으로 삼아 같은 경로, 같은 JSON 모양으로 구현하고, 데이터는 SQLite에 두되 처음 켤 때 `data/` 폴더의 시작 데이터로 채웁니다. agent 파이프라인은 `agent/`를 그대로 import 해서 백그라운드에서 한 번에 하나씩 실행합니다.
+`backend/`는 콘솔 화면(`frontend/`)이 부르는 REST API와, agent 파이프라인(`agent/`)을 화면에서 돌리기 위한 job API를 제공하는 FastAPI 서버입니다. 콘솔 REST는 프로토타입의 경로 표 `prototype/src/api/http/routes.ts`를 계약으로 삼아 같은 경로, 같은 JSON 모양으로 구현하고, 데이터는 SQLite에 두되 처음 켤 때 `data/` 폴더의 시작 데이터로 채웁니다. agent 파이프라인은 `agent/`를 그대로 import 해서 백그라운드에서 실행하며, 기본으로 job 세 개까지 동시에 돌립니다.
 
 ```
 브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ backend (FastAPI, :8000)
@@ -138,7 +138,7 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 
 ## agent job API
 
-원본 데이터와 prompt(또는 손으로 쓴 spec)를 올리면 agent 파이프라인(profile → plan → preprocess → render → validate)을 백그라운드에서 돌리고, 결과 파일을 내려받을 수 있습니다. job은 한 번에 하나씩 순서대로 실행됩니다.
+원본 데이터와 prompt(또는 손으로 쓴 spec)를 올리면 agent 파이프라인(profile → plan → preprocess → render → validate)을 백그라운드에서 돌리고, 결과 파일을 내려받을 수 있습니다. job은 접수한 순서대로 꺼내 `AGENT_JOB_WORKERS`개(기본 3)까지 동시에 실행합니다. 그래서 후보 묶음(`POST /api/agent/job-groups`)의 세 job은 함께 LLM을 부릅니다.
 
 | 메서드와 경로 | 하는 일 |
 |---|---|
@@ -149,6 +149,8 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 | `GET /api/agent/jobs/{id}` | `<Job>`. 없으면 404입니다. |
 | `GET /api/agent/jobs/{id}/inputs` | 저장된 raw 참조, prompt 본문, 모델 설정과 spec 유무입니다. |
 | `PUT /api/agent/jobs/{id}/review` | 실행 상태와 별도로 후보의 품질 평가를 저장합니다. |
+| `POST /api/agent/job-groups` | 같은 원본과 prompt로 모델만 바꾼 후보 job을 한꺼번에 접수합니다 (`multipart/form-data`). 응답은 202 `{"group": {"id", "size"}, "jobs": [<Job>, …]}`입니다. 아래 [후보 묶음](#후보-묶음)을 봅니다. |
+| `PUT /api/agent/job-groups/{id}/choice` | 비교한 뒤 고른 후보를 기록합니다. body는 `{"job_id": "<묶음의 job id>"}`이고, 응답은 `{"jobs": [<Job>, …]}`(후보 순서)입니다. |
 | `GET /api/agent/jobs/{id}/files/{name}` | 결과 파일입니다. `job.files`에 있는 이름만 받으며(그 밖의 이름은 404), 확장자에 따라 `Content-Type`을 정하고(`.csv` text/csv, `.html` text/html, `.json` application/json, `.md` text/markdown, `.jsonl` application/x-ndjson) `Content-Disposition: attachment; filename="<name>"`을 붙입니다. |
 
 ### POST /api/agent/jobs 의 필드
@@ -182,6 +184,22 @@ curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/
 curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/hits.csv
 ```
 
+### 후보 묶음
+
+`POST /api/agent/job-groups`는 `POST /api/agent/jobs`와 같은 필드를 받되, `model_config` 대신 `model_configs`를 후보마다 한 번씩(1~3번) 보냅니다. 같은 모델을 여러 번 보내도 되지만, 모델 설정이 모두 temperature 0이라 거의 같은 명세가 나옵니다. 화면의 `Generate`는 후보 세 개를 보냅니다.
+
+- 후보는 LLM이 쓴 명세를 비교하려는 것이므로 `spec`과 `reuse_spec`은 받지 않습니다(400). LLM 없이 명세로 돌릴 때는 `POST /api/agent/jobs`를 씁니다.
+- LLM 호출 조건(요청의 `allow_api=true`와 서버의 `AGENT_ALLOW_API=1`)과 모델 설정 검사는 단일 job과 같고, 하나라도 맞지 않으면 job을 하나도 만들지 않습니다.
+- job마다 폴더와 입력 사본이 따로 생기며, 이름(`name`)은 모두 같습니다. 각 job의 `group`에 `{"id": "grp-…", "index": 0부터, "size": 후보 수, "chosen_job_id": null}`이 적힙니다.
+- `PUT /api/agent/job-groups/{id}/choice`는 `succeeded`인 후보만 받습니다. 고른 id를 묶음의 모든 job의 `group.chosen_job_id`에 적고 `job.json`에도 저장하므로 서버를 다시 켜도 남습니다. 없는 묶음은 404, 묶음에 없는 job이나 실패한 후보는 400입니다.
+
+```bash
+curl -s -F raw=@agent/examples/groundedness/raw.json -F prompt_text="Judge whether each passage supports the statement." \
+        -F allow_api=true -F model_configs=default -F model_configs=qwen3-235b -F model_configs=deepseek-v3.2 \
+        -F name=groundedness http://localhost:8000/api/agent/job-groups
+# → 202 {"group": {"id": "grp-20261013-061501-3f2a", "size": 3}, "jobs": [{…"group": {"index": 0, …}}, …]}
+```
+
 ### Job 객체
 
 `GET /api/agent/models`의 `prompt_candidates`는 고정 예시와 분리한 requester prompt 4종(`id`, `name`, `description`, `prompt_text`)입니다. `GET /api/agent/example/raw.json`은 이 후보용 합성 raw 데이터를 내려줍니다. 이 두 조회는 LLM을 호출하지 않습니다. 후보와 비교 조건은 [prompt 실험 안내](../docs/prompt-experiments.md)에 설명합니다.
@@ -205,7 +223,8 @@ curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/
  "usage": {"calls", "prompt_tokens", "completion_tokens", "total_tokens", "cost": float | null} | null,
  "files": ["profile.json", "profile.md", "task_spec.json", "hits.csv", "settings.json", "items.jsonl",
            "summary.json", "template.html", "validation.json", …있는 파일만…],
- "error": string | null}
+ "error": string | null, "provenance": {…}, "review": {…},
+ "group": {"id": "grp-…", "index": int, "size": int, "chosen_job_id": "<job id>" | null} | null}
 ```
 
 - job 폴더는 `OUTPUT_DIR/jobs/<job id>/`입니다. 업로드는 `input/`에, 파이프라인 결과는 폴더에 바로 쓰며, 상태가 바뀔 때마다 `job.json`을 다시 써서 서버를 다시 켜도 목록에 남습니다. 다시 켤 때 `running`이던 job은 `failed`로, `queued`이던 job은 다시 큐에 넣습니다.
@@ -225,6 +244,7 @@ docker-compose.yml의 `backend` 서비스가 컨테이너 경로로 채워 줍�
 | `MODELS_DIR` | `/app/environment/models` | 모델 설정 yaml |
 | `ENV_FILE` | `/app/environment/.env` | `OPENROUTER_KEY`, `AGENT_MODEL`을 읽는 파일 |
 | `AGENT_ALLOW_API` | `${AGENT_ALLOW_API:-}` | OpenRouter 호출을 허용하는 서버 스위치입니다. 셸에서 주지 않으면 빈 값이고, 그때는 `environment/.env`의 `AGENT_ALLOW_API`를 따릅니다 (1/true/yes/on이면 허용) |
+| `AGENT_JOB_WORKERS` | (`environment/.env`에 적을 때만) | 동시에 도는 agent job 수입니다. 비어 있거나 숫자가 아니면 3이고, 1보다 작으면 1입니다 |
 
 ## 폴더 구성
 
@@ -259,10 +279,10 @@ backend/
    │   ├─ manage.py      listHits, getHit, listAssignments, approve, reject, addAssignments, expireBatch, getResults, exportBatch
    │   ├─ workers.py     listWorkers, getWorker, updateWorkerNote, createPool, add/removeWorkers, block/unblockWorkers
    │   ├─ common.py      요청 읽기, 프로토타입과 같은 검증 오류, 시각과 ID, 잔액, HIT 필드 동기화
-   │   └─ agent_jobs.py  /api/agent/models, /api/agent/jobs
+   │   └─ agent_jobs.py  /api/agent/models, /api/agent/jobs, /api/agent/job-groups
    └─ agent_jobs/
        ├─ models.py      Job, Step 과 job.json 의 모양
-       └─ runner.py      FIFO 큐 + worker 스레드. agent 의 단계를 job 폴더를 out_dir 로 해서 부릅니다
+       └─ runner.py      FIFO 큐 + worker 스레드 여러 개(AGENT_JOB_WORKERS). agent 의 단계를 job 폴더를 out_dir 로 해서 부릅니다
 ```
 
 컨테이너 안에서는 `/app/agent`와 `/app/backend/app`이 이미지에 복사되어 있고, compose가 같은 경로에 bind mount를 겁니다. `PYTHONPATH=/app:/app/backend`라서 `import agent`와 `import app`이 모두 됩니다.
@@ -290,4 +310,5 @@ docker compose run --rm backend-test pytest -q tests/test_console_api.py -k batc
 - `test_manage_api.py`: HIT 목록의 항목과 조회 조건, assignment 목록의 Row·Agree 열과 필터·기본 순서, column 과 majority 대조 기준, 승인·반려·번복의 상태 변화와 잔액($500.06 → $500.00), 전부 아니면 아무것도 바꾸지 않는 것, 재모집(fill-to-target, 만료 연장, 9개 상한, 잔액 부족), 만료, 결과와 κ, 두 export 형식을 확인합니다.
 - `test_workers_api.py`: worker 목록의 지표와 순서, 정렬(값이 없는 항목은 맨 뒤)과 조건 필터, worker 상세, pool 만들기·추가·제거, 차단(사유 필수)·메모·해제, 응답이 없는 worker 가 목록에 나오는 것을 확인합니다.
 - `test_agent_jobs_api.py`: 모델 목록, 예시(`agent/examples/groundedness/`)로 접수한 job 이 `succeeded`까지 가는 것(단계, 파일 9개, 검증, 요약)과 결과 파일 내려받기, 400 조건들(raw 없음, spec 도 prompt 도 없음, LLM 호출 불허, 잘못된 spec), spec 이 원본과 맞지 않을 때 `preprocess`에서 `failed`가 되는 것, `prompt_text`, 다른 앱이 같은 출력 폴더를 열어도 job 이 남는 것을 확인합니다.
+- `test_agent_job_groups_api.py`: 후보 묶음의 접수(후보마다 job, 같은 이름과 원본, `group`의 index), planner를 가짜로 바꾼 mock 으로 세 후보가 실제로 동시에 도는 것(모두 plan 에 들어와야 풀리는 Barrier), 실패한 후보가 섞인 묶음에서 고르기와 재시작 뒤에도 남는 선택, 잘못된 선택과 없는 묶음, 이전 job 의 원본 재사용, 400 조건들(모델 수, 없는 모델, 빈 prompt, 호출 불허, spec)에서 폴더가 남지 않는 것, `AGENT_JOB_WORKERS` 읽기를 확인합니다.
 - `test_errors.py`: 오류 봉투(`ApiError`의 code → 상태 코드, 검증 오류 422 → 400, 없는 경로와 다른 메서드 → 404, 그 밖의 예외 → 500)를 작은 임시 앱으로 확인합니다.

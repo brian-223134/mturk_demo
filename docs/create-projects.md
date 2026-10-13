@@ -24,18 +24,18 @@ Project를 고쳐도 이미 게시한 batch는 게시할 때의 layout 사본을
 
 **원본 데이터에서 자동으로 만들 때**(`New Project` → `Generate from raw data`)는 두 단계가 이어집니다.
 
-1. agent **job**이 layout(`template.html`), HIT CSV(`hits.csv`), 설정(`settings.json`)을 만듭니다. job은 Project가 아니며, `Generate from raw data`의 job 목록에만 있습니다.
-2. job 카드의 `Use this result`가 layout과 설정을 **Project**로 저장하고, CSV를 올린 **Publish Batch**를 엽니다. 그 뒤로는 일반 Project와 같습니다.
+1. 모델만 다른 agent **job** 세 개(후보 A, B, C)가 동시에 돌며, 후보마다 layout(`template.html`), HIT CSV(`hits.csv`), 설정(`settings.json`)을 만듭니다. 후보는 Project가 아니며, `Generate from raw data`의 `Templates` 목록에만 있습니다.
+2. 후보를 나란히 비교하고 `Choose this template`으로 하나를 고르면, 그 후보의 layout과 설정이 **Project**로 저장되고 CSV를 올린 **Publish Batch**가 열립니다. 그 뒤로는 일반 Project와 같습니다.
 
 그래서 화면에 미리보기가 세 군데 있고, 보는 것이 다릅니다.
 
 | 어디서 | 화면 | 보는 것 |
 |---|---|---|
-| job 카드의 `Preview & evaluate` | New Project → Generate from raw data → job 목록 | LLM에 준 prompt, LLM이 쓴 명세(`Task spec`), HIT 한 행의 worker 화면, 평가 메모. 결과를 Project로 쓰기 전에 검토합니다 |
+| 후보 묶음의 `Compare and choose` | New Project → Generate from raw data → `Templates` 목록 | 후보마다 LLM에 준 prompt, LLM이 쓴 명세(`Task spec`), HIT 한 행의 worker 화면, 평가 메모. 나란히 비교하고 Project로 쓸 후보를 고릅니다 |
 | Project 편집기의 `Preview and Finish` | 목록의 `Edit` → 세 번째 탭 | Project의 속성 요약과, 표본 값으로 그린 worker 화면 |
 | Publish Batch의 `Preview tasks` | 목록의 `Publish Batch` → 두 번째 단계 | 올린 CSV의 행을 하나씩 넣은 실제 worker 화면 |
 
-자동 생성 job에서 만든 Project에는 `Preview & evaluate`가 없습니다. 그 Project의 명세와 prompt를 다시 보려면 Generate from raw data의 job 목록에서 같은 이름의 job을 찾습니다.
+자동 생성 결과로 만든 Project에는 후보 비교 화면이 없습니다. 그 Project의 명세와 prompt를 다시 보려면 Generate from raw data의 `Templates` 목록에서 같은 이름의 묶음을 찾습니다. 고른 후보에는 `Chosen`이 표시되어 있습니다.
 
 ## Project 목록
 
@@ -78,7 +78,7 @@ starter 템플릿은 아홉 가지입니다. 모두 `<ann-*>` 요소로 쓴 수�
 
 ## 원본 데이터에서 자동으로 만들기
 
-`New Project` → `Generate from raw data`는 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로 agent job을 돌립니다.
+`New Project` → `Generate from raw data`는 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로 agent job을 돌립니다. `Generate`를 누르면 같은 원본과 prompt로 모델만 바꾼 후보 세 개가 동시에 돌고, 끝나면 비교해서 하나를 고릅니다.
 job은 원본의 구조를 분석하고(`profile`), LLM이 작업 명세 `task_spec.json`을 쓰고(`plan`), 코드가 그 명세대로 데이터를 HIT로 자르고(`preprocess`), 템플릿을 그리고(`render`), 결과를 검사합니다(`validate`).
 LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나옵니다. 파이프라인과 출력 파일은 [agent/README.md](../agent/README.md)에 있습니다.
 
@@ -86,17 +86,19 @@ LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만�
 
 | 항목 | 설명 |
 |---|---|
-| `Candidate name` | job의 이름입니다. `Use this result`를 누르면 이 이름으로 Project가 저장되고, 같은 이름의 Project가 있으면 덮어씁니다. 시도마다 다른 이름을 씁니다. |
+| `Name` | 후보 세 개가 함께 쓰는 이름입니다. 후보를 고르면 이 이름으로 Project가 저장되고, 같은 이름의 Project가 있으면 덮어씁니다. 시도마다 다른 이름을 씁니다. |
 | `Raw data` | 원본 파일입니다. 구조를 미리 알려 줄 필요는 없습니다. |
-| `Import prompt file`, `Prompt text` | 무엇을 판정하게 할지 적습니다. "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개" 같은 한 문장도 되고, 절을 나눈 markdown도 됩니다 ([prompt 쓰기](../agent/README.md#prompt-쓰기)). |
-| `Model` | `environment/models/`의 모델 설정입니다. 기본은 `default`입니다. |
-| `Allow API calls (uses credits)` | LLM이 명세를 쓰게 하려면 job마다 체크합니다. 유료 호출이므로 서버 스위치도 켜져 있어야 하며, 그렇지 않으면 체크할 수 없습니다. 서버 스위치는 `environment/.env`에 `AGENT_ALLOW_API=1`을 적고 `docker compose restart backend`로 켭니다. |
-| `Optional task spec · offline replay` | `task_spec.json`을 올리면 LLM 없이 그 명세로 돌립니다(`plan` 단계는 `skipped`). `Reuse the saved task spec`은 `Reuse inputs`로 불러온 job의 명세를 그대로 씁니다. |
-| `Example prompt candidates` | 합성 예시 데이터와 prompt 후보 네 가지를 채웁니다 ([prompt 비교 실험](prompt-experiments.md)). |
+| `Prompt text` | 무엇을 판정하게 할지 적습니다. 파일에 써 둔 prompt는 본문을 붙여 넣습니다. "chunk 하나를 보여주고 atomic fact 중 그 chunk가 지지하는 걸 전부 고르게 하자. BM25 top-10, HIT 20개" 같은 한 문장도 되고, 절을 나눈 markdown도 됩니다 ([prompt 쓰기](../agent/README.md#prompt-쓰기)). |
+| `Models for the candidates` | 후보 A, B, C가 명세를 쓰게 할 모델 설정(`environment/models/`)입니다. 처음에는 서로 다른 세 개(`default`, 그다음 목록 순서)가 골라져 있습니다. 모든 설정이 temperature 0이라 같은 모델을 두 번 고르면 거의 같은 후보가 나오므로, 그렇게 고르면 화면이 알려 줍니다. |
+| `Allow API calls (uses credits)` | LLM이 명세를 쓰게 하려면 실행할 때마다 체크합니다. 유료 호출이므로 서버 스위치도 켜져 있어야 하며, 그렇지 않으면 체크할 수 없습니다. 서버 스위치는 `environment/.env`에 `AGENT_ALLOW_API=1`을 적고 `docker compose restart backend`로 켭니다. |
+| `Optional task spec · offline replay` | `task_spec.json`을 올리면 LLM 없이 그 명세로 돌립니다(`plan` 단계는 `skipped`). 모델이 쓰이지 않으므로 후보 없이 job 하나만 만들어집니다. `Reuse the saved task spec`은 `Reuse inputs`로 불러온 job의 명세를 그대로 씁니다. |
+| `Example prompts` | 합성 예시 데이터와 예시 prompt 네 가지를 채웁니다 ([prompt 비교 실험](prompt-experiments.md)). |
 
-### job 카드
+### Templates 목록
 
-`Generate`를 누르면 아래 `Jobs` 목록에 카드가 생기고, 단계 다섯 개의 진행 상황이 표시됩니다. 끝나면 카드에 다음이 보입니다.
+`Generate 3 candidates`를 누르면 아래 `Templates` 목록에 후보 세 개를 묶은 카드가 생깁니다. 후보마다 칸이 하나씩 있고, 단계 다섯 개의 진행 상황, 모델, 걸린 시간이 표시됩니다. 셋이 함께 돌기 때문에 기다리는 시간은 가장 늦은 후보만큼입니다. 모두 끝나면 화면 오른쪽 위에 알림이 뜨고, 후보 칸에 HIT 수, 항목 수, attention 항목 수, LLM 비용이 보입니다. 실패한 후보는 이유가 함께 표시됩니다.
+
+후보 칸의 `Details`를 펼치면 다음이 보입니다.
 
 - `Summary`: 쓴 레코드 수, 항목 수, HIT 수, HIT당 항목 수, attention 항목 수, 정답 라벨의 분포
 - `Validation`: 구조 검사 결과 (`OK`면 게시할 수 있는 형태입니다. 문구나 라벨 대응이 원하는 대로인지는 사람이 봐야 합니다)
@@ -104,20 +106,23 @@ LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만�
 - `Files`: `task_spec.json`, `template.html`, `hits.csv`, `settings.json`, LLM에 보낸 요청과 받은 응답 등. 눌러서 내려받을 수 있습니다.
 - `Planner notes`: LLM이 명세를 그렇게 짠 이유
 
-카드의 버튼은 네 가지입니다.
+묶음 카드의 버튼은 두 가지입니다.
 
-- `Reuse inputs`: 그 job의 원본과 prompt를 입력 칸에 다시 채웁니다. 원본은 서버에 남아 있으므로 다시 올리지 않아도 됩니다.
-- `Preview & evaluate`: 결과 요약표와 함께 `Requester prompt`, `Task spec`, HIT 한 행을 worker 화면으로 그린 미리보기를 엽니다. 평가 메모를 남길 수 있습니다.
-- `Compare`: 체크한 뒤 위쪽의 `Compare selected`를 누르면 성공한 job 2~3개를 나란히 비교합니다.
-- `Use this result`: Project를 저장하고, hits.csv를 올린 상태로 Publish Batch를 엽니다. 이후는 [Publish Batch](#publish-batch)와 같습니다. settings.json의 attention 규칙과 대조 기준 컬럼은 `Review settings`에 미리 채워집니다.
+- `Compare and choose`: 모든 후보가 끝나고 하나 이상 성공하면 누를 수 있습니다. 성공한 후보만 나란히 여는 비교 창에서 결과 요약표와 함께 후보마다 `Requester prompt`, `Task spec`, HIT 한 행을 worker 화면으로 그린 미리보기를 보고, 평가 메모를 남길 수 있습니다. 공통 항목이 있으면 같은 항목을 모든 후보에서 함께 봅니다. 후보는 일부러 모델만 바꾼 것이므로 모델 차이는 경고하지 않고, 샘플링이나 HIT 구성이 다를 때만 알립니다.
+- `Reuse inputs`: 묶음의 원본과 prompt를 입력 칸에 다시 채웁니다. 원본은 서버에 남아 있으므로 다시 올리지 않아도 됩니다.
+
+비교 창에서 마음에 드는 후보의 `Choose this template`을 누르면 그 후보를 고른 것으로 기록하고, 그 후보의 결과로 Project를 저장한 뒤 hits.csv를 올린 상태로 Publish Batch를 엽니다. 이후는 [Publish Batch](#publish-batch)와 같습니다. settings.json의 attention 규칙과 대조 기준 컬럼은 `Review settings`에 미리 채워집니다. 고른 후보에는 `Chosen`이 표시되며, 다시 비교 창을 열어 다른 후보를 고르면 같은 이름의 Project를 덮어씁니다.
+
+task spec으로 돌린 job은 후보 없이 job 카드 하나로 보이고, 카드에서 `Preview & evaluate`(결과 보기와 평가)와 `Use this result`(Project 저장과 Publish Batch)를 씁니다. 후보 묶음이 생기기 전에 만든 job도 같은 모양입니다.
+서로 다른 실행의 결과를 함께 보고 싶으면 후보 칸이나 job 카드의 `Compare`를 2~3개 체크하고 목록 위쪽의 `Compare selected`를 누릅니다.
 
 ### 명세를 고쳐 다시 만들기
 
 LLM이 요청과 다르게 명세를 쓰면, 명세를 고쳐 LLM 없이 다시 만듭니다. 비용이 들지 않고 몇 초면 끝납니다.
 
-1. 카드의 `Files`에서 `task_spec.json`을 내려받아 고칩니다.
-2. 같은 카드의 `Reuse inputs`를 누르고 `Candidate name`을 새 이름으로 바꿉니다.
-3. `Optional task spec · offline replay`의 `Task spec`에 고친 파일을 올리고, `Allow API calls`는 끈 채로 `Generate`를 누릅니다.
+1. 후보 칸의 `Details` → `Files`에서 `task_spec.json`을 내려받아 고칩니다.
+2. 묶음 카드의 `Reuse inputs`를 누르고 `Name`을 새 이름으로 바꿉니다.
+3. `Optional task spec · offline replay`의 `Task spec`에 고친 파일을 올리고, `Allow API calls`는 끈 채로 `Generate`를 누릅니다. job 하나가 만들어지고, 그 카드의 `Use this result`로 Project를 만듭니다.
 
 예를 들어 "BM25 top-10, HIT 20개"라고 요청했을 때 LLM이 레코드 20개를 고른 뒤 레코드마다 passage 10개를 5개씩 두 HIT로 나눠(`"items_per_hit": 5`) HIT가 40개가 된 적이 있습니다.
 `hit.items_per_hit`만 10으로 고쳐 다시 만들면, 같은 항목 200개와 같은 정답 라벨로 HIT 20개가 됩니다.
@@ -125,13 +130,15 @@ LLM이 요청과 다르게 명세를 쓰면, 명세를 고쳐 LLM 없이 다시 
 ### 걸리는 시간과 실패
 
 실제 RAG 평가 원본(레코드 400개, 약 28MB)에 한 문장 prompt와 `default` 모델로 돌렸을 때, 성공한 job은 140초 동안 호출 3번에 $0.0036이 들었습니다. 명세가 검사에 걸리면 오류를 LLM에 돌려주고 다시 묻기 때문에 호출이 여러 번이 됩니다.
-LLM 호출은 실패할 수 있습니다. 같은 입력의 다른 시도는 응답이 공백으로 채워져 출력 상한에 닿아 217초 뒤에 실패했습니다($0.0083). 실패한 job도 카드에 이유와 비용이 남습니다.
-실패하면 같은 입력으로 다시 돌리거나 다른 모델을 고릅니다. 발표처럼 결과가 꼭 필요한 자리에서는 미리 만들어 둔 job을 씁니다.
+후보 세 개는 각자 LLM을 부르므로 비용은 후보 수만큼 들고, 시간은 가장 늦은 후보만큼 걸립니다.
+LLM 호출은 실패할 수 있습니다. 같은 입력의 다른 시도는 응답이 공백으로 채워져 출력 상한에 닿아 217초 뒤에 실패했습니다($0.0083). 실패한 후보도 칸에 이유와 비용이 남고, 나머지 후보가 성공했으면 그 후보들로 비교하고 고를 수 있습니다.
+모두 실패하면 같은 입력으로 다시 돌리거나 다른 모델을 고릅니다. 발표처럼 결과가 꼭 필요한 자리에서는 미리 만들어 둔 결과를 씁니다.
 
-### job 목록 관리
+### Templates 목록 관리
 
-job의 입력과 결과는 `output/jobs/<job id>/`(gitignore)에 저장되고, backend는 시작할 때 이 폴더를 읽어 목록을 만듭니다. 화면에는 job을 지우는 버튼이 없습니다.
-목록에서 빼려면 job 폴더를 `output/jobs/` 밖(예: `output/jobs-archive/`)으로 옮기고 `docker compose restart backend`를 실행합니다. 다시 보이게 하려면 폴더를 되돌리고 같은 명령을 실행합니다.
+후보 하나하나가 job이며, 입력과 결과는 `output/jobs/<job id>/`(gitignore)에 저장됩니다. 묶음은 각 job의 `job.json`에 적힌 `group`으로 다시 묶이므로 따로 저장하는 파일이 없습니다. backend는 시작할 때 이 폴더를 읽어 목록을 만듭니다. 화면에는 지우는 버튼이 없습니다.
+목록에서 빼려면 job 폴더를 `output/jobs/` 밖(예: `output/jobs-archive/`)으로 옮기고 `docker compose restart backend`를 실행합니다. 묶음 전체를 빼려면 그 묶음의 job 폴더 세 개를 함께 옮깁니다. 다시 보이게 하려면 폴더를 되돌리고 같은 명령을 실행합니다.
+backend는 job을 기본으로 세 개까지 동시에 돌립니다. 이 수는 `environment/.env`의 `AGENT_JOB_WORKERS`로 바꿀 수 있으며, 3보다 작게 하면 후보가 차례를 기다립니다.
 
 ## Project 편집기
 
