@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.domain.agreement import majority
@@ -296,7 +297,7 @@ def test_expire_batch_closes_remaining_hits(client: TestClient) -> None:
 
 def test_results_count_approved_real_items_only(client: TestClient) -> None:
     results = client.get(f"/api/batches/{F1}/results").json()
-    assert set(results) == {"target", "items", "unanimousRatio", "fleissKappa", "kappaItemCount", "labelDistribution"}
+    assert set(results) == {"target", "items", "unanimousRatio", "fleissKappa", "kappaItemCount", "labelDistribution", "iaa"}
     assert results["target"] == 3
     assert all(not item["answerName"].startswith("attention_") for item in results["items"])
     assert sum(len(item["votes"]) for item in results["items"]) == sum(results["labelDistribution"].values())
@@ -317,6 +318,40 @@ def test_fleiss_kappa_matches_statsmodels(client: TestClient) -> None:
         results = client.get(f"/api/batches/{batch_id}/results").json()
         assert results["kappaItemCount"] == items, batch_id
         assert round(results["fleissKappa"], 6) == kappa, batch_id
+
+
+# 시작 데이터의 두 범위 IAA. krippendorff 0.8 과 statsmodels 0.14 패키지로 따로 계산한 값과 소수 여섯째 자리까지 같다
+# (attention 문항 제외, κ 는 투표 3건인 문항만, α 는 투표 2건 이상인 문항 모두).
+IAA_REFERENCE = {
+    "batch-1000001": {"submitted": (132, 31, 520, 310, 0.598084, 520, 0.411499), "approved": (108, 27, 420, 420, 0.730594, 420, 0.730808)},
+    "batch-1000002": {"submitted": (51, 20, 326, 274, 0.867540, 326, 0.741161), "approved": (48, 19, 326, 326, 0.856749, 326, 0.856896)},
+    "batch-1000003": {"submitted": (48, 21, 241, 241, 0.938407, 241, 0.938492), "approved": (48, 21, 241, 241, 0.938407, 241, 0.938492)},
+}
+
+
+@pytest.mark.parametrize("batch_id", sorted(IAA_REFERENCE))
+def test_results_iaa_for_submitted_and_approved(client: TestClient, batch_id: str) -> None:
+    """제출 전체(검수 대기·승인·반려)와 승인만의 Fleiss' κ, Krippendorff's α. 승인 범위의 κ 는 위의 fleissKappa 와 같다."""
+    results = client.get(f"/api/batches/{batch_id}/results").json()
+    iaa = results["iaa"]
+    assert iaa["submitted"]["statuses"] == ["Submitted", "Approved", "Rejected"] and iaa["approved"]["statuses"] == ["Approved"]
+    for scope, (assignments, workers, items, kappa_items, kappa, alpha_items, alpha) in IAA_REFERENCE[batch_id].items():
+        got = iaa[scope]
+        assert (got["assignments"], got["workers"], got["items"], got["kappaItemCount"], got["alphaItemCount"]) == (assignments, workers, items, kappa_items, alpha_items), scope
+        assert round(got["fleissKappa"], 6) == kappa and round(got["krippendorffAlpha"], 6) == alpha, scope
+    assert iaa["approved"]["fleissKappa"] == results["fleissKappa"] and iaa["approved"]["kappaItemCount"] == results["kappaItemCount"]
+
+
+def test_results_iaa_follows_review(client: TestClient) -> None:
+    """검수 대기 응답을 반려하면 제출 전체 범위에는 그대로 남고, 승인하면 승인 범위에 들어간다."""
+    pending = client.get(f"/api/batches/{F1}/assignments", params=list_query(page_size=50, filters={"AssignmentStatus": "Submitted"})).json()["items"]
+    before = client.get(f"/api/batches/{F1}/results").json()["iaa"]
+    client.post("/api/assignments/approve", json={"ids": [a["AssignmentId"] for a in pending[:3]]})
+    client.post("/api/assignments/reject", json={"ids": [a["AssignmentId"] for a in pending[3:]], "feedback": "Poor Quality."})
+    after = client.get(f"/api/batches/{F1}/results").json()["iaa"]
+    assert after["submitted"]["assignments"] == before["submitted"]["assignments"] == 132
+    assert after["submitted"]["krippendorffAlpha"] == before["submitted"]["krippendorffAlpha"]
+    assert after["approved"]["assignments"] == before["approved"]["assignments"] + 3
 
 
 def test_export_mturk_csv(client: TestClient) -> None:

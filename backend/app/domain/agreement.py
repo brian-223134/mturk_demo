@@ -1,4 +1,5 @@
-"""Majority 와 Fleiss' κ. prototype/src/domain/agreement.ts 를 그대로 옮겼다.
+"""Majority 와 Fleiss' κ (prototype/src/domain/agreement.ts 를 그대로 옮겼다), 그리고 backend 에만 있는 Krippendorff's α 와
+범위별 IAA (Results 의 "제출 전체"와 "승인만").
 
 agreement.test.ts 의 기대값:
     item_key(12, "general_0_1") == "12:general_0_1"
@@ -125,6 +126,56 @@ def fleiss_kappa(items: list[list[str]]) -> float | None:
     if 1 - expected < 1e-12:
         return None
     return (mean_p - expected) / (1 - expected)
+
+
+def krippendorff_alpha(units: list[list[str]]) -> float | None:
+    """Krippendorff's α (nominal). 문항(unit)마다 평가자 수가 달라도 되고, 표가 2개 미만인 문항은 쓰지 않는다.
+
+    coincidence 행렬 o_ck = Σ_u (u 안의 순서쌍 (c, k) 수) / (m_u - 1),  n_c = Σ_k o_ck,  n = Σ_c n_c
+        α = 1 - (n - 1) · Σ_{c≠k} o_ck / Σ_{c≠k} n_c · n_k
+    Krippendorff (2011) "Computing Krippendorff's Alpha-Reliability" 의 nominal 예시(12 문항, 4 평가자)는 0.743 이다.
+    짝지을 수 있는 표가 없거나(n < 2) 모든 표가 한 범주라 기대 불일치가 0 이면 None.
+    """
+    coincidence: dict[tuple[str, str], float] = {}
+    for votes in units:
+        m = len(votes)
+        if m < 2:
+            continue
+        counts = tally(votes)
+        for c, n_c in counts.items():
+            for k, n_k in counts.items():
+                pairs = n_c * (n_c - 1) if c == k else n_c * n_k
+                if pairs:
+                    coincidence[(c, k)] = coincidence.get((c, k), 0.0) + pairs / (m - 1)
+    totals: dict[str, float] = {}
+    for (c, _), value in coincidence.items():
+        totals[c] = totals.get(c, 0.0) + value
+    n = sum(totals.values())
+    if n < 2:
+        return None
+    observed = sum(value for (c, k), value in coincidence.items() if c != k)
+    expected = sum(totals[c] * totals[k] for c in totals for k in totals if c != k)
+    if expected < 1e-12:
+        return None
+    return 1 - (n - 1) * observed / expected
+
+
+def agreement_scope(items: list[VotedItem], target: int, assignments: int, workers: int) -> dict:
+    """한 범위(제출 전체, 승인만)의 IAA. κ 는 투표 수가 정확히 target 인 문항만(summarize_results 와 같은 기준),
+    α 는 투표가 2개 이상인 모든 문항으로 계산한다. 그래서 반려 뒤 재모집으로 표가 target 보다 많아진 HIT 도 α 에는 들어간다."""
+    full = [item.votes for item in items if len(item.votes) == target]
+    kappa = fleiss_kappa(full)
+    paired = [item.votes for item in items if len(item.votes) >= 2]
+    alpha = krippendorff_alpha(paired)
+    return {
+        "assignments": assignments,
+        "workers": workers,
+        "items": len(items),
+        "fleissKappa": None if kappa is None else js_number(kappa),
+        "kappaItemCount": len(full),
+        "krippendorffAlpha": None if alpha is None else js_number(alpha),
+        "alphaItemCount": len(paired),
+    }
 
 
 def summarize_results(items: list[VotedItem], target: int) -> dict:

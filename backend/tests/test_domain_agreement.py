@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from app.domain.agreement import (Vote, agreement_with_others, collect_items, fleiss_kappa, item_key, majority, majority_of_tally,
+from app.domain.agreement import (Vote, agreement_scope, agreement_with_others, collect_items, fleiss_kappa, item_key, krippendorff_alpha, majority, majority_of_tally,
                                   summarize_results, tally)
 from app.domain.attention import is_attention_name
 from app.domain.export_formats import build_labels_json
@@ -139,3 +139,34 @@ def test_agreement_with_others() -> None:
     others = [answers({"q1": "a", "q2": "b", "q3": "a"}), answers({"q1": "a", "q2": "b", "q3": "b"})]
     assert agreement_with_others(own, others) == 0.5    # q1 일치, q2 불일치, q3 동률, q4 표 없음
     assert agreement_with_others(own, []) is None
+
+
+# ---- Krippendorff's α, 범위별 IAA ------------------------------------------------------------------
+
+
+def test_krippendorff_alpha_matches_the_published_nominal_example() -> None:
+    """Krippendorff (2011) "Computing Krippendorff's Alpha-Reliability" 의 nominal 예시: 12 문항, 4 평가자, 빈칸 있음 → 0.743.
+    값이 하나뿐인 12번째 문항은 짝이 없어 빠진다."""
+    coders = ["1 2 3 3 2 1 4 1 2 . . .", "1 2 3 3 2 2 4 1 2 5 . 3", ". 3 3 3 2 3 4 2 2 5 1 .", "1 2 3 3 2 4 4 1 2 5 1 ."]
+    units = [[v for v in column if v != "."] for column in zip(*(c.split() for c in coders))]
+    assert round(krippendorff_alpha(units), 3) == 0.743
+    assert krippendorff_alpha(units[:11]) == krippendorff_alpha(units)
+
+
+def test_krippendorff_alpha_edge_cases() -> None:
+    """완전 일치는 1, 모두 한 범주거나 짝지을 표가 없으면 None. 평가자 수가 같으면 표 순서와 무관하다."""
+    assert krippendorff_alpha([["a", "a"], ["b", "b"]]) == 1
+    assert krippendorff_alpha([["a", "a", "a"], ["a", "a"]]) is None
+    assert krippendorff_alpha([["a"], ["b"]]) is None and krippendorff_alpha([]) is None
+    assert krippendorff_alpha([["a", "b", "a"], ["b", "b"]]) == krippendorff_alpha([["b", "a", "a"], ["b", "b"]])
+
+
+def test_agreement_scope_counts_kappa_and_alpha_on_different_items() -> None:
+    """κ 는 투표가 정확히 target 인 문항만, α 는 투표가 2개 이상인 문항 모두. 표가 하나뿐인 문항은 둘 다 쓰지 않는다."""
+    votes = [Vote(0, "q", v, f"W{i}") for i, v in enumerate("aab")] + [Vote(1, "q", v, f"W{i}") for i, v in enumerate("bbba")] + \
+            [Vote(2, "q", v, f"W{i}") for i, v in enumerate("ab")] + [Vote(3, "q", "a", "W0")]
+    scope = agreement_scope(collect_items(votes), 3, assignments=7, workers=4)
+    assert scope["items"] == 4 and scope["kappaItemCount"] == 1 and scope["alphaItemCount"] == 3
+    assert scope["assignments"] == 7 and scope["workers"] == 4
+    assert scope["fleissKappa"] == fleiss_kappa([["a", "a", "b"]])
+    assert scope["krippendorffAlpha"] == krippendorff_alpha([["a", "a", "b"], ["b", "b", "b", "a"], ["a", "b"]])

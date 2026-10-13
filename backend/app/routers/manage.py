@@ -13,7 +13,7 @@ from typing import Callable
 from fastapi import Request, Response
 
 from app.db import Store
-from app.domain.agreement import Vote, collect_items, summarize_results
+from app.domain.agreement import Vote, agreement_scope, collect_items, summarize_results
 from app.domain.answer_kinds import AnswerKinds, reads_hit_input
 from app.domain.export_formats import build_labels_json, build_mturk_csv
 from app.domain.js import is_js_integer, js_len, js_number_of, js_slice, js_string, js_truthy, locale_key, slug
@@ -57,20 +57,34 @@ def _resync_hits(store: Store, hit_ids: list[str], at) -> None:
             store.update_hit(hit)
 
 
+# Results 의 IAA 범위. 제출 전체는 worker 가 낸 응답을 검수 결과와 상관없이 모두(검수 대기, 승인, 반려), 승인은 승인된 응답만 센다
+SUBMITTED_STATUSES = ("Submitted", "Approved", "Rejected")
+APPROVED_STATUSES = ("Approved",)
+
+
 def _approved_votes(store: Store, batch: dict) -> list[Vote]:
     """Approved 응답의 라벨 표 (attention 과 자유 서술 제외). 저장 순서."""
+    return _votes(store, batch, APPROVED_STATUSES)[0]
+
+
+def _votes(store: Store, batch: dict, statuses: tuple[str, ...]) -> tuple[list[Vote], int, int]:
+    """그 상태들인 응답의 라벨 표 (attention 과 자유 서술 제외, 저장 순서)와 응답 수, worker 수."""
     row_index_of = {hit.id: hit.row_index for hit in store.hits_of_batch(batch["id"])}
     kinds_of = answer_kinds_by_hit(store, batch)
     votes: list[Vote] = []
+    assignments = 0
+    workers: set[str] = set()
     for assignment in store.assignments_of_batch(batch["id"]):
-        if assignment.get("AssignmentStatus") != "Approved":
+        if assignment.get("AssignmentStatus") not in statuses:
             continue
+        assignments += 1
+        workers.add(assignment["WorkerId"])
         kinds = kinds_of(assignment["HITId"])
         for answer in assignment.get("answers", []):
             if kinds.is_excluded(str(answer.get("name", ""))):
                 continue
             votes.append(Vote(row_index_of[assignment["HITId"]], answer["name"], answer["value"], assignment["WorkerId"]))
-    return votes
+    return votes, assignments, len(workers)
 
 
 # ---- HITs -----------------------------------------------------------------------------------
@@ -325,12 +339,19 @@ async def expire_batch(request: Request, id: str) -> Response:
 
 
 async def get_results(request: Request, batchId: str) -> dict:
-    """BatchResults: Approved 응답의 일반 문항만 세고, κ 와 만장일치 비율은 투표 수가 target 인 문항만으로 계산한다."""
+    """BatchResults: Approved 응답의 일반 문항만 세고, κ 와 만장일치 비율은 투표 수가 target 인 문항만으로 계산한다.
+    iaa 는 backend 에만 있는 필드다: 제출 전체(submitted)와 승인만(approved) 두 범위의 Fleiss' κ 와 Krippendorff's α."""
     with db_of(request).transaction() as store:
         batch = find_batch(store, batchId)
-        items = collect_items(_approved_votes(store, batch))
+        approved, approved_count, approved_workers = _votes(store, batch, APPROVED_STATUSES)
+        submitted, submitted_count, submitted_workers = _votes(store, batch, SUBMITTED_STATUSES)
     target = batch["settings"]["MaxAssignments"]
-    return {"target": target, "items": [item.to_json() for item in items], **summarize_results(items, target)}
+    items = collect_items(approved)
+    iaa = {
+        "submitted": {"statuses": list(SUBMITTED_STATUSES), **agreement_scope(collect_items(submitted), target, submitted_count, submitted_workers)},
+        "approved": {"statuses": list(APPROVED_STATUSES), **agreement_scope(items, target, approved_count, approved_workers)},
+    }
+    return {"target": target, "items": [item.to_json() for item in items], **summarize_results(items, target), "iaa": iaa}
 
 
 async def export_batch(request: Request, batchId: str) -> dict:
