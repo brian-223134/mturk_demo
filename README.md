@@ -288,7 +288,7 @@ production 콘솔에서 전체 흐름을 한 번 따라가 보는 순서입니�
 3. **반려와 재모집**: 두 건을 골라 반려합니다. attention check를 통과한 응답이라는 경고가 표시되고, 반려를 확정하면 다시 모집할지 물어봅니다. 나머지 응답은 승인합니다.
 4. **HITs**: `Incomplete only`를 켜고, HIT 하나에 큰 수를 추가해 봅니다. 9개를 넘을 수 없다는 이유와 함께 건너뛰는 것을 볼 수 있습니다.
 5. **Results**: Fleiss' κ가 0.731로 표시됩니다. 이 값은 statsmodels의 `fleiss_kappa` 결과와 소수 여섯째 자리까지 일치하며, 테스트로 고정되어 있습니다. Export로 받는 CSV는 MTurk Requester 웹사이트의 결과 CSV와 컬럼이 같아서 기존 분석 스크립트를 그대로 쓸 수 있습니다.
-6. **Create**: `Tutorial` 탭의 순서대로 starter로 Project를 만들고, [위의 예시](#starter로-attention-check가-있는-batch-게시하기)처럼 `5-project/passage-relevance.csv`를 올려 게시합니다. 잔액이 줄고 Manage 목록에 새 batch가 생깁니다. 이어서 New Project → `Generate from raw data`에서 `Load prompt + example data`로 합성 예시를 채우고, `Optional task spec · offline replay`에 `agent/examples/groundedness/task_spec.json`을 올려 LLM 없이 자동 생성을 해 봅니다.
+6. **Create**: `Tutorial` 탭의 순서대로 starter로 Project를 만들고, [위의 예시](#starter로-attention-check가-있는-batch-게시하기)처럼 `5-project/passage-relevance.csv`를 올려 게시합니다. 잔액이 줄고 Manage 목록에 새 batch가 생깁니다. 이어서 Tutorial의 `원본 데이터에서 자동으로 만들기`에서 `Load prompt + example data`를 눌러 합성 예시가 채워진 Generate from raw data를 열고, `Optional task spec · offline replay`에 `agent/examples/groundedness/task_spec.json`을 올려 LLM 없이 자동 생성을 해 봅니다.
 7. **Worker Pool**: `Rej%`를 내림차순으로 정렬해 상위 worker를 선택하고 `Block…`을 누른 뒤, 기본 선택지인 "Excluded pool에 추가"를 고릅니다. 이어서 Pools에서 `Fill by criteria…`로 Trusted pool을 채워 봅니다.
    기본 조건(승인 20건 이상, attention 실패 0%, 일치율 90% 이상)으로는 해당하는 worker가 없습니다. 예시 데이터에서는 승인이 가장 많은 worker가 20건이고 attention 실패율이 5%이기 때문입니다. **승인 기준을 5로 낮추면 7명**이 나옵니다.
    이렇게 만든 pool은 Project의 `Enter Properties`에서 참여 또는 제외로 지정합니다.

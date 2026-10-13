@@ -92,7 +92,8 @@ LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만�
 | `Models for the candidates` | 후보 A, B, C가 명세를 쓰게 할 모델 설정(`environment/models/`)입니다. 처음에는 서로 다른 세 개(`default`, 그다음 목록 순서)가 골라져 있습니다. 모든 설정이 temperature 0이라 같은 모델을 두 번 고르면 거의 같은 후보가 나오므로, 그렇게 고르면 화면이 알려 줍니다. |
 | `Allow API calls (uses credits)` | LLM이 명세를 쓰게 하려면 실행할 때마다 체크합니다. 유료 호출이므로 서버 스위치도 켜져 있어야 하며, 그렇지 않으면 체크할 수 없습니다. 서버 스위치는 `environment/.env`에 `AGENT_ALLOW_API=1`을 적고 `docker compose restart backend`로 켭니다. |
 | `Optional task spec · offline replay` | `task_spec.json`을 올리면 LLM 없이 그 명세로 돌립니다(`plan` 단계는 `skipped`). 모델이 쓰이지 않으므로 후보 없이 job 하나만 만들어집니다. `Reuse the saved task spec`은 `Reuse inputs`로 불러온 job의 명세를 그대로 씁니다. |
-| `Example prompts` | 합성 예시 데이터와 예시 prompt 네 가지를 채웁니다 ([prompt 비교 실험](prompt-experiments.md)). |
+
+처음 써 볼 때는 `Tutorial` 탭의 `원본 데이터에서 자동으로 만들기`에서 예시 prompt 네 가지 중 하나를 고릅니다. `Load prompt`는 prompt와 이름만, `Load prompt + example data`는 합성 예시 원본(레코드 6개)까지 채운 채로 Generate from raw data를 엽니다 ([prompt 비교 실험](prompt-experiments.md)). Generate from raw data 화면에는 생성에 필요한 입력만 있습니다.
 
 ### Templates 목록
 
