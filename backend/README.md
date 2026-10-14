@@ -1,6 +1,6 @@
 # backend: FastAPI 백엔드
 
-`backend/`는 콘솔 화면(`frontend/`)이 부르는 REST API와, agent 파이프라인(`agent/`)을 화면에서 돌리기 위한 job API를 제공하는 FastAPI 서버입니다. 콘솔 REST는 프로토타입의 경로 표 `prototype/src/api/http/routes.ts`를 계약으로 삼아 같은 경로, 같은 JSON 모양으로 구현하고, 데이터는 PostgreSQL에 두되 처음 켤 때 `data/` 폴더의 시작 데이터로 채웁니다. agent 파이프라인은 `agent/`를 그대로 import 해서 백그라운드에서 실행하며, 기본으로 job 세 개까지 동시에 돌립니다.
+`backend/`는 콘솔 화면(`frontend/`)이 부르는 REST API, worker가 HIT를 받아 풀고 제출하는 API, agent 파이프라인(`agent/`)을 화면에서 돌리기 위한 job API를 제공하는 FastAPI 서버입니다. 콘솔 REST는 프로토타입의 경로 표 `prototype/src/api/http/routes.ts`를 계약으로 삼아 같은 경로, 같은 JSON 모양으로 구현하고, 데이터는 PostgreSQL에 두되 처음 켤 때 `data/` 폴더의 시작 데이터로 채웁니다. agent 파이프라인은 `agent/`를 그대로 import 해서 백그라운드에서 실행하며, 기본으로 job 세 개까지 동시에 돌립니다.
 
 ```
 브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ backend (FastAPI, :8000)
@@ -142,6 +142,8 @@ docker compose exec backend python -m app.users set-password --email someone@exa
 
 `GET /api/health`는 `{"status": "ok", "source": "seed" | "snapshot", "counts": {"templates", "batches", "hits", "assignments", "pools", "workers"}}`를 돌려줍니다. `source`는 이번 프로세스의 데이터가 방금 `data/`에서 올라온 것(`seed`)인지 DB에 있던 것(`snapshot`)인지입니다.
 
+Review, Results, 내보내기, worker 지표는 검수할 수 있는 상태(`Submitted`, `Approved`, `Rejected`)의 assignment만 봅니다. worker가 푸는 중인 assignment(`Accepted`)는 진행률의 `inProgress`(프로토타입에는 없는 값)와 HIT의 `NumberOfAssignmentsPending`으로만 보이며, 자리를 차지하므로 `open`에서 빠집니다([worker 의 작업 API](#worker-의-작업-api)).
+
 batch 목록과 상세의 상태(`in_progress`, `completed`, `expired`), `needsReview`, 진행률, 비용은 프로토타입과 같은 규칙으로 계산합니다. 계산 규칙은 `app/domain/`에 옮겨 두었고, 각 모듈의 docstring에 프로토타입 테스트의 기대값을 적어 두었습니다.
 
 ### 목록 조회 (ListQuery)
@@ -180,7 +182,7 @@ MTurk 처럼 HIT 를 만들 때 비용을 미리 잡아 두고, 반려하면 돌
 
 `getResults`는 Approved 응답의 라벨(attention 과 자유 서술 답 제외)만 모아 문항(`<rowIndex>:<answerName>`)마다 `votes`, `workers`, `majority`(동률이면 `null`), `unanimous`를 내고, 투표 수가 정확히 `target`(batch 의 MaxAssignments)인 문항만으로 `unanimousRatio`와 Fleiss' κ(`fleissKappa`, `kappaItemCount`)를 계산합니다 (`app/domain/agreement.py`). 시작 데이터의 κ 는 statsmodels 의 값과 같습니다: batch-1000001 0.730594 (420 문항), batch-1000003 0.938407 (241), batch-1000002 0.856749 (326). `labelDistribution`은 전체 표의 값별 수입니다.
 
-`iaa`는 backend 에만 있는 필드입니다 (프로토타입의 경로 표에는 없고, 화면은 없으면 예전처럼 κ 카드만 보입니다). `submitted`(제출 전체: Submitted, Approved, Rejected)와 `approved`(Approved 만) 두 범위마다 `statuses`, `assignments`, `workers`, `items`, `fleissKappa`·`kappaItemCount`(투표 수가 정확히 `target`인 문항), `krippendorffAlpha`·`alphaItemCount`(nominal, 투표 2개 이상인 문항 모두)를 냅니다. `approved`의 κ 는 위의 `fleissKappa`와 같습니다. 시작 데이터의 값은 krippendorff·statsmodels 패키지로 따로 계산한 값과 같고 `test_manage_api.py`에 고정되어 있습니다 (예: batch-1000001 제출 전체 κ 0.598084 / α 0.411499, 승인 κ 0.730594 / α 0.730808).
+`iaa`는 backend 에만 있는 필드입니다 (프로토타입의 경로 표에는 없고, 화면은 없으면 예전처럼 κ 카드만 보입니다). `approved`(Approved), `pending`(승인하지 않은 제출: Submitted), `submitted`(검수 대기 + 승인: Submitted, Approved) 세 범위마다 `statuses`, `assignments`, `workers`, `items`, `fleissKappa`·`kappaItemCount`(투표 수가 정확히 `target`인 문항), `krippendorffAlpha`·`alphaItemCount`(nominal, 투표 2개 이상인 문항 모두)를 냅니다. 반려된 응답은 어느 범위에도 넣지 않습니다. 계산할 문항이 없으면 κ 와 α 는 `null`입니다. `approved`의 κ 는 위의 `fleissKappa`와 같습니다. 시작 데이터의 값은 krippendorff·statsmodels 패키지로 따로 계산한 값과 같고 `test_manage_api.py`에 고정되어 있습니다 (예: batch-1000001 승인 κ 0.730594 / α 0.730808, 검수 대기 κ 없음 / α 0.242277, 검수 대기 + 승인 κ 0.730594 / α 0.710026).
 
 `exportBatch?format=`은 `{"filename", "mimeType", "content"}`(ExportFile)를 돌려줍니다. `mturk-csv`는 MTurk Requester 웹사이트의 결과 CSV 와 같은 컬럼(`HITId … Input.<컬럼> Answer.taskAnswers Approve Reject`, 시각은 `Thu Oct 09 07:30:20 UTC 2025` 형식, `Answer.taskAnswers`는 `[{"input_answers": "<JSON>"}]`)이고, `labels-json`은 `{"<rowIndex>:<answerName>": {votes, majority, workers}}`입니다 (`app/domain/export_formats.py`). `mturk-csv`에는 attention 답과 자유 서술 답을 포함한 모든 답이 들어가고, `labels-json`에는 `getResults`와 같은 라벨만 들어갑니다. 파일 이름은 batch 이름의 slug 에 `-results.csv`, `-labels.json`을 붙인 것입니다.
 
@@ -202,6 +204,25 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 | 404 | `NOT_FOUND` | 없는 자원, 없는 경로, 다른 메서드 |
 | 501 | `NOT_IMPLEMENTED` | 경로 표에는 있지만 구현하지 않은 경로 (지금은 없습니다. stub 장치만 남아 있습니다) |
 | 500 | `UNKNOWN` | 그 밖의 예외 |
+
+## worker 의 작업 API
+
+worker 계정만 부를 수 있습니다(다른 역할은 403). 경로 표는 `app/routes.py`의 `WORKER_ROUTES`이고 frontend의 같은 이름 표와 같습니다(테스트가 대조합니다). 규칙은 `app/domain/tasks.py`, 핸들러는 `app/routers/worker.py`에 있습니다.
+
+| 이름 | 메서드와 경로 | 하는 일 |
+|---|---|---|
+| listHitGroups | `GET /api/worker/hit-groups` | `{groups}`. 이 worker가 받을 수 있는 HIT가 남은 batch(MTurk의 HIT group)와 남은 HIT 수, 보상, 제한 시간, Requester 이름, 푸는 중인 assignment |
+| acceptHit | `POST /api/worker/hit-groups/:batchId/accept` | 그 batch에서 다음 HIT를 받아 `{assignment}`를 돌려줍니다. 이미 그 batch에서 푸는 중이면 그것을 돌려줍니다 |
+| listMyAssignments | `GET /api/worker/assignments` | `{assignments, summary}`. 푸는 중, 검수 대기, 승인, 반려인 내 assignment와 승인·검수 대기 금액 |
+| getMyAssignment | `GET /api/worker/assignments/:id` | `{assignment}`. 푸는 중이면 `task: {html, row}`(템플릿과 보여도 되는 입력)를 함께 줍니다 |
+| submitAssignment | `POST /api/worker/assignments/:id/submit` | `{answers: [{name, value}]}`로 제출합니다 (`Submitted`) |
+| returnAssignment | `POST /api/worker/assignments/:id/return` | 반납합니다 (`Returned`). 자리가 다시 열립니다 |
+
+- **assignment 상태**: HIT를 받으면 `Accepted`(받은 시각 + `AssignmentDurationInSeconds`까지 `Deadline`)로 생기고, 제출하면 `Submitted`가 됩니다. 반납은 `Returned`, 제한 시간이 지나면 `Abandoned`입니다. 시간이 지난 `Accepted`는 바로 자리를 차지하지 않게 되고, 다음 쓰기 요청(받기, 제출, 반납) 때 `Abandoned`로 저장됩니다. 같은 worker는 HIT 하나에 assignment 하나이며, 반납하거나 시간이 지난 HIT를 다시 받으면 그 행을 다시 씁니다.
+- **자리**: HIT의 `MaxAssignments`에서 검수 상태의 assignment와 푸는 중인 assignment를 뺀 만큼입니다. 받기는 쓰기 트랜잭션 안에서 자리를 세고 assignment를 만들므로 자리보다 많이 나가지 않습니다. 만료된 HIT는 받을 수 없습니다(이미 받은 것은 제한 시간 안에 제출할 수 있습니다).
+- **받을 수 있는 사람**: batch를 만든 Requester가 차단하지 않았고, `requiredPoolIds`의 pool에 모두 들어 있고, `excludedPoolIds`의 pool에는 없는 worker입니다. Masters 같은 MTurk Qualification은 보지 않습니다.
+- **작업 화면의 입력**: 템플릿에 `${컬럼}` placeholder가 있으면 그 컬럼만, 없으면(`window.TASK_DATA`로 행을 읽는 템플릿) attention 기대 답 컬럼과 대조 기준 컬럼을 뺀 나머지를 보냅니다. 정답이 worker의 페이지 소스에 남지 않게 하기 위해서입니다.
+- **제출**: `SubmitTime`, `AutoApprovalTime`(제출 + `AutoApprovalDelayInSeconds`), `workTimeInSeconds`, `answers`, 그리고 batch의 규칙으로 계산한 `attention`을 적습니다. 그 뒤로는 시작 데이터의 응답과 같은 모양이라 Review, Results, worker 지표에 그대로 들어갑니다. 답은 `[{name, value}]`이고 값은 문자열로 저장합니다(2000개, 답 하나 2만 자까지).
 
 ## agent job API
 
@@ -342,7 +363,8 @@ backend/
    │                     Database.transaction() 이 트랜잭션 하나로 묶어 준다 (연결은 pool 에서)
    ├─ schema.py          스키마 이전: migrations/ 의 SQL 파일을 번호순으로, 아직 적용하지 않은 것만
    ├─ migrations/        0001_console.sql (콘솔 문서 테이블), 0002_agent_jobs.sql (agent job 의 상태),
-   │                     0003_accounts.sql (계정, 세션, 초대 코드, Requester 별 차단, owner_id)
+   │                     0003_accounts.sql (계정, 세션, 초대 코드, Requester 별 차단, owner_id),
+   │                     0004_worker_tasks.sql (Accepted·Returned·Abandoned, deadline, HIT 와 worker 의 고유)
    ├─ legacy_import.py   이전 버전의 SQLite 파일을 PostgreSQL 로 옮기는 명령
    ├─ accounts.py        계정 규칙: 비밀번호 해시, 이메일, 가입 조건, 세션 만료, 초대 코드 (HTTP 와 무관)
    ├─ auth.py            세션 쿠키 읽기와 쓰기, 역할 검사 의존성(require_roles), current_user
@@ -352,13 +374,14 @@ backend/
    │                     (두 규칙 모양의 판정), answer_kinds.py (attention·자유 서술·라벨 구분),
    │                     template.py (placeholder), agreement.py (majority, Fleiss' κ, Krippendorff's α), reference.py (대조 기준),
    │                     worker_stats.py (worker 지표), export_formats.py (CSV, 라벨 JSON), list_query.py (ListQuery),
-   │                     js.py (JS 와 같은 숫자·문자열·정렬 규칙)
+   │                     js.py (JS 와 같은 숫자·문자열·정렬 규칙), tasks.py (assignment 상태, 받을 수 있는 사람, worker 에게 보낼 컬럼)
    ├─ routers/
    │   ├─ console.py     health, 템플릿 조회, batch 목록과 상세, 계정. 모듈들의 IMPLEMENTED 를 합쳐 경로 표대로 등록
    │   ├─ create.py      saveTemplate, deleteTemplate, createBatch, listPools
    │   ├─ manage.py      listHits, getHit, listAssignments, approve, reject, addAssignments, expireBatch, getResults, exportBatch
    │   ├─ workers.py     listWorkers, getWorker, updateWorkerNote, createPool, add/removeWorkers, block/unblockWorkers
    │   ├─ accounts.py    /api/auth/* (가입, 로그인, 로그아웃, 내 계정)와 /api/admin/* (사용자, 초대 코드)
+   │   ├─ worker.py      /api/worker/* (HIT group 목록, 받기, 내 assignment, 작업 화면, 제출, 반납)
    │   ├─ common.py      요청 읽기, 프로토타입과 같은 검증 오류, 시각과 ID, 잔액, HIT 필드 동기화
    │   └─ agent_jobs.py  /api/agent/models, /api/agent/jobs, /api/agent/job-groups
    └─ agent_jobs/
@@ -374,23 +397,24 @@ backend/
 
 ```bash
 docker compose build backend-test            # 처음 한 번, 그리고 requirements*.txt 를 바꿨을 때
-docker compose run --rm backend-test         # 전체 테스트 213개 (20초 안팎). 테스트용 db-test 가 함께 뜹니다. 코드와 data/ 는 bind mount 라 다시 빌드할 필요가 없습니다
+docker compose run --rm backend-test         # 전체 테스트 223개 (20초 안팎). 테스트용 db-test 가 함께 뜹니다. 코드와 data/ 는 bind mount 라 다시 빌드할 필요가 없습니다
 docker compose run --rm backend-test pytest -q tests/test_console_api.py -k batches   # 일부만
 ```
 
 테스트는 `create_app(Settings(...))`로 앱을 만들되 DB는 `TEST_DATABASE_URL`의 PostgreSQL(compose의 `db-test`, 메모리에만 저장)에 테스트마다 schema를 새로 만들어 쓰고 끝나면 지웁니다. job 출력은 pytest 의 임시 폴더에 두고, 시작 데이터는 저장소의 `data/`, 모델 설정은 `environment/models/`를 읽습니다. `environment/.env`는 읽지 않고(임시 env 파일을 씁니다) OpenRouter 는 부르지 않습니다 (`AGENT_ALLOW_API=0`). 클라이언트는 requester 계정으로 로그인한 상태로 만들고(다른 역할은 `sign_in`, 로그인하지 않은 클라이언트는 `make_client(sign_in_as=None)`), 비밀번호 해시는 반복 횟수를 줄여 빠르게 돌립니다. 경로는 파일 위치에서 저장소 루트를 찾아 정하므로 컨테이너에서도, 호스트에서 `backend/`로 들어가 `pytest`를 돌려도 같습니다. 호스트에서 돌릴 때는 `docker compose --profile test up -d db-test`로 DB를 띄우고 `TEST_DATABASE_URL=postgresql://mturk:mturk@127.0.0.1:5433/mturk_test`를 줍니다. 파일마다 다루는 것은 다음과 같습니다.
 
-- `test_routes_table.py`: `app/routes.py`의 경로 표가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나(이름, 메서드, 경로, 인자 순서) 같은지, 표의 모든 경로가 앱에 등록되어 있고 어느 것도 501 을 내지 않는지, `MOCK_ROUTES`는 등록되어 있지 않은지 확인합니다. 계정 API 의 표(`ACCOUNT_ROUTES`)는 frontend 의 `routes.js`와 대조합니다.
-- `test_domain.py`: `app/domain/`의 진행률, 비용, attention, 대조 기준(`reference.py`), worker 지표, export 형식, 재모집 계획, JS 호환 규칙(`js.py`)이 프로토타입 테스트(`prototype/src/domain/*.test.ts`)의 기대값과 같은지 확인합니다.
+- `test_routes_table.py`: `app/routes.py`의 경로 표가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나(이름, 메서드, 경로, 인자 순서) 같은지, 표의 모든 경로가 앱에 등록되어 있고 어느 것도 501 을 내지 않는지, `MOCK_ROUTES`는 등록되어 있지 않은지 확인합니다. 계정 API 와 worker API 의 표(`ACCOUNT_ROUTES`, `WORKER_ROUTES`)는 frontend 의 `routes.js`와 대조합니다.
+- `test_domain.py`: `app/domain/`의 진행률, 비용, attention, 대조 기준(`reference.py`), worker 지표, export 형식, 재모집 계획, JS 호환 규칙(`js.py`)이 프로토타입 테스트(`prototype/src/domain/*.test.ts`)의 기대값과 같은지 확인합니다. worker 가 푸는 중인 assignment 가 자리를 차지하고 부족분에 들어가지 않는 것(`inProgress`)도 봅니다.
 - `test_domain_agreement.py`: majority(동률은 `null`), Fleiss' κ(Fleiss 1971 예제 0.210, 정의되지 않는 경우), 문항 묶기와 자연 순서 정렬, 그리고 `data/`의 세 batch 에서 κ 가 statsmodels 의 값(0.730594, 0.938407, 0.856749)과 소수 여섯째 자리까지 같은지 확인합니다. Krippendorff's α 는 Krippendorff (2011) 의 nominal 예시 0.743 과 경계 경우(완전 일치, 한 범주, 짝 없음), 범위별 IAA 가 κ 와 α 에 서로 다른 문항을 쓰는 것을 확인합니다.
 - `test_list_query.py`: ListQuery 의 필터(같음, 배열, 빈 값, custom), 정렬(숫자, boolean, 문자열, 없는 값은 맨 뒤, 안정), 페이지, 잘못된 값의 400 문구, query string 읽기를 확인합니다.
 - `test_seed_db.py`: `data/`로 seed 한 규모(templates 2, batches 3, hits 72, assignments 231, pools 2, workers 60), 처음 켤 때 `seed`이고 같은 DB를 다시 열면 `snapshot`인 것, 깨진 seed 폴더(임시 사본에서 파일을 지운 것)에서 `SeedError`가 나는 것을 확인합니다. 문서가 키 순서까지 그대로 돌아오는 것, 읽기 트랜잭션에서 쓰면 거부되는 것, 스키마 이전 파일이 한 번만 적용되고 실패하면 통째로 되돌아가는 것도 확인합니다.
 - `test_legacy_import.py`: 이전 버전 모양의 SQLite 파일을 만들어 PostgreSQL로 옮기고, 저장 순서·문서·seed 시각·잔액이 그대로인 것, 이미 데이터가 있으면 `--replace` 없이 덮어쓰지 않는 것, 스키마 버전이 다르거나 파일이 없을 때의 오류를 확인합니다.
 - `test_accounts.py`: 비밀번호와 초대 코드의 규칙, 역할별 가입 조건(`WORKER_SIGNUP`의 세 값, 이메일 도메인, 한 번만 쓰는 초대 코드), 로그인·로그아웃과 틀린 비밀번호의 같은 문구, 유휴·절대 만료와 `last_seen_at`을 1분에 한 번만 고치는 것, 로그인하지 않으면 401·worker 는 403 인 것, admin 의 계정 정지(세션 삭제)와 초대 코드 관리, 만든 사람 기록, Requester 별 차단, 첫 admin 이 주인 없는 데이터를 넘겨받는 것과 `python -m app.users` 명령을 확인합니다.
+- `test_worker_api.py`: worker 에게 보낼 컬럼(placeholder, 정답 컬럼 빼기)과 답 검사, 게시한 batch 를 worker 가 받아(같은 batch 에서 푸는 중이면 이어서) 작업 화면을 받고 제출하면 Review·진행률(`inProgress`)·IAA 의 검수 대기 범위·worker 지표에 들어가는 것, 자리 수(MaxAssignments), 반납과 제한 시간이 지난 뒤 다시 받기, Requester 별 차단과 pool 조건, 내 HIT 목록의 금액 요약, 다른 worker 의 assignment 와 다른 역할의 접근을 확인합니다.
 - `test_console_api.py`: health, 템플릿 목록과 상세, batch 목록과 상세의 상태·`needsReview`·진행률·비용, 계정, 없는 자원과 없는 경로의 404, 잘못된 입력의 400 봉투, 그리고 경로 표의 모든 경로가 구현되어 501 을 내는 경로가 없는 것을 확인합니다.
 - `test_create_api.py`: 템플릿 저장(새 id, `-2` 접미어, 덮어쓰기, placeholders, Project 필드 `properties`·`sampleRow`의 저장·유지·삭제와 검사 문구)과 삭제(204, 게시된 batch 의 사본은 그대로), 게시(행마다 HIT, 열린 자리, 잔액 $496.40, 100KB 셀), attention 규칙 두 모양과 `freeTextSuffixes`의 저장, 게시 검증의 모든 문구, pool 목록을 확인합니다.
 - `test_answer_kinds.py`: 기대 답 컬럼 방식의 판정과 셀 읽기, 답 분류(접두어·컬럼·자유 서술, attention 우선)를 확인하고, 새 출력 모양의 batch 두 개로 만든 임시 seed 폴더로 seed 판정, `listAssignments`의 `attentionNames`·`freeTextNames`·대조 기준·일치율, 결과와 κ·`labels-json`에서 빠지는 것, `mturk-csv`에 남는 것, worker 의 majority 일치율을 확인합니다.
-- `test_manage_api.py`: HIT 목록의 항목과 조회 조건, assignment 목록의 Row·Agree 열과 필터·기본 순서, column 과 majority 대조 기준, 승인·반려·번복의 상태 변화와 잔액($500.06 → $500.00), 전부 아니면 아무것도 바꾸지 않는 것, 재모집(fill-to-target, 만료 연장, 9개 상한, 잔액 부족), 만료, 결과와 κ, 두 export 형식을 확인합니다. Results 의 `iaa`(세 batch 의 두 범위 값, 검수 대기 응답을 승인·반려한 뒤의 변화)도 확인합니다.
+- `test_manage_api.py`: HIT 목록의 항목과 조회 조건, assignment 목록의 Row·Agree 열과 필터·기본 순서, column 과 majority 대조 기준, 승인·반려·번복의 상태 변화와 잔액($500.06 → $500.00), 전부 아니면 아무것도 바꾸지 않는 것, 재모집(fill-to-target, 만료 연장, 9개 상한, 잔액 부족), 만료, 결과와 κ, 두 export 형식을 확인합니다. Results 의 `iaa`(세 batch 의 세 범위 값, 검수 대기 응답을 승인·반려하면 범위 사이를 옮겨 가거나 빠지는 것)도 확인합니다.
 - `test_workers_api.py`: worker 목록의 지표와 순서, 정렬(값이 없는 항목은 맨 뒤)과 조건 필터, worker 상세, pool 만들기·추가·제거, 차단(사유 필수)·메모·해제, 응답이 없는 worker 가 목록에 나오는 것을 확인합니다.
 - `test_agent_jobs_api.py`: 모델 목록, 예시(`agent/examples/groundedness/`)로 접수한 job 이 `succeeded`까지 가는 것(단계, 파일 9개, 검증, 요약)과 결과 파일 내려받기, 400 조건들(raw 없음, spec 도 prompt 도 없음, LLM 호출 불허, 잘못된 spec), spec 이 원본과 맞지 않을 때 `preprocess`에서 `failed`가 되는 것, `prompt_text`, 상태가 DB 에만 있고 서버를 다시 켜도 job 이 남는 것, 이전 버전의 `job.json`을 한 번만 가져오는 것을 확인합니다.
 - `test_agent_job_groups_api.py`: 후보 묶음의 접수(후보마다 job, 같은 이름과 원본, `group`의 index), planner를 가짜로 바꾼 mock 으로 세 후보가 실제로 동시에 도는 것(모두 plan 에 들어와야 풀리는 Barrier), 실패한 후보가 섞인 묶음에서 고르기와 재시작 뒤에도 남는 선택, 잘못된 선택과 없는 묶음, 이전 job 의 원본 재사용, 400 조건들(모델 수, 없는 모델, 빈 prompt, 호출 불허, spec)에서 폴더가 남지 않는 것, `AGENT_JOB_WORKERS` 읽기를 확인합니다.

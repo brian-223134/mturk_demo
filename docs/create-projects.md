@@ -185,7 +185,7 @@ Project의 `Publish Batch`를 누르면 네 단계로 게시합니다. 보상, �
 | 1. `Upload CSV` | CSV를 올리면 layout이 읽는 컬럼이 모두 있는지 검사합니다. 빠진 컬럼이 있으면 다음으로 갈 수 없습니다. `Download CSV template`으로 양식을 받을 수 있고, `Use the sample row`는 Project의 표본 값으로 HIT 1개짜리 데이터를 만듭니다. |
 | 2. `Preview tasks` | CSV의 행을 하나씩 골라 worker 화면을 그대로 미리 봅니다. 답 칸 목록은 batch의 `answerSchema`로 저장됩니다. |
 | 3. `Review settings` | attention 규칙, 자유 서술 답, Review의 대조 기준을 정합니다. CSV의 컬럼에 달린 설정이라 batch마다 정하며, 처음 값은 Project에 저장된 값입니다. layout에 자유 서술 문항(`ann-textarea`)이 있으면 그 이름이 자유 서술 답으로 미리 채워집니다. |
-| 4. `Confirm and publish` | 비용 견적(보상 + 수수료)과 잔액, 전체 요약을 확인하고 batch 이름을 정해 게시합니다. 게시가 끝나면 그 batch의 Overview로 갑니다. |
+| 4. `Confirm and publish` | 비용 견적(보상 + 수수료)과 잔액, 전체 요약을 확인하고 batch 이름을 정해 게시합니다. 요약의 `Workers receive`는 worker의 작업 화면에 보낼 입력 컬럼과 보내지 않는 컬럼(템플릿이 쓰지 않는 컬럼, 정답이 든 컬럼)입니다. 게시가 끝나면 그 batch의 Overview로 가고, worker의 `HITs` 목록에 그 batch가 나타납니다. |
 
 Overview의 `Project` 칸에서 batch를 게시한 Project의 편집기로 갈 수 있습니다.
 

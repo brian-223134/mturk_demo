@@ -141,7 +141,7 @@ Publish Batch의 `Review settings`가 이 문항의 이름을 자유 서술 답�
 - `Compare answers with`에서 정답이 든 컬럼(이 예시에서는 `gold`)을 고르면, Review의 `Answers` 열이 worker의 답 옆에 그 값을 보여 줍니다. 고르지 않으면 같은 HIT를 수행한 다른 worker들의 majority와 비교합니다.
 
 worker 화면에는 `gold`와 `attention_expected`가 보이지 않습니다. 템플릿이 그 컬럼을 `${…}`로 쓰지 않기 때문입니다.
-다만 지금의 미리보기는 행 전체를 `window.TASK_DATA`로도 넣습니다. worker가 HIT를 푸는 페이지를 만들 때는 템플릿이 쓰는 컬럼만 넣어야 정답이 페이지 소스에 남지 않습니다.
+worker의 작업 화면에는 서버가 템플릿이 쓰는 컬럼만 보내므로, 정답은 `window.TASK_DATA`나 페이지 소스에도 남지 않습니다. `${…}`가 없는 템플릿(행 전체를 `window.TASK_DATA`로 읽는 템플릿)이면 attention 기대 답 컬럼과 대조 기준 컬럼을 뺀 나머지를 보냅니다. 어떤 컬럼이 가는지는 게시할 때 `Confirm and publish`의 `Workers receive`에 표시됩니다. Requester의 미리보기는 지금처럼 행 전체를 씁니다.
 
 ## 콘솔과 주고받는 것
 

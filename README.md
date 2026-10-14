@@ -3,7 +3,7 @@
 Amazon Mechanical Turk(MTurk)로 진행하던 annotation 작업을 **만들고, 게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
 실제 MTurk에는 연동하지 않습니다. MTurk의 용어와 화면 구성, 그리고 HIT, assignment, reward, qualification, attention check 같은 annotation 설정 방식을 차용한 자체 annotation 콘솔을 목표로 합니다.
-지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다. Requester와 Worker는 각자 계정으로 로그인하며, worker가 HIT를 푸는 화면은 아직 없습니다.
+지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다. Requester와 Worker는 각자 계정으로 로그인하며, Requester가 게시한 batch의 HIT를 worker가 받아 풀고 제출하면 그 응답이 Requester의 검수 화면에 들어옵니다.
 
 콘솔은 mono-repo로 구성되어 있습니다. 주 화면은 `frontend/`(vanilla JavaScript)와 `backend/`(FastAPI)이고, 원본 데이터에서 annotation 템플릿과 HIT를 자동으로 만드는 파이프라인이 `agent/`에 있습니다. 화면과 REST 계약을 처음 설계할 때 만든 React 프로토타입은 `prototype/`에 남아 있습니다.
 
@@ -88,7 +88,7 @@ Docker 없이 실행하려면 Node 24 이상이 필요합니다 (Node에 내장�
 - **`Sign in`, `Create an account`**: 로그인하지 않으면 로그인 화면이 열립니다. 가입할 때 계정 종류(`Worker` 또는 `Requester`)를 고르며, Requester는 초대 코드가 있어야 합니다. 로그인 ID는 이메일입니다.
 - **Requester**: 아래의 Create, Manage, Worker Pool을 씁니다. Project와 batch는 연구실의 Requester가 함께 보고, 누가 만들었는지는 기록됩니다.
 - **Admin**: Requester 화면에 `Users` 탭이 더 있습니다. 초대 코드를 만들고(코드는 만들 때 한 번만 보입니다), 계정을 정지하거나 다시 활성화합니다.
-- **Worker**: 자기 Worker ID를 보는 화면이 열립니다. Requester 화면에는 worker의 이메일과 이름 대신 이 Worker ID만 보입니다. HIT를 받아 푸는 화면은 다음 단계에서 붙습니다.
+- **Worker**: 아래의 [Worker 화면](#worker-화면-hit-받아-풀기)이 열립니다. Requester 화면에는 worker의 이메일과 이름 대신 Worker ID만 보입니다.
 
 ### 상단 바
 
@@ -119,7 +119,7 @@ starter 템플릿은 콘솔이 제공하는 `<ann-*>` 요소로 쓴 짧은 HTML�
 
 batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으로 나뉘어 있습니다.
 
-- **`Overview`**: 진행률, 응답 현황, 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
+- **`Overview`**: 진행률, 응답 현황(worker가 지금 풀고 있는 `In progress` 포함), 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
 - **`Review`**: 응답을 검수하는 화면입니다.
   - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 검수합니다. 검수 대기 응답마다 `Approve` / `Reject` 라디오가 있고, 기본 정렬(`Row`)에서는 같은 HIT의 응답이 하나로 묶여 HIT 칸의 `Approve all` / `Reject all`로 그 HIT의 worker 전원을 한 번에 정할 수 있습니다. 고른 결정은 페이지를 넘겨도 남으며, 표 위의 `Submit … decisions…`로 한 번에 제출합니다. `Reject attention-failed`는 attention check를 틀린 검수 대기 응답을 모두 `Reject`로 골라 둡니다.
   - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 batch를 게시할 때 `Review settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
@@ -128,7 +128,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
   - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
   - 반려한 응답은 30일 안에 승인으로 되돌릴 수 있습니다 (반려된 행의 `Revert…`).
 - **`HITs`**: HIT별로 승인, 반려, 검수 대기, 남은 자리 수와 완료 여부를 보여 줍니다. 미완료 HIT만 골라 볼 수 있고, 선택한 HIT의 응답을 추가로 모집할 수 있습니다. 처음에 응답 수를 10개 미만으로 만든 HIT는 합계를 9개보다 늘릴 수 없다는 MTurk의 제약도 반영되어 있어, 이를 넘는 요청은 이유와 함께 건너뜁니다.
-- **`Results`**: annotator 간 일치도(Fleiss' κ, Krippendorff's α)를 제출된 응답 전체와 승인된 응답만으로 나누어 보여 주고, 문항별 투표와 majority, 만장일치 비율, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
+- **`Results`**: annotator 간 일치도(Fleiss' κ, Krippendorff's α)를 승인된 응답, 아직 승인하지 않은 제출(검수 대기), 둘을 합친 것의 세 범위로 나누어 보여 주고(반려된 응답은 어디에도 넣지 않습니다), 문항별 투표와 majority, 만장일치 비율, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
 
 결과 집계에는 승인된(Approved) 응답의 실제 문항만 들어가며, attention 문항은 제외합니다. κ와 만장일치 비율은 표 수가 목표(HIT당 응답 수)와 같은 문항만으로 계산합니다.
 화면에 나오는 숫자를 읽는 방법은 [콘솔의 값 읽기](docs/reading-the-console.md)에 시작 데이터의 실제 값으로 정리되어 있습니다.
@@ -143,6 +143,16 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 - **Worker 상세**: 지표 요약, batch별 참여 이력, 메모를 볼 수 있습니다. batch 이름을 누르면 그 worker의 응답만 걸러진 Review 화면으로 이동합니다.
 
 pool은 Project의 `Enter Properties`(Worker requirements)에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. MTurk의 custom Qualification과 같은 역할입니다.
+
+### Worker 화면: HIT 받아 풀기
+
+worker 계정으로 로그인하면 MTurk의 worker 사이트처럼 HIT를 고르고 풉니다.
+
+- **`HITs`**: 받을 수 있는 HIT가 남은 batch 목록입니다. 제목, Requester, 보상, 제한 시간, 남은 HIT 수를 보고 `Accept & Work`로 HIT 하나를 받습니다. 이미 풀고 있는 HIT가 있으면 `Continue`로 이어서 합니다.
+- **작업 화면**: Requester가 만든 템플릿이 그대로 열리고, 위쪽에 보상과 남은 시간, `Return HIT`(반납)가 있습니다. 템플릿의 `Submit`을 누르면 제출되고, 기본으로 같은 batch의 다음 HIT가 이어서 열립니다. 제한 시간이 지나면 제출할 수 없고 그 HIT는 다시 다른 worker에게 열립니다.
+- **`Your HITs`**: 제출한 HIT의 상태(검수 대기, 승인, 반려)와 받을 금액, 반려 사유를 봅니다.
+- 같은 HIT는 한 번만 풀 수 있고, HIT마다 정한 인원(`MaxAssignments`)이 차면 더 받을 수 없습니다. Requester가 차단한 worker와 pool 조건에 맞지 않는 worker에게는 그 batch가 보이지 않습니다.
+- 작업 화면에는 템플릿이 쓰는 입력 컬럼만 보냅니다. 정답이 든 컬럼(attention 기대 답 컬럼, 대조 기준 컬럼)은 페이지 소스에도 남지 않으며, Requester는 게시할 때 `Confirm and publish`의 `Workers receive`에서 어떤 컬럼이 가는지 확인합니다.
 
 ## 예시 파일로 mock 테스팅 해보기
 
@@ -311,7 +321,9 @@ production 콘솔에서 전체 흐름을 한 번 따라가 보는 순서입니�
    이렇게 만든 pool은 Project의 `Enter Properties`에서 참여 또는 제외로 지정합니다.
 8. **API 확인**: 터미널에서 `curl localhost:8000/api/batches`로 방금 게시한 batch가 REST 응답에 있는 것을 확인할 수 있습니다.
 
-worker가 HIT를 푸는 화면은 아직 없어서 production 콘솔에서 새로 게시한 batch에는 응답이 들어오지 않습니다. 검수 흐름은 시작 데이터의 batch로 보거나, 프로토타입 콘솔의 **Mock tools → Generate fake submissions…**로 가짜 응답을 만들어 확인합니다.
+9. **Worker로 풀어 보기**: 다른 브라우저(또는 시크릿 창)에서 `Create an account`로 worker 계정을 만들고, 6번에서 게시한 batch를 `HITs`에서 받아 풀어 제출합니다. Requester 창의 그 batch `Review` 탭에 응답이 들어오고, 승인하면 worker의 `Your HITs`에 승인과 금액이 보입니다.
+
+시작 데이터의 batch 세 개는 모두 만료되어 worker의 `HITs` 목록에는 보이지 않습니다.
 
 ## 폴더 구조
 
