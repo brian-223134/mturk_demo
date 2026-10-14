@@ -57,9 +57,13 @@ def _resync_hits(store: Store, hit_ids: list[str], at) -> None:
             store.update_hit(hit)
 
 
-# Results 의 IAA 범위. 제출 전체는 worker 가 낸 응답을 검수 결과와 상관없이 모두(검수 대기, 승인, 반려), 승인은 승인된 응답만 센다
-SUBMITTED_STATUSES = ("Submitted", "Approved", "Rejected")
 APPROVED_STATUSES = ("Approved",)
+# Results 의 IAA 범위 (표의 순서). 반려된 응답은 어느 범위에도 넣지 않는다
+IAA_SCOPES = (
+    ("approved", APPROVED_STATUSES),             # 승인된 응답. HIT 의 응답이 다 모인 뒤에 승인한다
+    ("pending", ("Submitted",)),                  # 제출됐지만 아직 승인하지 않은 응답 (검수 대기)
+    ("submitted", ("Submitted", "Approved")),     # 검수 대기 + 승인
+)
 
 
 def _approved_votes(store: Store, batch: dict) -> list[Vote]:
@@ -340,17 +344,14 @@ async def expire_batch(request: Request, id: str) -> Response:
 
 async def get_results(request: Request, batchId: str) -> dict:
     """BatchResults: Approved 응답의 일반 문항만 세고, κ 와 만장일치 비율은 투표 수가 target 인 문항만으로 계산한다.
-    iaa 는 backend 에만 있는 필드다: 제출 전체(submitted)와 승인만(approved) 두 범위의 Fleiss' κ 와 Krippendorff's α."""
+    iaa 는 backend 에만 있는 필드다: IAA_SCOPES 의 세 범위(approved, pending, submitted)마다 Fleiss' κ 와 Krippendorff's α."""
     with db_of(request).transaction() as store:
         batch = find_batch(store, batchId)
-        approved, approved_count, approved_workers = _votes(store, batch, APPROVED_STATUSES)
-        submitted, submitted_count, submitted_workers = _votes(store, batch, SUBMITTED_STATUSES)
+        scopes = {key: (statuses, *_votes(store, batch, statuses)) for key, statuses in IAA_SCOPES}
     target = batch["settings"]["MaxAssignments"]
-    items = collect_items(approved)
-    iaa = {
-        "submitted": {"statuses": list(SUBMITTED_STATUSES), **agreement_scope(collect_items(submitted), target, submitted_count, submitted_workers)},
-        "approved": {"statuses": list(APPROVED_STATUSES), **agreement_scope(items, target, approved_count, approved_workers)},
-    }
+    iaa = {key: {"statuses": list(statuses), **agreement_scope(collect_items(votes), target, count, workers)}
+           for key, (statuses, votes, count, workers) in scopes.items()}
+    items = collect_items(scopes["approved"][1])
     return {"target": target, "items": [item.to_json() for item in items], **summarize_results(items, target), "iaa": iaa}
 
 
