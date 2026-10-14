@@ -3,7 +3,7 @@
 Amazon Mechanical Turk(MTurk)로 진행하던 annotation 작업을 **만들고, 게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
 실제 MTurk에는 연동하지 않습니다. MTurk의 용어와 화면 구성, 그리고 HIT, assignment, reward, qualification, attention check 같은 annotation 설정 방식을 차용한 자체 annotation 콘솔을 목표로 합니다.
-지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있고, worker가 HIT를 푸는 화면은 아직 없습니다.
+지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다. Requester와 Worker는 각자 계정으로 로그인하며, worker가 HIT를 푸는 화면은 아직 없습니다.
 
 콘솔은 mono-repo로 구성되어 있습니다. 주 화면은 `frontend/`(vanilla JavaScript)와 `backend/`(FastAPI)이고, 원본 데이터에서 annotation 템플릿과 HIT를 자동으로 만드는 파이프라인이 `agent/`에 있습니다. 화면과 REST 계약을 처음 설계할 때 만든 React 프로토타입은 `prototype/`에 남아 있습니다.
 
@@ -24,6 +24,14 @@ docker compose up -d --build frontend backend
 - `frontend`: 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api` 요청을 `backend`로 전달합니다.
 - `backend`: FastAPI 백엔드입니다 (http://localhost:8000/api/health). 처음 실행될 때 [data/](data/)의 시작 데이터로 DB를 채우고, agent 파이프라인을 job API로 노출합니다.
 - `db`: PostgreSQL입니다. `backend`를 띄우면 함께 뜹니다.
+
+처음에는 계정이 없으므로 admin 계정을 명령으로 만든 뒤 로그인합니다. 비밀번호는 명령이 물어봅니다.
+
+```bash
+docker compose exec backend python -m app.users create-admin --email <이메일> --name "<이름>"
+```
+
+처음 만든 admin은 이미 있던 데이터(시작 데이터와 그동안 만든 Project, batch, pool)의 주인이 됩니다. 연구실의 다른 Requester는 admin이 `Users` 탭에서 만든 초대 코드로 가입하고, worker는 가입 화면에서 바로 가입합니다. 가입 방식은 설정으로 바꿀 수 있습니다([backend/README.md](backend/README.md#계정)).
 
 게시, 승인과 반려, pool 편집 같은 변경 사항과 자동 생성 job의 상태는 PostgreSQL(Docker volume `backend-pg`)에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다). 이전 버전에서 SQLite에 쌓은 데이터를 옮기는 방법은 [backend/README.md](backend/README.md#db)에 있습니다.
 
@@ -75,9 +83,17 @@ Docker 없이 실행하려면 Node 24 이상이 필요합니다 (Node에 내장�
 
 화면의 글자는 MTurk의 용어와 맞추기 위해 영어로 표시합니다. 이 문서에서 `이렇게 표시한 글자`는 화면에 보이는 그대로입니다.
 
+### 로그인과 계정
+
+- **`Sign in`, `Create an account`**: 로그인하지 않으면 로그인 화면이 열립니다. 가입할 때 계정 종류(`Worker` 또는 `Requester`)를 고르며, Requester는 초대 코드가 있어야 합니다. 로그인 ID는 이메일입니다.
+- **Requester**: 아래의 Create, Manage, Worker Pool을 씁니다. Project와 batch는 연구실의 Requester가 함께 보고, 누가 만들었는지는 기록됩니다.
+- **Admin**: Requester 화면에 `Users` 탭이 더 있습니다. 초대 코드를 만들고(코드는 만들 때 한 번만 보입니다), 계정을 정지하거나 다시 활성화합니다.
+- **Worker**: 자기 Worker ID를 보는 화면이 열립니다. Requester 화면에는 worker의 이메일과 이름 대신 이 Worker ID만 보입니다. HIT를 받아 푸는 화면은 다음 단계에서 붙습니다.
+
 ### 상단 바
 
 - **`MOCK` 배지**: 현재 환경을 나타냅니다. mock에서는 항상 `MOCK`입니다. `SANDBOX`(파랑)와 `PRODUCTION`(빨강)은 시험 환경과 실제 환경을 구분하기 위해 남겨 둔 값입니다.
+- **계정 메뉴**: 오른쪽 끝의 이름을 누르면 이메일과 `Sign out`이 보입니다.
 - **`Balance`**: 잔액입니다. batch를 게시하거나 응답을 추가로 모집하면 비용이 미리 차감되고, 응답을 반려하면 그만큼 돌아옵니다. 잔액이 부족하면 게시와 재모집을 할 수 없습니다.
 - 프로토타입 콘솔에는 오른쪽 위에 **`Mock tools`**(가짜 응답 만들기, 상태 내보내기와 불러오기, `Reset to fixtures`)가 더 있습니다.
 
@@ -122,7 +138,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 오른쪽 위의 버튼으로 `Workers`와 `Pools` 화면을 오갑니다.
 
 - **Worker 목록**: 모든 batch를 합산한 worker별 지표를 보여 줍니다. 제출, 승인, 반려 수와 반려율, attention 실패율, 작업 시간 중앙값, majority 일치율, 참여한 batch 수, 마지막 활동일을 볼 수 있습니다. 정렬, 검색, 필터를 지원하고, 여러 명을 선택해 pool에 넣거나 뺄 수 있습니다.
-- **차단(`Block…`)**: 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다. MTurk에서 차단이 worker 계정에 불이익을 주던 것을 따라, 차단을 마지막 수단으로 두는 설계입니다.
+- **차단(`Block…`)**: 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다. MTurk에서 차단이 worker 계정에 불이익을 주던 것을 따라, 차단을 마지막 수단으로 두는 설계입니다. 차단과 메모는 MTurk처럼 Requester마다 따로이며, 다른 Requester가 차단했는지는 보이지 않습니다.
 - **Pools**: pool을 만들고 구성원을 확인하거나 뺄 수 있습니다. `Fill by criteria…`는 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율 등)을 입력하면 **해당하는 worker가 몇 명인지 먼저 보여 주고**, 확인한 뒤에 추가합니다.
 - **Worker 상세**: 지표 요약, batch별 참여 이력, 메모를 볼 수 있습니다. batch 이름을 누르면 그 worker의 응답만 걸러진 Review 화면으로 이동합니다.
 

@@ -66,6 +66,40 @@ docker compose up -d backend
 - agent job은 따로 옮길 필요가 없습니다. backend가 켤 때 `output/jobs/<job id>/job.json`(이전 버전이 상태를 쓰던 파일) 중 DB에 없는 것을 가져오고, 그 뒤로는 DB의 상태를 씁니다.
 - SQLite 파일은 읽기만 하므로 옮긴 뒤에도 그대로 남습니다.
 
+## 계정
+
+Requester와 Worker는 같은 `users` 테이블에 있고, 계정 하나에 역할(`admin`, `requester`, `worker`) 하나를 둡니다. 로그인 ID는 이메일입니다. 콘솔 REST와 agent job API는 `admin`과 `requester`만 부를 수 있으며, 로그인하지 않으면 401 `UNAUTHORIZED`, 다른 역할이면 403 `FORBIDDEN`입니다. `/api/health`와 `/api/auth/*`는 로그인 전에도 부를 수 있습니다.
+
+```bash
+docker compose exec backend python -m app.users create-admin --email lab@example.com --name "Lab Admin"   # 첫 admin
+docker compose exec backend python -m app.users invite --role requester [--email someone@example.com]      # 초대 코드 (화면의 Users 탭과 같음)
+docker compose exec backend python -m app.users list
+docker compose exec backend python -m app.users set-password --email someone@example.com                  # 비밀번호 재설정 (모든 세션 종료)
+```
+
+- **첫 admin**: 화면이 아니라 위 명령으로 만듭니다. 계정이 하나도 없을 때 만든 admin은 주인 없는 데이터(시작 데이터와 계정이 생기기 전에 만든 Project, batch, pool, agent job, worker 메모와 차단)의 주인이 됩니다.
+- **가입**: Requester는 언제나 초대 코드가 있어야 합니다. Worker는 `WORKER_SIGNUP`에 따라 누구나(`open`), 초대 코드로(`invite`) 가입하거나 가입이 막힙니다(`closed`). `SIGNUP_EMAIL_DOMAINS`로 가입할 수 있는 이메일 도메인을 정할 수 있습니다(하위 도메인 포함). 초대 코드는 한 번만 쓸 수 있고, 이메일을 지정하면 그 주소로만 가입됩니다.
+- **비밀번호**: PBKDF2-HMAC-SHA256(60만 회, 사용자별 salt)로 저장하고, 반복 횟수를 해시 문자열에 함께 적어 나중에 늘릴 수 있게 했습니다. 없는 이메일로 로그인해도 같은 시간만큼 계산하고 같은 문구를 돌려줘, 계정이 있는지 드러나지 않습니다.
+- **세션**: 쿠키(`mturk_session`, HttpOnly, SameSite=Lax)에는 무작위 토큰만 담고 DB에는 그 해시를 둡니다. 마지막 요청에서 `SESSION_IDLE_MINUTES`, 로그인에서 `SESSION_MAX_DAYS`가 지나면 끝납니다. 계정을 정지하면 그 계정의 세션을 바로 모두 지웁니다.
+- **만든 사람**: 템플릿, batch, pool, agent job을 만들면 `owner_id`에 만든 계정을 적습니다. 목록은 연구실의 Requester가 모두 함께 보며, API 응답의 모양은 바뀌지 않습니다.
+- **Requester별 차단**: 차단과 메모는 `requester_workers`에 Requester마다 따로 둡니다. Worker Pool 화면과 `listWorkers`·`getWorker`의 `blocked`, `blockReason`, `note`는 로그인한 Requester의 것이고, 다른 Requester가 차단했는지는 보이지 않습니다. 연구실 전체에서 막으려면 admin이 계정을 정지합니다.
+- **Worker ID**: worker 계정은 가입할 때 `W` + 12자리 hex의 Worker ID를 받습니다. 시작 데이터의 worker와 겹치지 않게 만들며, Requester 화면에는 worker의 이메일과 이름 대신 이 ID만 보입니다.
+
+| 이름 | 메서드와 경로 | 누가 | 하는 일 |
+|---|---|---|---|
+| getSignupOptions | `GET /api/auth/options` | 누구나 | 가입 화면이 쓰는 설정 `{workerSignup, emailDomains, passwordMinLength}` |
+| signup | `POST /api/auth/signup` | 누구나 | `{email, password, displayName, role, inviteCode?}` → 201 `{user}`와 세션 쿠키 |
+| login | `POST /api/auth/login` | 누구나 | `{email, password}` → `{user}`와 세션 쿠키 |
+| logout | `POST /api/auth/logout` | 누구나 | 세션을 지우고 쿠키를 비웁니다 (204) |
+| getMe | `GET /api/auth/me` | 로그인한 계정 | `{user}` |
+| listUsers | `GET /api/admin/users` | admin | `{users}` |
+| suspendUser, activateUser | `POST /api/admin/users/:id/suspend`, `…/activate` | admin | 정지하거나 다시 활성화합니다. 자기 계정은 정지할 수 없습니다 |
+| listInvitations | `GET /api/admin/invitations` | admin | `{invitations}` (코드 원문은 없습니다) |
+| createInvitation | `POST /api/admin/invitations` | admin | `{role, email?, note?, expiresInDays?}` → `{invitation, code}`. 코드 원문은 이때 한 번만 돌려줍니다 |
+| deleteInvitation | `DELETE /api/admin/invitations/:id` | admin | 쓰지 않은 코드를 지웁니다 (204) |
+
+`user`는 `{id, email, displayName, role, status, workerId, createdAt, lastLoginAt}`입니다. 이 표는 `app/routes.py`의 `ACCOUNT_ROUTES`이고 frontend의 `ACCOUNT_ROUTES`와 같습니다(테스트가 대조합니다). 프로토타입의 mock API에는 계정 API가 없어서, frontend를 mock API에 붙이면 로그인 없이 콘솔이 열립니다.
+
 ## 콘솔 REST
 
 기본 경로는 `/api`입니다. 인자를 싣는 규칙은 `routes.ts`와 같습니다. 경로의 `:이름`은 경로에, GET과 DELETE의 나머지 인자는 query string에(`q`는 `page`, `pageSize`, `sort=필드:방향`, `filters=<JSON>`으로 폅니다), POST와 PUT의 나머지 인자는 JSON body에 이름으로 넣되 인자 이름이 `body`면 그 값 자체가 body입니다. 응답 JSON의 모양은 `prototype/src/api/types.ts`의 타입과 같습니다.
@@ -154,7 +188,7 @@ MTurk 처럼 HIT 를 만들 때 비용을 미리 잡아 두고, 반려하면 돌
 
 worker 목록은 모든 assignment 를 훑어 지표(`app/domain/worker_stats.py`: total, approved, rejected, pending, rejectRate, attentionFailRate, medianWorkTimeInSeconds, majorityAgreement, batchCount, lastActiveAt)를 계산한 것입니다. majority 일치율은 라벨마다 자기 표를 빼고 같은 문항의 다른 worker 들(반려 제외) majority 와 비교하며, 다른 표가 없거나 동률인 문항과 attention·자유 서술 답은 뺍니다. 응답이 없어도 pool 에 들어 있거나 메모·차단이 붙은 worker 는 빈 지표로 목록에 나옵니다. `getWorker`는 여기에 batch 별 이력(`batches`), 최근 제출부터의 assignment 요약(`assignments`), 차단됐을 때의 `blockReason`을 더합니다.
 
-pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 수 없습니다. `addWorkersToPool`은 중복 없이 뒤에 붙이고, `removeWorkersFromPool`은 없는 id 를 무시합니다. `blockWorkers`는 사유가 필수이고 응답이 없는 worker 도 차단할 수 있으며, `unblockWorkers`는 `blockReason`을 지웁니다. `updateWorkerNote`는 목록에 있는 worker 만 받습니다.
+pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 수 없습니다. `addWorkersToPool`은 중복 없이 뒤에 붙이고, `removeWorkersFromPool`은 없는 id 를 무시합니다. `blockWorkers`는 사유가 필수이고 응답이 없는 worker 도 차단할 수 있으며(차단과 메모는 로그인한 Requester 의 것입니다, [계정](#계정)), `unblockWorkers`는 `blockReason`을 지웁니다. `updateWorkerNote`는 목록에 있는 worker 만 받습니다.
 
 ### 오류 봉투
 
@@ -163,6 +197,8 @@ pool 은 `pool-<slug>` id 를 받고 이름은 대소문자를 무시해 겹칠 
 | 상태 | code | 언제 |
 |---|---|---|
 | 400 | `INVALID_REQUEST` | 잘못된 요청. FastAPI의 검증 오류(422)도 이 봉투로 바꿉니다 |
+| 401 | `UNAUTHORIZED` | 로그인하지 않았거나 세션이 끝났습니다. 로그인할 때 이메일이나 비밀번호가 틀린 경우도 같습니다 |
+| 403 | `FORBIDDEN` | 이 역할로는 쓸 수 없는 경로(예: worker가 콘솔 REST), 정지된 계정의 로그인 |
 | 404 | `NOT_FOUND` | 없는 자원, 없는 경로, 다른 메서드 |
 | 501 | `NOT_IMPLEMENTED` | 경로 표에는 있지만 구현하지 않은 경로 (지금은 없습니다. stub 장치만 남아 있습니다) |
 | 500 | `UNKNOWN` | 그 밖의 예외 |
@@ -276,6 +312,12 @@ docker-compose.yml의 `backend` 서비스가 컨테이너 경로로 채워 줍�
 | `ENV_FILE` | `/app/environment/.env` | `OPENROUTER_KEY`, `AGENT_MODEL`을 읽는 파일 |
 | `AGENT_ALLOW_API` | `${AGENT_ALLOW_API:-}` | OpenRouter 호출을 허용하는 서버 스위치입니다. 셸에서 주지 않으면 빈 값이고, 그때는 `environment/.env`의 `AGENT_ALLOW_API`를 따릅니다 (1/true/yes/on이면 허용) |
 | `AGENT_JOB_WORKERS` | (`environment/.env`에 적을 때만) | 동시에 도는 agent job 수입니다. 비어 있거나 숫자가 아니면 3이고, 1보다 작으면 1입니다 |
+| `WORKER_SIGNUP` | (`environment/.env`에 적을 때만) | Worker 가입 방식입니다. `open`(기본값, 누구나), `invite`(초대 코드), `closed`(가입 막음) |
+| `SIGNUP_EMAIL_DOMAINS` | (`environment/.env`에 적을 때만) | 가입할 수 있는 이메일 도메인을 쉼표로 구분해 적습니다. 비어 있으면 제한하지 않습니다 |
+| `SESSION_IDLE_MINUTES` | (`environment/.env`에 적을 때만) | 이 시간 동안 요청이 없으면 로그아웃됩니다. 기본값 480 |
+| `SESSION_MAX_DAYS` | (`environment/.env`에 적을 때만) | 로그인하고 이 기간이 지나면 다시 로그인해야 합니다. 기본값 2 |
+| `PASSWORD_MIN_LENGTH` | (`environment/.env`에 적을 때만) | 비밀번호 최소 길이입니다. 기본값 8 |
+| `SESSION_COOKIE_SECURE` | (`environment/.env`에 적을 때만) | 1이면 https로만 세션 쿠키를 보냅니다. https로 서비스할 때 켭니다 |
 
 ## 폴더 구성
 
@@ -299,8 +341,12 @@ backend/
    ├─ db.py              PostgreSQL 문서 저장소 (테이블마다 id + JSON doc). 비어 있으면 seed. Store 는 연결 하나 위의 읽기와 쓰기,
    │                     Database.transaction() 이 트랜잭션 하나로 묶어 준다 (연결은 pool 에서)
    ├─ schema.py          스키마 이전: migrations/ 의 SQL 파일을 번호순으로, 아직 적용하지 않은 것만
-   ├─ migrations/        0001_console.sql (콘솔 문서 테이블), 0002_agent_jobs.sql (agent job 의 상태)
+   ├─ migrations/        0001_console.sql (콘솔 문서 테이블), 0002_agent_jobs.sql (agent job 의 상태),
+   │                     0003_accounts.sql (계정, 세션, 초대 코드, Requester 별 차단, owner_id)
    ├─ legacy_import.py   이전 버전의 SQLite 파일을 PostgreSQL 로 옮기는 명령
+   ├─ accounts.py        계정 규칙: 비밀번호 해시, 이메일, 가입 조건, 세션 만료, 초대 코드 (HTTP 와 무관)
+   ├─ auth.py            세션 쿠키 읽기와 쓰기, 역할 검사 의존성(require_roles), current_user
+   ├─ users.py           계정 관리 명령 (create-admin, invite, list, set-password)
    ├─ seed.py            data/ 폴더 읽기 (placeholders 와 attention 판정은 여기서 계산)
    ├─ domain/            프로토타입 계산 규칙의 이식. progress.py (진행률, 재모집 계획), cost.py (수수료, 단가), attention.py
    │                     (두 규칙 모양의 판정), answer_kinds.py (attention·자유 서술·라벨 구분),
@@ -312,6 +358,7 @@ backend/
    │   ├─ create.py      saveTemplate, deleteTemplate, createBatch, listPools
    │   ├─ manage.py      listHits, getHit, listAssignments, approve, reject, addAssignments, expireBatch, getResults, exportBatch
    │   ├─ workers.py     listWorkers, getWorker, updateWorkerNote, createPool, add/removeWorkers, block/unblockWorkers
+   │   ├─ accounts.py    /api/auth/* (가입, 로그인, 로그아웃, 내 계정)와 /api/admin/* (사용자, 초대 코드)
    │   ├─ common.py      요청 읽기, 프로토타입과 같은 검증 오류, 시각과 ID, 잔액, HIT 필드 동기화
    │   └─ agent_jobs.py  /api/agent/models, /api/agent/jobs, /api/agent/job-groups
    └─ agent_jobs/
@@ -327,18 +374,19 @@ backend/
 
 ```bash
 docker compose build backend-test            # 처음 한 번, 그리고 requirements*.txt 를 바꿨을 때
-docker compose run --rm backend-test         # 전체 테스트 192개 (15초 안팎). 테스트용 db-test 가 함께 뜹니다. 코드와 data/ 는 bind mount 라 다시 빌드할 필요가 없습니다
+docker compose run --rm backend-test         # 전체 테스트 213개 (20초 안팎). 테스트용 db-test 가 함께 뜹니다. 코드와 data/ 는 bind mount 라 다시 빌드할 필요가 없습니다
 docker compose run --rm backend-test pytest -q tests/test_console_api.py -k batches   # 일부만
 ```
 
-테스트는 `create_app(Settings(...))`로 앱을 만들되 DB는 `TEST_DATABASE_URL`의 PostgreSQL(compose의 `db-test`, 메모리에만 저장)에 테스트마다 schema를 새로 만들어 쓰고 끝나면 지웁니다. job 출력은 pytest 의 임시 폴더에 두고, 시작 데이터는 저장소의 `data/`, 모델 설정은 `environment/models/`를 읽습니다. `environment/.env`는 읽지 않고(임시 env 파일을 씁니다) OpenRouter 는 부르지 않습니다 (`AGENT_ALLOW_API=0`). 경로는 파일 위치에서 저장소 루트를 찾아 정하므로 컨테이너에서도, 호스트에서 `backend/`로 들어가 `pytest`를 돌려도 같습니다. 호스트에서 돌릴 때는 `docker compose --profile test up -d db-test`로 DB를 띄우고 `TEST_DATABASE_URL=postgresql://mturk:mturk@127.0.0.1:5433/mturk_test`를 줍니다. 파일마다 다루는 것은 다음과 같습니다.
+테스트는 `create_app(Settings(...))`로 앱을 만들되 DB는 `TEST_DATABASE_URL`의 PostgreSQL(compose의 `db-test`, 메모리에만 저장)에 테스트마다 schema를 새로 만들어 쓰고 끝나면 지웁니다. job 출력은 pytest 의 임시 폴더에 두고, 시작 데이터는 저장소의 `data/`, 모델 설정은 `environment/models/`를 읽습니다. `environment/.env`는 읽지 않고(임시 env 파일을 씁니다) OpenRouter 는 부르지 않습니다 (`AGENT_ALLOW_API=0`). 클라이언트는 requester 계정으로 로그인한 상태로 만들고(다른 역할은 `sign_in`, 로그인하지 않은 클라이언트는 `make_client(sign_in_as=None)`), 비밀번호 해시는 반복 횟수를 줄여 빠르게 돌립니다. 경로는 파일 위치에서 저장소 루트를 찾아 정하므로 컨테이너에서도, 호스트에서 `backend/`로 들어가 `pytest`를 돌려도 같습니다. 호스트에서 돌릴 때는 `docker compose --profile test up -d db-test`로 DB를 띄우고 `TEST_DATABASE_URL=postgresql://mturk:mturk@127.0.0.1:5433/mturk_test`를 줍니다. 파일마다 다루는 것은 다음과 같습니다.
 
-- `test_routes_table.py`: `app/routes.py`의 경로 표가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나(이름, 메서드, 경로, 인자 순서) 같은지, 표의 모든 경로가 앱에 등록되어 있고 어느 것도 501 을 내지 않는지, `MOCK_ROUTES`는 등록되어 있지 않은지 확인합니다.
+- `test_routes_table.py`: `app/routes.py`의 경로 표가 `prototype/src/api/http/routes.ts`의 `API_ROUTES`와 키 하나하나(이름, 메서드, 경로, 인자 순서) 같은지, 표의 모든 경로가 앱에 등록되어 있고 어느 것도 501 을 내지 않는지, `MOCK_ROUTES`는 등록되어 있지 않은지 확인합니다. 계정 API 의 표(`ACCOUNT_ROUTES`)는 frontend 의 `routes.js`와 대조합니다.
 - `test_domain.py`: `app/domain/`의 진행률, 비용, attention, 대조 기준(`reference.py`), worker 지표, export 형식, 재모집 계획, JS 호환 규칙(`js.py`)이 프로토타입 테스트(`prototype/src/domain/*.test.ts`)의 기대값과 같은지 확인합니다.
 - `test_domain_agreement.py`: majority(동률은 `null`), Fleiss' κ(Fleiss 1971 예제 0.210, 정의되지 않는 경우), 문항 묶기와 자연 순서 정렬, 그리고 `data/`의 세 batch 에서 κ 가 statsmodels 의 값(0.730594, 0.938407, 0.856749)과 소수 여섯째 자리까지 같은지 확인합니다. Krippendorff's α 는 Krippendorff (2011) 의 nominal 예시 0.743 과 경계 경우(완전 일치, 한 범주, 짝 없음), 범위별 IAA 가 κ 와 α 에 서로 다른 문항을 쓰는 것을 확인합니다.
 - `test_list_query.py`: ListQuery 의 필터(같음, 배열, 빈 값, custom), 정렬(숫자, boolean, 문자열, 없는 값은 맨 뒤, 안정), 페이지, 잘못된 값의 400 문구, query string 읽기를 확인합니다.
 - `test_seed_db.py`: `data/`로 seed 한 규모(templates 2, batches 3, hits 72, assignments 231, pools 2, workers 60), 처음 켤 때 `seed`이고 같은 DB를 다시 열면 `snapshot`인 것, 깨진 seed 폴더(임시 사본에서 파일을 지운 것)에서 `SeedError`가 나는 것을 확인합니다. 문서가 키 순서까지 그대로 돌아오는 것, 읽기 트랜잭션에서 쓰면 거부되는 것, 스키마 이전 파일이 한 번만 적용되고 실패하면 통째로 되돌아가는 것도 확인합니다.
 - `test_legacy_import.py`: 이전 버전 모양의 SQLite 파일을 만들어 PostgreSQL로 옮기고, 저장 순서·문서·seed 시각·잔액이 그대로인 것, 이미 데이터가 있으면 `--replace` 없이 덮어쓰지 않는 것, 스키마 버전이 다르거나 파일이 없을 때의 오류를 확인합니다.
+- `test_accounts.py`: 비밀번호와 초대 코드의 규칙, 역할별 가입 조건(`WORKER_SIGNUP`의 세 값, 이메일 도메인, 한 번만 쓰는 초대 코드), 로그인·로그아웃과 틀린 비밀번호의 같은 문구, 유휴·절대 만료와 `last_seen_at`을 1분에 한 번만 고치는 것, 로그인하지 않으면 401·worker 는 403 인 것, admin 의 계정 정지(세션 삭제)와 초대 코드 관리, 만든 사람 기록, Requester 별 차단, 첫 admin 이 주인 없는 데이터를 넘겨받는 것과 `python -m app.users` 명령을 확인합니다.
 - `test_console_api.py`: health, 템플릿 목록과 상세, batch 목록과 상세의 상태·`needsReview`·진행률·비용, 계정, 없는 자원과 없는 경로의 404, 잘못된 입력의 400 봉투, 그리고 경로 표의 모든 경로가 구현되어 501 을 내는 경로가 없는 것을 확인합니다.
 - `test_create_api.py`: 템플릿 저장(새 id, `-2` 접미어, 덮어쓰기, placeholders, Project 필드 `properties`·`sampleRow`의 저장·유지·삭제와 검사 문구)과 삭제(204, 게시된 batch 의 사본은 그대로), 게시(행마다 HIT, 열린 자리, 잔액 $496.40, 100KB 셀), attention 규칙 두 모양과 `freeTextSuffixes`의 저장, 게시 검증의 모든 문구, pool 목록을 확인합니다.
 - `test_answer_kinds.py`: 기대 답 컬럼 방식의 판정과 셀 읽기, 답 분류(접두어·컬럼·자유 서술, attention 우선)를 확인하고, 새 출력 모양의 batch 두 개로 만든 임시 seed 폴더로 seed 판정, `listAssignments`의 `attentionNames`·`freeTextNames`·대조 기준·일치율, 결과와 κ·`labels-json`에서 빠지는 것, `mturk-csv`에 남는 것, worker 의 majority 일치율을 확인합니다.

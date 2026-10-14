@@ -44,9 +44,10 @@ frontend/
 │  └─ starters.test.js    starter 템플릿과 example/5-project
 └─ src/
    ├─ index.html           루트 요소 하나와 <script type="module" src="/main.js">
-   ├─ main.js              레이아웃을 그리고 라우터에 페이지를 등록합니다
+   ├─ main.js              로그인 상태(GET /api/auth/me)를 보고 역할에 맞는 레이아웃과 경로를 등록합니다 (아래 "로그인과 역할")
    ├─ router.js            history API 라우터. 경로는 main.js 에서 등록합니다 (/create, /create/new, /create/tutorial, /create/project/:projectId(/:tab),
-   │                       /create/publish/:projectId, /manage, /manage/:batchId(/:tab), /workers, /workers/pools, /workers/:workerId). / 는 /create 로 보냅니다
+   │                       /create/publish/:projectId, /manage, /manage/:batchId(/:tab), /workers, /workers/pools, /workers/:workerId,
+   │                       /admin/users, /worker, /login, /signup). / 는 역할의 첫 화면으로 보내고, onNotFound 로 등록하지 않은 경로를 돌려보냅니다
    ├─ router-match.js      경로 패턴 → 정규식(compilePattern), 경로에 맞는 route 찾기(matchRoute). DOM 을 쓰지 않아 Node 에서 테스트합니다
    ├─ styles.css           밝은 테마. 배지 색은 mock 회색, sandbox 파랑, production 빨강
    ├─ styles-create.css     Create 의 스타일 (Project 목록, 갤러리, 편집기와 미리보기, 단계 표시줄, 검사 줄, 폼)
@@ -55,8 +56,8 @@ frontend/
    │  └─ starters/         New Project 의 starter 템플릿 9종 (<ann-*> 로 쓴 HTML)
    ├─ styles-review.css     Manage 의 Review·HITs·Results 와 Worker Pool 의 스타일
    ├─ api-client/          (api/ 가 아닌 이유: /api/ 는 nginx 가 backend 로 넘기는 경로라 정적 파일과 겹칩니다)
-   │  ├─ routes.js         REST 경로 표(API_ROUTES)와 agent job 경로(AGENT_ROUTES), 요청 인코딩(encodeRequest)
-   │  └─ client.js         call(routeName, args), api.<route>(…), ApiError { code, message, status }, createJob, createJobGroup, fileUrl
+   │  ├─ routes.js         REST 경로 표(API_ROUTES), agent job 경로(AGENT_ROUTES), 계정 경로(ACCOUNT_ROUTES), 요청 인코딩(encodeRequest)
+   │  └─ client.js         call(routeName, args), api.<route>(…), auth, admin, ApiError { code, message, status }, createJob, createJobGroup, fileUrl
    ├─ lib/                  DOM 을 쓰지 않는 순수 로직. Node 테스트에서 그대로 import 합니다
    │  ├─ csv.js             RFC 4180 파서(따옴표, 겹따옴표, 줄바꿈, CRLF, BOM)와 UTF-8 검사. papaparse 를 쓰지 않습니다
    │  ├─ template.js        placeholder 추출, 치환, window.TASK_DATA 주입, 미리보기 스크립트(제출 가로채기, 문항 목록 보고)
@@ -70,10 +71,11 @@ frontend/
    │  ├─ starters.js        starter 템플릿 목록 (설명, 표본 행, 미리 채울 속성)
    │  ├─ layout-lint.js     Design Layout 의 검사 (<ann-*> 를 잘못 쓴 곳)
    │  ├─ job-groups.js      Generate 의 후보 묶음: job 목록을 묶음과 단독 job 으로 나누기, 묶음 상태와 안내, 후보마다 고를 기본 모델
+   │  ├─ session.js         역할별 첫 화면과 열 수 있는 경로, 로그인 뒤 돌아갈 곳(safeNext), 가입 조건과 검사 문구 (backend 와 같은 문구)
    │  └─ element-reference.js  Insert element 메뉴와 Element reference 패널의 요소 설명
    ├─ components/
    │  ├─ dom.js            el() 도우미와 escapeHtml. 데이터는 항상 textContent 로 넣습니다
-   │  ├─ layout.js         제목 줄(환경 배지, 잔액), 세 탭, 오류 띠
+   │  ├─ layout.js         콘솔 레이아웃(제목 줄의 환경 배지·잔액·계정 메뉴, 탭, admin 의 Users 탭, 오류 띠), worker 레이아웃, 로그인 화면 레이아웃
    │  ├─ table.js          표, 정렬 머리글(sortKey), 체크박스 선택(selection), 여러 행을 덮는 칸(span), 행 클릭, 페이지 이동(페이지 크기 선택)
    │  ├─ format.js         금액($0.00), 비율(%), 시각(YYYY-MM-DD HH:mm), 기간, 경과 시간
    │  ├─ badges.js         환경 배지, 상태 태그, attention 판정, job 과 step 의 상태 칩
@@ -90,6 +92,9 @@ frontend/
    │  ├─ render.js         null 과 배열을 받는 replace(node, …children)
    │  └─ preview-frame.js   sandbox iframe 미리보기. Submit 을 가로채 답을 보여 줍니다
    └─ pages/
+      ├─ auth.js           /login(로그인, next 로 돌아가기), /signup(계정 종류, 초대 코드, 가입 조건은 GET /api/auth/options)
+      ├─ worker.js         /worker: worker 의 첫 화면 (Worker ID. HIT 목록과 작업 화면은 다음 단계)
+      ├─ admin.js          /admin/users: 초대 코드 만들기(코드는 한 번만 표시)와 지우기, 계정 목록과 정지·해제
       ├─ create.js         Create 의 경로별 진입점
       ├─ create/
       │  ├─ projects.js      Project 목록 (Publish Batch, Edit, Copy, Delete)
@@ -133,9 +138,20 @@ frontend/
 - GET과 DELETE의 나머지 인자는 query string에 넣습니다. `q`(목록 조회 조건)는 `page`, `pageSize`, `sort=필드:방향`, `filters=<JSON>`으로 폅니다.
 - POST와 PUT의 나머지 인자는 인자 이름을 키로 한 JSON body에 넣습니다. 인자 이름이 `body`면 그 값 자체가 body입니다.
 
-`api.getBatch(id)`, `api.listHits(batchId, { page: 1, pageSize: 25 })`처럼 메서드로도 부를 수 있습니다. 오류는 항상 `ApiError { code, message, status }`입니다. `code`는 backend의 오류 봉투 `{ "error": { "code", "message" } }`에서 오고(`INVALID_REQUEST`, `NOT_FOUND`, `NOT_IMPLEMENTED`, `UNKNOWN`), 서버에 닿지 못했거나 JSON이 아닌 응답이 오면 `NETWORK`입니다. 화면은 `NOT_IMPLEMENTED`(501)를 "Not implemented in the backend yet" 안내로 보여 주고 나머지 부분은 계속 동작합니다.
+`api.getBatch(id)`, `api.listHits(batchId, { page: 1, pageSize: 25 })`처럼 메서드로도 부를 수 있습니다. 오류는 항상 `ApiError { code, message, status }`입니다. `code`는 backend의 오류 봉투 `{ "error": { "code", "message" } }`에서 오고(`INVALID_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `NOT_IMPLEMENTED`, `UNKNOWN`), 서버에 닿지 못했거나 JSON이 아닌 응답이 오면 `NETWORK`입니다. 콘솔 REST나 agent API가 `UNAUTHORIZED`(세션이 끝남)를 돌려주면 `window`에 `auth:required` 이벤트를 보내고, main.js가 로그인 화면으로 보냅니다. 계정 API(`ACCOUNT_ROUTES`, `auth`와 `admin` 객체)의 401은 틀린 비밀번호처럼 화면이 직접 다루므로 이벤트를 보내지 않습니다. 화면은 `NOT_IMPLEMENTED`(501)를 "Not implemented in the backend yet" 안내로 보여 주고 나머지 부분은 계속 동작합니다.
 
 agent job API(`/api/agent/models`, `/api/agent/jobs`, `/api/agent/jobs/{id}`, `/api/agent/jobs/{id}/files/{name}`, `/api/agent/job-groups`, `/api/agent/job-groups/{id}/choice`)는 `AGENT_ROUTES`에 있습니다. job과 후보 묶음의 생성은 multipart/form-data라서 `createJob(formData)`, `createJobGroup(formData)`로 따로 보냅니다.
+
+## 로그인과 역할
+
+main.js는 시작할 때 `GET /api/auth/me`로 로그인 상태를 확인하고 역할에 맞는 레이아웃과 경로만 등록합니다.
+
+- **로그인하지 않음**: `/login`과 `/signup`만 있고, 다른 경로는 `/login?next=<경로>`로 보냅니다. 로그인하면 `next`(같은 사이트이고 그 역할로 열 수 있는 경로일 때만)로, 가입하면 역할의 첫 화면으로 페이지를 새로 불러 시작합니다.
+- **requester, admin**: 아래의 콘솔입니다. 제목 줄 오른쪽에 계정 메뉴(이메일, `Sign out`)가 있고, admin에게는 `Users` 탭(`/admin/users`)이 더 있습니다.
+- **worker**: `/worker`만 있고 다른 경로는 `/worker`로 보냅니다. 지금은 Worker ID를 보여 주는 첫 화면뿐입니다.
+- **계정 API가 없는 서버**: `/api/auth/me`가 404면(프로토타입의 mock API에 붙인 경우) 예전처럼 로그인 없이 콘솔을 그리고 계정 메뉴를 빼고 보여 줍니다.
+
+가입 화면의 초대 코드 칸은 `GET /api/auth/options`의 `workerSignup`과 고른 계정 종류(Requester는 언제나 필요)에 따라 보이거나 숨습니다.
 
 ## 화면
 
@@ -159,7 +175,7 @@ Create의 Generate 패널은 prompt 본문, 이름, 후보마다 고른 모델�
 
 backend가 경로 표의 27개 경로를 모두 구현하므로, 프로토타입에서 되던 콘솔 기능은 이 화면에서도 모두 됩니다. Create의 Project 만들기와 게시, Manage의 검수·재모집·만료·export·결과, Worker Pool의 pool 편집·차단·worker 상세입니다. `API_UPSTREAM`을 프로토타입의 mock API로 바꾸면 Generate 패널만 잠기고 나머지는 같습니다.
 
-아직 없는 것은 worker가 HIT를 푸는 화면입니다. MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, Review와 Results는 시작 데이터의 batch 세 개로 확인합니다. 프로토타입의 Mock tools(가짜 응답 생성, Reset to fixtures)는 mock 전용이라 backend에 없습니다. 시작 데이터의 템플릿과 agent가 만드는 템플릿이 `assets.crowd.aws`의 스크립트를 불러오는 점도 그대로입니다. starter와 `<ann-*>` 요소로 쓴 템플릿은 이 스크립트에 의존하지 않습니다.
+아직 없는 것은 worker가 HIT를 푸는 화면입니다(worker 계정으로 로그인하면 Worker ID를 보여 주는 첫 화면까지 있습니다). MTurk에 연동하지 않으므로 새로 게시한 batch에는 응답이 들어오지 않고, Review와 Results는 시작 데이터의 batch 세 개로 확인합니다. 프로토타입의 Mock tools(가짜 응답 생성, Reset to fixtures)는 mock 전용이라 backend에 없습니다. 시작 데이터의 템플릿과 agent가 만드는 템플릿이 `assets.crowd.aws`의 스크립트를 불러오는 점도 그대로입니다. starter와 `<ann-*>` 요소로 쓴 템플릿은 이 스크립트에 의존하지 않습니다.
 
 ## 테스트
 
@@ -171,8 +187,9 @@ docker compose run --rm frontend-test
 
 테스트는 `src/`의 모듈을 그대로 import합니다. 부를 때 `document`나 `window`가 필요한 모듈(`pages/`, `layout.js`, `router.js`의 이동 부분)은 여기서 다루지 않고 브라우저로 확인합니다.
 
-- `routes.test.js`: `API_ROUTES`가 `routes.ts`의 표와 키 순서, 메서드, 경로, 인자 순서까지 같은지, mock 전용 경로가 없는지, `AGENT_ROUTES`의 열 경로가 맞는지, 그리고 `encodeRequest`가 경로 인자, `q`(page, pageSize, sort, filters), 이름 있는 인자의 JSON body, `body` 인자, DELETE, multipart를 규칙대로 싣는지 확인합니다. `helpers/routes-ts.js`가 TS 파일을 컴파일하지 않고 정규식으로 표를 읽습니다.
-- `client.test.js`: `globalThis.fetch`를 가짜로 바꿔 `call()`과 `api.<route>()`가 보내는 메서드, URL, 헤더, body를 확인하고, 200 JSON, 204, 오류 봉투(501 `NOT_IMPLEMENTED`, 404 `NOT_FOUND`, 모르는 code), JSON이 아닌 502, fetch 자체의 실패가 각각 어떤 값이나 `ApiError`가 되는지 봅니다. `isApiError`, `createJob(formData)`·`createJobGroup(formData)`(multipart, JSON Content-Type 없음), `chooseCandidate`(`{job_id}` JSON), `fileUrl`도 확인합니다.
+- `routes.test.js`: `API_ROUTES`가 `routes.ts`의 표와 키 순서, 메서드, 경로, 인자 순서까지 같은지, mock 전용 경로가 없는지, `AGENT_ROUTES`의 열 경로가 맞는지, `ACCOUNT_ROUTES`가 `/auth`와 `/admin` 아래에 있고 다른 표와 이름이 겹치지 않는지(backend 의 표와의 대조는 backend 테스트가 합니다), 그리고 `encodeRequest`가 경로 인자, `q`(page, pageSize, sort, filters), 이름 있는 인자의 JSON body, `body` 인자, DELETE, multipart를 규칙대로 싣는지 확인합니다. `helpers/routes-ts.js`가 TS 파일을 컴파일하지 않고 정규식으로 표를 읽습니다.
+- `lib-session.test.js`: 역할별 첫 화면과 열 수 있는 경로, `safeNext`가 다른 사이트(`//…`, `https://…`)나 `/api/`, 로그인 화면, 그 역할로 열 수 없는 경로를 버리는 것, `loginPath`, 가입 조건(`workerSignup` 세 값, Requester 의 초대 코드)과 검사 문구가 backend 와 같은지, 이메일 도메인 제한을 확인합니다.
+- `client.test.js`: `globalThis.fetch`를 가짜로 바꿔 `call()`과 `api.<route>()`가 보내는 메서드, URL, 헤더, body를 확인하고, 200 JSON, 204, 오류 봉투(501 `NOT_IMPLEMENTED`, 404 `NOT_FOUND`, 모르는 code), JSON이 아닌 502, fetch 자체의 실패가 각각 어떤 값이나 `ApiError`가 되는지 봅니다. `isApiError`, `createJob(formData)`·`createJobGroup(formData)`(multipart, JSON Content-Type 없음), `chooseCandidate`(`{job_id}` JSON), `fileUrl`도 확인합니다. 콘솔 REST 의 401 이 `auth:required` 이벤트를 보내고 계정 API 의 401 과 403 은 보내지 않는 것, `auth`와 `admin`이 보내는 요청도 봅니다.
 - `format.test.js`: `formatCents`, `formatPercent`, `formatDateTime`/`formatDate`(TZ를 UTC로 고정), `formatDurationSeconds`, `formatElapsed`, `EMPTY` 등 표시 도우미를 확인합니다.
 - `dom.test.js`: `escapeHtml`, `join`과, 아주 작은 가짜 `document`를 넣은 `el`/`append`/`clear`의 속성과 자식 처리를 확인합니다.
 - `router.test.js`: `router-match.js`의 `compilePattern`과 `matchRoute`가 main.js의 패턴(`/manage/:batchId/:tab`, Create 의 `/create/project/:projectId/:tab` 등)에 경로를 맞추고 params를 뽑는지, 맞지 않는 경로는 null인지 확인합니다.
