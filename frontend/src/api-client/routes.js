@@ -56,6 +56,23 @@ export const AGENT_ROUTES = {
   chooseCandidate: { method: 'PUT', path: '/agent/job-groups/:id/choice', args: ['id', 'job_id'] },
 };
 
+/** 계정 API. backend 에만 있다 (backend/app/routes.py 의 ACCOUNT_ROUTES 와 같고, backend 테스트가 대조한다).
+ *  /auth/* 는 로그인 전에도 부르고, /admin/* 는 admin 만 부른다. */
+export const ACCOUNT_ROUTES = {
+  getSignupOptions: { method: 'GET', path: '/auth/options', args: [] },
+  signup: { method: 'POST', path: '/auth/signup', args: ['body'] },
+  login: { method: 'POST', path: '/auth/login', args: ['email', 'password'] },
+  logout: { method: 'POST', path: '/auth/logout', args: [] },
+  getMe: { method: 'GET', path: '/auth/me', args: [] },
+
+  listUsers: { method: 'GET', path: '/admin/users', args: [] },
+  suspendUser: { method: 'POST', path: '/admin/users/:id/suspend', args: ['id'] },
+  activateUser: { method: 'POST', path: '/admin/users/:id/activate', args: ['id'] },
+  listInvitations: { method: 'GET', path: '/admin/invitations', args: [] },
+  createInvitation: { method: 'POST', path: '/admin/invitations', args: ['body'] },
+  deleteInvitation: { method: 'DELETE', path: '/admin/invitations/:id', args: ['id'] },
+};
+
 const PARAM = /:([A-Za-z]+)/g;
 
 export function pathParamNames(path) {

@@ -747,6 +747,132 @@ p.muted {
   margin-right: 4px;
 }
 
+/* ── 계정: 로그인과 가입, 제목 줄의 계정 메뉴, worker 화면, 사용자 관리 ──────────────────────── */
+
+.auth-content {
+  min-height: 100vh;
+  padding: 48px 16px;
+}
+.auth-page {
+  max-width: 420px;
+  margin: 0 auto;
+}
+.auth-brand {
+  margin-bottom: 16px;
+  font-weight: 600;
+  font-size: 18px;
+  text-align: center;
+}
+.auth-card {
+  padding: 24px 28px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.auth-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+.auth-subtitle {
+  margin: 0 0 16px;
+}
+.auth-message:not(:empty) {
+  margin-bottom: 12px;
+}
+.auth-form .notice {
+  margin-bottom: 12px;
+}
+.auth-form .input {
+  width: 100%;
+  padding: 7px 10px;
+}
+.auth-switch {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--muted);
+}
+.btn-block {
+  width: 100%;
+  padding: 8px 14px;
+  margin-top: 4px;
+}
+.role-choice {
+  border: none;
+  padding: 0;
+}
+.role-choice legend {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.role-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.role-option + .role-option {
+  margin-top: 6px;
+}
+.role-option:has(input:checked) {
+  border-color: var(--link);
+  background: #f3f6fb;
+}
+.role-option input {
+  margin-top: 3px;
+}
+.role-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-menu > summary.btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+.account-menu > summary.btn:hover {
+  border-color: #fff;
+  color: #fff;
+}
+.account-menu .menu-list {
+  left: auto;
+  right: 0;
+}
+.account-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.account-role {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.topbar-sub {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.topbar-worker-id {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.worker-id code,
+.invitation-code code {
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+.invitation-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .content {
     padding: 16px;

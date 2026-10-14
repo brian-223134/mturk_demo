@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"                                     # 시작 데이터 (seed)
 MODELS_DIR = REPO_ROOT / "environment" / "models"                 # 모델 설정 yaml
 ROUTES_TS = REPO_ROOT / "prototype" / "src" / "api" / "http" / "routes.ts"   # 경로 표의 원본 (계약서)
+ROUTES_JS = REPO_ROOT / "frontend" / "src" / "api-client" / "routes.js"      # frontend 의 경로 표 (계정 API 대조용)
 EXAMPLE_DIR = REPO_ROOT / "agent" / "examples" / "groundedness"   # LLM 없이 도는 예시 (raw + prompt + spec)
 
 # routes.ts 의 한 줄:  listHits: { method: 'GET', path: '/batches/:batchId/hits', args: ['batchId', 'q'] },
@@ -26,10 +27,11 @@ ROUTE_LINE_RE = re.compile(
 )
 
 
-def parse_ts_routes(text: str, table: str) -> dict[str, tuple[str, str, tuple[str, ...]]]:
-    """routes.ts 의 `export const <table> = { … } as const` 를 {이름: (메서드, 경로, 인자 튜플)} 로 읽는다 (등장 순서대로)."""
+def parse_ts_routes(text: str, table: str, end_marker: str = "} as const") -> dict[str, tuple[str, str, tuple[str, ...]]]:
+    """routes.ts 의 `export const <table> = { … } as const` 를 {이름: (메서드, 경로, 인자 튜플)} 로 읽는다 (등장 순서대로).
+    frontend 의 routes.js 는 end_marker="\n};" 로 읽는다."""
     start = text.index(f"export const {table} = {{")
-    end = text.index("} as const", start)
+    end = text.index(end_marker, start)
     routes: dict[str, tuple[str, str, tuple[str, ...]]] = {}
     for raw_line in text[start:end].splitlines()[1:]:
         line = raw_line.strip()

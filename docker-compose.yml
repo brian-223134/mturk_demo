@@ -234,6 +234,8 @@ services:
       - ./environment/models:/app/environment/models:ro
       - ./prototype/src/api/http/routes.ts:/app/prototype/src/api/http/routes.ts:ro
       - ./prototype/src/domain:/app/prototype/src/domain:ro
+      # 계정 API 의 경로 표를 frontend 의 표와 대조한다 (test_routes_table.py)
+      - ./frontend/src/api-client/routes.js:/app/frontend/src/api-client/routes.js:ro
     tmpfs:
       # pytest 의 tmp_path (job 출력, data/ 의 깨진 사본, 예전 SQLite 파일)
       - /tmp
