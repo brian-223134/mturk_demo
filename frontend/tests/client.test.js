@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it } from 'node:test';
 
-import { ApiError, BASE_URL, agent, api, call, createJob, createJobGroup, fileUrl, isApiError } from '../src/api-client/client.js';
+import { AUTH_REQUIRED_EVENT, ApiError, BASE_URL, admin, agent, api, auth, call, createJob, createJobGroup, fileUrl, isApiError, worker } from '../src/api-client/client.js';
 import { API_ROUTES } from '../src/api-client/routes.js';
 
 let originalFetch;
@@ -225,5 +225,90 @@ describe('agent job API', () => {
     assert.equal(fileUrl('j1', 'hits.csv'), '/api/agent/jobs/j1/files/hits.csv');
     assert.equal(fileUrl('j 1', 'a b/c.csv'), '/api/agent/jobs/j%201/files/a%20b%2Fc.csv');
     assert.equal(agent.fileUrl, fileUrl);
+  });
+});
+
+describe('계정 API 와 세션이 끝났을 때', () => {
+  /** globalThis.dispatchEvent 를 가짜로 바꿔 보낸 이벤트 이름을 모은다. */
+  function stubEvents() {
+    const original = globalThis.dispatchEvent;
+    const events = [];
+    globalThis.dispatchEvent = (event) => events.push(event.type);
+    return { events, restore: () => (globalThis.dispatchEvent = original) };
+  }
+  const unauthorized = () => json(401, { error: { code: 'UNAUTHORIZED', message: 'Sign in to continue.' } });
+
+  it('콘솔 REST 가 401 이면 UNAUTHORIZED ApiError 를 던지고 auth:required 이벤트를 보낸다', async () => {
+    const { events, restore } = stubEvents();
+    try {
+      stubFetch(unauthorized);
+      const error = await rejection(api.listBatches());
+      assert.ok(isApiError(error, 'UNAUTHORIZED'));
+      assert.equal(error.status, 401);
+      await rejection(agent.listJobs());
+      assert.deepEqual(events, [AUTH_REQUIRED_EVENT, AUTH_REQUIRED_EVENT]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('계정 API 의 401(틀린 비밀번호, 로그인 안 함)은 이벤트를 보내지 않는다. 403 은 FORBIDDEN 이다', async () => {
+    const { events, restore } = stubEvents();
+    try {
+      stubFetch(unauthorized);
+      assert.ok(isApiError(await rejection(auth.login('a@b.c', 'x')), 'UNAUTHORIZED'));
+      assert.ok(isApiError(await rejection(auth.me()), 'UNAUTHORIZED'));
+      stubFetch(() => json(403, { error: { code: 'FORBIDDEN', message: 'no' } }));
+      assert.ok(isApiError(await rejection(api.listBatches()), 'FORBIDDEN'));
+      assert.deepEqual(events, []);
+    } finally {
+      restore();
+    }
+  });
+
+  it('auth 와 admin 은 /api/auth/… 와 /api/admin/… 로 보낸다', async () => {
+    const calls = stubFetch(() => json(200, {}));
+    await auth.login('kim@example.com', 'secret');
+    await auth.signup({ role: 'worker', email: 'kim@example.com' });
+    await auth.logout();
+    await admin.suspendUser('u-1');
+    await admin.createInvitation({ role: 'requester' });
+    await admin.deleteInvitation('inv-1');
+    assert.deepEqual(
+      calls.map((c) => [c.init.method, c.url, c.init.body && JSON.parse(c.init.body)]),
+      [
+        ['POST', '/api/auth/login', { email: 'kim@example.com', password: 'secret' }],
+        ['POST', '/api/auth/signup', { role: 'worker', email: 'kim@example.com' }],
+        ['POST', '/api/auth/logout', {}],
+        ['POST', '/api/admin/users/u-1/suspend', {}],
+        ['POST', '/api/admin/invitations', { role: 'requester' }],
+        ['DELETE', '/api/admin/invitations/inv-1', undefined],
+      ],
+    );
+  });
+
+  it('worker 는 /api/worker/… 로 보내고, 401 이면 auth:required 이벤트를 보낸다', async () => {
+    const calls = stubFetch(() => json(200, {}));
+    await worker.listHitGroups();
+    await worker.acceptHit('batch 1');
+    await worker.submitAssignment('A1', [{ name: 'q', value: 'x' }]);
+    await worker.returnAssignment('A1');
+    assert.deepEqual(
+      calls.map((c) => [c.init.method, c.url, c.init.body && JSON.parse(c.init.body)]),
+      [
+        ['GET', '/api/worker/hit-groups', undefined],
+        ['POST', '/api/worker/hit-groups/batch%201/accept', {}],
+        ['POST', '/api/worker/assignments/A1/submit', { answers: [{ name: 'q', value: 'x' }] }],
+        ['POST', '/api/worker/assignments/A1/return', {}],
+      ],
+    );
+    const { events, restore } = stubEvents();
+    try {
+      stubFetch(unauthorized);
+      await rejection(worker.listMyAssignments());
+      assert.deepEqual(events, [AUTH_REQUIRED_EVENT]);
+    } finally {
+      restore();
+    }
   });
 });

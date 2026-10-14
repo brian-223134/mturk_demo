@@ -7,3 +7,6 @@ uvicorn[standard]>=0.30,<1
 python-multipart>=0.0.9,<1
 # agent 가 모델 설정 yaml(environment/models/*.yaml)을 읽는 데 쓴다 (agent/requirements.txt 와 같은 조건)
 pyyaml>=6,<7
+# PostgreSQL 드라이버와 연결 pool (app/db.py). binary 는 libpq 를 함께 담은 wheel 이라 이미지에 따로 설치할 것이 없다
+psycopg[binary]>=3.2,<4
+psycopg-pool>=3.2,<4

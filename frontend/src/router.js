@@ -3,6 +3,7 @@
 // 페이지가 fetch 를 기다리는 동안 다른 곳으로 이동하면 signal 이 abort 되므로, 페이지는 await 뒤에 signal.aborted 를 확인한다.
 // render 가 함수를 돌려주면 다음 이동 때 그 함수를 불러 준다 (폴링 타이머 정리 등).
 // 패턴 컴파일과 매칭은 router-match.js 에 있다 (DOM 없이 테스트할 수 있도록 분리).
+// configure 의 onNotFound 를 주면 등록되지 않은 경로에서 "Page not found" 대신 그 함수를 부른다 (로그인 화면으로 보내기 등).
 
 import { el } from './components/dom.js';
 import { errorNotice } from './components/notice.js';
@@ -11,6 +12,7 @@ import { compilePattern, matchRoute } from './router-match.js';
 const routes = [];
 let container = null;
 let onNavigate = () => {};
+let onNotFound = null;
 let current = { abort: null, cleanup: null };
 
 /** route('/manage/:batchId', module.render, { tab: 'manage' }) 또는 route('/', null, { redirect: '/create' }) */
@@ -21,6 +23,7 @@ export function route(pattern, handler, meta = {}) {
 export function configure(options) {
   container = options.container;
   onNavigate = options.onNavigate ?? onNavigate;
+  onNotFound = options.onNotFound ?? onNotFound;
 }
 
 export function navigate(path, { replace = false } = {}) {
@@ -44,6 +47,10 @@ async function dispatch() {
   const found = matchRoute(routes, pathname);
   if (found?.meta.redirect) {
     navigate(found.meta.redirect, { replace: true });
+    return;
+  }
+  if (!found && onNotFound) {
+    onNotFound(pathname, location.search);
     return;
   }
 

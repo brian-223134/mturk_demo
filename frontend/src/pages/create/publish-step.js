@@ -8,6 +8,7 @@ import { errorNotice, muted, notice } from '../../components/notice.js';
 import { table } from '../../components/table.js';
 import { formatCents, rewardToCents } from '../../lib/cost.js';
 import { balanceCentsOf, buildCreateBatchRequest, describeQualifications, normalizeSuffixes, toAttentionRule, toHitSettings, toReviewReference } from '../../lib/settings.js';
+import { workerColumns } from '../../lib/worker-tasks.js';
 import { navigate } from '../../router.js';
 import { descList, failureNotice, field, refreshBalance } from './common.js';
 
@@ -30,6 +31,16 @@ function attentionRuleText(rule) {
     return el('span', {}, 'Answers listed in the input column ', el('code', {}, rule.column), ' of each HIT must equal their expected values', pass);
   }
   return el('span', {}, 'Answers named ', el('code', {}, `${rule.namePrefix}*`), ' must be ', el('code', {}, rule.expectedValue), pass);
+}
+
+/** worker 의 작업 화면에 보낼 입력 컬럼. 나머지(정답이 든 컬럼, 템플릿이 쓰지 않는 컬럼)는 worker 에게 보내지 않는다. */
+function workerColumnsText({ visible, hidden }) {
+  return el(
+    'span',
+    { id: 'worker-columns' },
+    visible.length > 0 ? join(visible.map((c) => el('code', {}, c))) : el('span', { className: 'muted' }, 'No input columns'),
+    hidden.length > 0 ? el('span', { className: 'muted' }, '; not sent to workers: ', join(hidden.map((c) => el('code', {}, c)))) : null,
+  );
 }
 
 /** 비용 견적 표: 보상 소계, 수수료, 합계, 잔액. */
@@ -182,6 +193,12 @@ export function renderConfirmStep(ctx) {
         label: 'Review reference',
         wide: true,
         value: reference.source === 'column' ? el('span', {}, 'Input column ', el('code', {}, reference.column)) : 'Majority of the other workers on the same HIT',
+      },
+      {
+        key: 'worker-columns',
+        label: 'Workers receive',
+        wide: true,
+        value: workerColumnsText(workerColumns({ inputColumns: data.columns, templateHtml: template.html, attentionRule, reference })),
       },
       {
         key: 'cost',

@@ -13,7 +13,10 @@ progress.test.ts 의 기대값:
     batch_status([(False, True), (False, False)]) == "in_progress"
     reject_rate(108, 18) == 18 / 126, reject_rate(0, 0) is None
     summarize_progress([hit_progress(3, (0,3,0), 3), hit_progress(4, (1,1,1), 3)])
-        == {hitsTotal 2, hitsCompleted 1, submitted 1, approved 4, rejected 1, open 1, rejectRate 1/5}
+        == {hitsTotal 2, hitsCompleted 1, submitted 1, approved 4, rejected 1, open 1, rejectRate 1/5, inProgress 0}
+
+worker 가 받아 푸는 중인 assignment(Accepted, app/domain/tasks.py)는 in_progress 로 센다. 프로토타입에는 없는 값이다.
+자리를 차지하므로 open 에서 빠지고, 제출될 것이므로 부족분(shortfall)에도 들어가지 않는다. Returned, Abandoned 는 세지 않는다.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ class AssignmentCounts:
     submitted: int = 0
     approved: int = 0
     rejected: int = 0
+    in_progress: int = 0   # Accepted (제한 시간 안)
 
 
 @dataclass(frozen=True)
@@ -40,32 +44,39 @@ class HitProgress:
     open: int          # 아직 아무도 제출하지 않은 자리
     completed: bool    # approved ≥ target
     shortfall: int     # 'fill-to-target' 재모집으로 추가해야 할 수
+    in_progress: int = 0   # worker 가 받아 푸는 중
 
 
 def count_by_status(statuses: Iterable[str]) -> AssignmentCounts:
-    """AssignmentStatus 값들을 상태별로 센다. Submitted, Approved 가 아닌 것은 모두 Rejected 로 센다 (TS 와 같다)."""
-    submitted = approved = rejected = 0
+    """AssignmentStatus 값들을 상태별로 센다. Accepted 는 in_progress, Returned 와 Abandoned 는 세지 않고,
+    그 밖에 Submitted, Approved 가 아닌 것은 Rejected 로 센다 (TS 와 같다)."""
+    submitted = approved = rejected = in_progress = 0
     for status in statuses:
         if status == "Submitted":
             submitted += 1
         elif status == "Approved":
             approved += 1
+        elif status == "Accepted":
+            in_progress += 1
+        elif status in ("Returned", "Abandoned"):
+            continue
         else:
             rejected += 1
-    return AssignmentCounts(submitted, approved, rejected)
+    return AssignmentCounts(submitted, approved, rejected, in_progress)
 
 
 def hit_progress(max_assignments: int, counts: AssignmentCounts, target: int) -> HitProgress:
     """target 은 batch.settings.MaxAssignments(목표 라벨 수)다. hit.MaxAssignments 는 재모집으로 더 클 수 있다."""
-    submitted, approved, rejected = counts.submitted, counts.approved, counts.rejected
-    open_slots = max(0, max_assignments - (approved + rejected + submitted))
+    submitted, approved, rejected, in_progress = counts.submitted, counts.approved, counts.rejected, counts.in_progress
+    open_slots = max(0, max_assignments - (approved + rejected + submitted + in_progress))
     return HitProgress(
         submitted=submitted,
         approved=approved,
         rejected=rejected,
         open=open_slots,
         completed=approved >= target,
-        shortfall=max(0, target - approved - submitted - open_slots),
+        shortfall=max(0, target - approved - submitted - in_progress - open_slots),
+        in_progress=in_progress,
     )
 
 
@@ -117,6 +128,7 @@ def summarize_progress(hits: list[HitProgress]) -> dict:
         "rejected": rejected,
         "open": sum(h.open for h in hits),
         "rejectRate": reject_rate(approved, rejected),
+        "inProgress": sum(h.in_progress for h in hits),
     }
 
 

@@ -23,7 +23,7 @@ batch               한 번에 게시한 HIT 묶음
 
 시작 데이터의 ID는 실제 값이 아니라 익명화하면서 새로 만든 값입니다.
 
-응답의 상태는 세 가지입니다.
+Requester가 검수하는 응답의 상태는 세 가지입니다.
 
 - `Submitted`: 제출되었고 아직 검수하지 않은 응답입니다.
 - `Approved`: 승인한 응답입니다. 보상이 지급되고 Results에 집계됩니다.
@@ -31,6 +31,8 @@ batch               한 번에 게시한 HIT 묶음
 
 상태는 `Submitted → Approved`, `Submitted → Rejected`, `Rejected → Approved`(30일 이내)로만 바꿀 수 있습니다.
 승인하면 보상이 곧바로 지급되므로, MTurk는 승인한 응답을 반려로 바꾸는 것을 허용하지 않습니다.
+
+worker가 HIT를 받으면 제출하기 전까지 assignment는 `Accepted`(푸는 중)입니다. 제한 시간(`Time allotted`) 안에 제출하면 `Submitted`가 되고, worker가 반납하면 `Returned`, 제한 시간이 지나면 `Abandoned`가 되어 그 자리가 다시 열립니다. 이 세 상태는 Review와 Results, Worker Pool의 지표에는 나오지 않고, Overview의 응답 막대에서 푸는 중인 수만 `In progress`로 보입니다.
 
 ## attention check
 
@@ -52,7 +54,7 @@ attention check는 worker가 문항을 읽고 답했는지 확인하려고 실�
 
 - **`HITs`**는 완료된 HIT 수와 전체 HIT 수입니다. 승인된 응답이 HIT당 응답 수(3)에 도달해야 완료입니다. 제출만 된 응답은 세지 않습니다.
 - **`Assignments (S / A / R)`**는 Submitted, Approved, Rejected 응답의 수입니다. S가 1 이상이면 숫자가 주황색으로 바뀌고 batch 이름 옆에 `Needs review`가 붙습니다.
-  아직 아무도 제출하지 않은 자리는 여기에 들어 있지 않습니다. pilot batch에는 빈 자리가 6개 더 있고, Overview의 막대에 `Open`으로 표시됩니다.
+  아직 아무도 제출하지 않은 자리는 여기에 들어 있지 않습니다. pilot batch에는 빈 자리가 6개 더 있고, Overview의 막대에 `Open`으로 표시됩니다. worker가 받아서 풀고 있는 자리는 `In progress`로 따로 표시됩니다.
 - **`Reject rate`**는 반려 / (승인 + 반려)입니다. pilot batch는 18 / (108 + 18) = 14%입니다. 검수 대기 응답은 분모에 넣지 않습니다.
 - **`Cost`**는 지출과 예상 총액입니다. 계산 방법은 다음 절에 있습니다.
 - **`Status`**에서 pilot batch가 `Expired`인 것은 완료되지 않은 HIT가 남았는데 게시 기간이 지났기 때문입니다. 시작 데이터의 시각이 과거여서 그렇습니다.
@@ -141,27 +143,30 @@ Review에서 행을 누르면 열리는 화면입니다. `Answers` 표의 한 �
 
 ## Results 읽기
 
-맨 위의 `Inter-annotator agreement`는 annotator 간 일치도를 두 범위로 나누어 보여 줍니다 (production 콘솔에만 있습니다. 프로토타입은 승인 응답의 `Fleiss' κ` 카드 하나입니다).
+맨 위의 `Inter-annotator agreement`는 annotator 간 일치도를 세 범위로 나누어 보여 줍니다 (production 콘솔에만 있습니다. 프로토타입은 승인 응답의 `Fleiss' κ` 카드 하나입니다). 반려된 응답은 어느 범위에도 넣지 않습니다.
 
-- **`All submitted`**: worker가 제출한 응답 전부입니다. 검수 대기, 승인, 반려를 모두 셉니다. 검수하기 전의 일치도입니다.
-- **`Approved only`**: 승인된 응답만입니다. 검수한 뒤의 일치도이며, 아래의 문항 표와 같은 응답을 셉니다.
-- **`Change after review`**: 승인만에서 제출 전체를 뺀 값입니다. 반려로 일치도가 얼마나 바뀌었는지 봅니다.
+- **`Approved`**: 승인된 응답입니다. HIT의 응답이 다 모인 뒤에 승인한다는 운영 방식에서는 검수를 마친 결과의 일치도이며, 아래의 문항 표와 같은 응답을 셉니다.
+- **`Submitted, not approved`**: 제출됐지만 아직 승인하지 않은 응답(검수 대기)입니다. 검수하기 전의 응답끼리 얼마나 맞는지 봅니다.
+- **`Submitted, with approved`**: 검수 대기와 승인을 합친 것입니다. 검수 중인 batch 전체의 일치도입니다.
 
 지표는 두 가지이고, 계산에 쓰는 문항이 다릅니다. attention 문항과 자유 서술 문항은 둘 다 제외합니다.
 
-- **`Fleiss' κ`**: 표 수가 HIT당 응답 수(3)와 정확히 같은 문항만 씁니다. 기존 분석 스크립트(statsmodels의 `fleiss_kappa`)와 같은 기준입니다. 그래서 반려한 뒤 다시 모집해 표가 4개가 된 HIT는 `All submitted`의 κ에서 빠집니다. 반려가 있었던 HIT가 바로 그런 HIT이므로, 제출 전체의 κ는 실제보다 높게 나올 수 있습니다.
-- **`Krippendorff's α`**(nominal): 표가 2개 이상인 문항을 모두 씁니다. 문항마다 표 수가 달라도 되므로 검수 전후를 비교할 때는 α가 더 공정합니다. krippendorff 패키지의 값과 소수 여섯째 자리까지 같고, 테스트로 고정되어 있습니다. 옆의 구간 이름은 Krippendorff의 권고입니다: 0.800 이상 reliable, 0.667 이상 tentative(잠정적인 결론에만 사용), 그 아래 unreliable.
+- **`Fleiss' κ`**: 표 수가 HIT당 응답 수(3)와 정확히 같은 문항만 씁니다. 기존 분석 스크립트(statsmodels의 `fleiss_kappa`)와 같은 기준입니다. 그래서 응답이 덜 모인 HIT는 빠지며, 검수 대기 응답만으로는 표가 3개인 문항이 없어 κ를 계산하지 못할 수 있습니다(`not enough votes`).
+- **`Krippendorff's α`**(nominal): 표가 2개 이상인 문항을 모두 씁니다. 문항마다 표 수가 달라도 되므로 응답이 덜 모인 범위끼리 비교할 때는 α가 더 공정합니다. krippendorff 패키지의 값과 소수 여섯째 자리까지 같고, 테스트로 고정되어 있습니다. 옆의 구간 이름은 Krippendorff의 권고입니다: 0.800 이상 reliable, 0.667 이상 tentative(잠정적인 결론에만 사용), 그 아래 unreliable.
 
 | batch | 범위 | `Fleiss' κ` (계산에 쓴 문항) | `Krippendorff's α` (계산에 쓴 문항) | 응답 수 |
 |---|---|---|---|---|
-| `pilot close-ended chunk-fact` | All submitted | 0.598 (310 / 520) | 0.411 (520) | 132 |
-| | Approved only | 0.731 (420 / 420) | 0.731 (420) | 108 |
-| `open-ended query-fact coverage (model B)` | All submitted | 0.868 (274 / 326) | 0.741 (326) | 51 |
-| | Approved only | 0.857 (326 / 326) | 0.857 (326) | 48 |
-| `close-ended query-fact coverage (model A)` | All submitted | 0.938 (241 / 241) | 0.938 (241) | 48 |
-| | Approved only | 0.938 (241 / 241) | 0.938 (241) | 48 |
+| `pilot close-ended chunk-fact` | Approved | 0.731 (420 / 420) | 0.731 (420) | 108 |
+| | Submitted, not approved | – (0 / 70) | 0.242 (70) | 6 |
+| | Submitted, with approved | 0.731 (420 / 490) | 0.710 (490) | 114 |
+| `open-ended query-fact coverage (model B)` | Approved | 0.857 (326 / 326) | 0.857 (326) | 48 |
+| | Submitted, not approved | – (0 / 0) | – (0) | 0 |
+| | Submitted, with approved | 0.857 (326 / 326) | 0.857 (326) | 48 |
+| `close-ended query-fact coverage (model A)` | Approved | 0.938 (241 / 241) | 0.938 (241) | 48 |
+| | Submitted, not approved | – (0 / 0) | – (0) | 0 |
+| | Submitted, with approved | 0.938 (241 / 241) | 0.938 (241) | 48 |
 
-model B batch에서는 검수한 뒤 κ가 0.868에서 0.857로 내려가지만 α는 0.741에서 0.857로 올라갑니다. 제출 전체의 κ가 반려 3건이 있었던 HIT의 문항 52개를 빼고 계산되었기 때문입니다. model A batch는 반려가 없어 두 범위가 같습니다.
+pilot batch에는 검수 대기 응답이 6건 있고, HIT 세 개에 두 건씩 들어 있습니다. 그래서 검수 대기 범위의 문항 70개는 표가 2개씩이라 α는 계산되지만(0.242), 표가 3개인 문항이 없어 κ는 없습니다. 승인과 합치면 α가 0.731에서 0.710으로 내려가므로, 검수 대기 응답이 승인된 응답보다 덜 맞는다는 뜻입니다. model A와 model B batch는 검수 대기 응답이 없어 승인과 합친 범위가 같습니다.
 
 그 아래 카드와 문항 표는 **승인된 응답의 실제 문항**만 집계합니다. attention 문항은 제외합니다. 문항 하나는 "행(HIT) × 문항 이름"입니다.
 `Fleiss' κ`와 `Unanimous items`는 표 수가 HIT당 응답 수(3)와 정확히 같은 문항만으로 계산합니다.

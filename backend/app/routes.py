@@ -60,6 +60,33 @@ API_ROUTES: dict[str, RouteDef] = {
     "getAccount": RouteDef("GET", "/account", ()),
 }
 
+# 계정 API. backend 에만 있고 prototype 의 mock API 에는 없다. frontend/src/api-client/routes.js 의 ACCOUNT_ROUTES 와 같다
+# (backend/tests/test_routes_table.py 가 대조한다). /auth/* 는 로그인 전에도 부르고, /admin/* 는 admin 만 부른다.
+ACCOUNT_ROUTES: dict[str, RouteDef] = {
+    "getSignupOptions": RouteDef("GET", "/auth/options", ()),
+    "signup": RouteDef("POST", "/auth/signup", ("body",)),
+    "login": RouteDef("POST", "/auth/login", ("email", "password")),
+    "logout": RouteDef("POST", "/auth/logout", ()),
+    "getMe": RouteDef("GET", "/auth/me", ()),
+
+    "listUsers": RouteDef("GET", "/admin/users", ()),
+    "suspendUser": RouteDef("POST", "/admin/users/:id/suspend", ("id",)),
+    "activateUser": RouteDef("POST", "/admin/users/:id/activate", ("id",)),
+    "listInvitations": RouteDef("GET", "/admin/invitations", ()),
+    "createInvitation": RouteDef("POST", "/admin/invitations", ("body",)),
+    "deleteInvitation": RouteDef("DELETE", "/admin/invitations/:id", ("id",)),
+}
+
+# worker 의 작업 API. backend 에만 있고 worker 계정만 부른다. frontend/src/api-client/routes.js 의 WORKER_ROUTES 와 같다.
+WORKER_ROUTES: dict[str, RouteDef] = {
+    "listHitGroups": RouteDef("GET", "/worker/hit-groups", ()),
+    "acceptHit": RouteDef("POST", "/worker/hit-groups/:batchId/accept", ("batchId",)),
+    "listMyAssignments": RouteDef("GET", "/worker/assignments", ()),
+    "getMyAssignment": RouteDef("GET", "/worker/assignments/:id", ("id",)),
+    "submitAssignment": RouteDef("POST", "/worker/assignments/:id/submit", ("id", "answers")),
+    "returnAssignment": RouteDef("POST", "/worker/assignments/:id/return", ("id",)),
+}
+
 
 def path_param_names(path: str) -> list[str]:
     return PARAM_RE.findall(path)

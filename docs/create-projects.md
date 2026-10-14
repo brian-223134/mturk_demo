@@ -137,7 +137,7 @@ LLM 호출은 실패할 수 있습니다. 같은 입력의 다른 시도는 응�
 
 ### Templates 목록 관리
 
-후보 하나하나가 job이며, 입력과 결과는 `output/jobs/<job id>/`(gitignore)에 저장됩니다. 묶음은 각 job의 `job.json`에 적힌 `group`으로 다시 묶이므로 따로 저장하는 파일이 없습니다. backend는 시작할 때 이 폴더를 읽어 목록을 만듭니다. 화면에는 지우는 버튼이 없습니다.
+후보 하나하나가 job이며, 입력과 결과 파일은 `output/jobs/<job id>/`(gitignore)에, job의 상태는 DB에 저장됩니다. 묶음은 각 job에 적힌 `group`으로 다시 묶이므로 따로 저장하는 곳이 없습니다. 화면에는 지우는 버튼이 없습니다.
 목록에서 빼려면 job 폴더를 `output/jobs/` 밖(예: `output/jobs-archive/`)으로 옮기고 `docker compose restart backend`를 실행합니다. 묶음 전체를 빼려면 그 묶음의 job 폴더 세 개를 함께 옮깁니다. 다시 보이게 하려면 폴더를 되돌리고 같은 명령을 실행합니다.
 backend는 job을 기본으로 세 개까지 동시에 돌립니다. 이 수는 `environment/.env`의 `AGENT_JOB_WORKERS`로 바꿀 수 있으며, 3보다 작게 하면 후보가 차례를 기다립니다.
 
@@ -185,7 +185,7 @@ Project의 `Publish Batch`를 누르면 네 단계로 게시합니다. 보상, �
 | 1. `Upload CSV` | CSV를 올리면 layout이 읽는 컬럼이 모두 있는지 검사합니다. 빠진 컬럼이 있으면 다음으로 갈 수 없습니다. `Download CSV template`으로 양식을 받을 수 있고, `Use the sample row`는 Project의 표본 값으로 HIT 1개짜리 데이터를 만듭니다. |
 | 2. `Preview tasks` | CSV의 행을 하나씩 골라 worker 화면을 그대로 미리 봅니다. 답 칸 목록은 batch의 `answerSchema`로 저장됩니다. |
 | 3. `Review settings` | attention 규칙, 자유 서술 답, Review의 대조 기준을 정합니다. CSV의 컬럼에 달린 설정이라 batch마다 정하며, 처음 값은 Project에 저장된 값입니다. layout에 자유 서술 문항(`ann-textarea`)이 있으면 그 이름이 자유 서술 답으로 미리 채워집니다. |
-| 4. `Confirm and publish` | 비용 견적(보상 + 수수료)과 잔액, 전체 요약을 확인하고 batch 이름을 정해 게시합니다. 게시가 끝나면 그 batch의 Overview로 갑니다. |
+| 4. `Confirm and publish` | 비용 견적(보상 + 수수료)과 잔액, 전체 요약을 확인하고 batch 이름을 정해 게시합니다. 요약의 `Workers receive`는 worker의 작업 화면에 보낼 입력 컬럼과 보내지 않는 컬럼(템플릿이 쓰지 않는 컬럼, 정답이 든 컬럼)입니다. 게시가 끝나면 그 batch의 Overview로 가고, worker의 `HITs` 목록에 그 batch가 나타납니다. |
 
 Overview의 `Project` 칸에서 batch를 게시한 Project의 편집기로 갈 수 있습니다.
 

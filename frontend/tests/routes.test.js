@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { AGENT_ROUTES, API_ROUTES, encodeRequest, pathParamNames } from '../src/api-client/routes.js';
+import { ACCOUNT_ROUTES, AGENT_ROUTES, API_ROUTES, WORKER_ROUTES, encodeRequest, pathParamNames } from '../src/api-client/routes.js';
 import { readTsRoutes } from './helpers/routes-ts.js';
 
 const ts = readTsRoutes();
@@ -54,6 +54,28 @@ describe('AGENT_ROUTES', () => {
 
   it('콘솔 REST 의 이름과 겹치지 않는다', () => {
     for (const name of Object.keys(AGENT_ROUTES)) assert.equal(name in API_ROUTES, false, name);
+  });
+});
+
+describe('ACCOUNT_ROUTES', () => {
+  it('계정 API 는 /auth 와 /admin 아래에 있고 다른 표의 이름과 겹치지 않는다 (backend 와의 대조는 backend 테스트가 한다)', () => {
+    for (const [name, def] of Object.entries(ACCOUNT_ROUTES)) {
+      assert.ok(def.path.startsWith('/auth/') || def.path.startsWith('/admin/'), `${name}: ${def.path}`);
+      assert.equal(name in API_ROUTES || name in AGENT_ROUTES, false, name);
+    }
+    assert.deepEqual(ACCOUNT_ROUTES.login, { method: 'POST', path: '/auth/login', args: ['email', 'password'] });
+  });
+});
+
+describe('WORKER_ROUTES', () => {
+  it('worker API 는 /worker 아래에 있고 다른 표의 이름과 겹치지 않는다 (backend 와의 대조는 backend 테스트가 한다)', () => {
+    for (const [name, def] of Object.entries(WORKER_ROUTES)) {
+      assert.ok(def.path.startsWith('/worker/'), `${name}: ${def.path}`);
+      assert.equal(name in API_ROUTES || name in AGENT_ROUTES || name in ACCOUNT_ROUTES, false, name);
+    }
+    assert.deepEqual(encodeRequest(WORKER_ROUTES.submitAssignment, ['A 1', [{ name: 'q', value: 'x' }]]), {
+      method: 'POST', url: '/worker/assignments/A%201/submit', body: JSON.stringify({ answers: [{ name: 'q', value: 'x' }] }),
+    });
   });
 });
 

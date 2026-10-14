@@ -9,12 +9,14 @@ import { el } from './dom.js';
 import { notice } from './notice.js';
 
 /**
- * previewFrame({ html, row, height, onSchema, onSubmit }) → { node, destroy }.
+ * previewFrame({ html, row, height, onSchema, onSubmit, title, showSubmitted }) → { node, destroy }.
  * onSchema(fields) 는 화면에서 읽어 낸 문항 목록 (name 과 선택지), onSubmit(answers) 는 가로챈 제출이다.
+ * worker 의 작업 화면은 같은 iframe 을 쓰되 title 을 바꾸고 showSubmitted: false 로 "Submit intercepted" 상자를 뺀다
+ * (가로챈 답을 backend 에 제출한다).
  * 내용이 바뀌면 새로 만든다 (srcdoc 만 바꾸면 이전 문서의 스크립트 상태가 남는 브라우저가 있다). destroy 로 message 리스너를 뗀다.
  */
-export function previewFrame({ html, row, height = 640, onSchema, onSubmit }) {
-  const iframe = el('iframe', { title: 'Task preview', sandbox: 'allow-scripts allow-forms', className: 'preview-frame', style: { height: `${height}px` } });
+export function previewFrame({ html, row, height = 640, onSchema, onSubmit, title = 'Task preview', showSubmitted: showResult = true }) {
+  const iframe = el('iframe', { title, sandbox: 'allow-scripts allow-forms', className: 'preview-frame', style: { height: `${height}px` } });
   iframe.srcdoc = renderTemplate(html, row, { preview: true });
   const result = el('div', { className: 'preview-result', id: 'submit-intercepted' });
   const node = el('div', { className: 'preview-frame-wrap' }, iframe, result);
@@ -38,7 +40,7 @@ export function previewFrame({ html, row, height = 640, onSchema, onSubmit }) {
     if (!data || data.source !== PREVIEW_MESSAGE_SOURCE) return;
     if (data.type === 'submit') {
       const answers = Array.isArray(data.answers) ? data.answers : [];
-      showSubmitted(answers);
+      if (showResult) showSubmitted(answers);
       if (onSubmit) onSubmit(answers);
     }
     if (data.type === 'schema' && onSchema) onSchema(Array.isArray(data.fields) ? data.fields : []);

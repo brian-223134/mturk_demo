@@ -138,13 +138,25 @@ def hit_unit_cost(batch: dict, hit_max_assignments: int) -> float | int:
     return unit_cost_cents(settings["Reward"], hit_max_assignments, uses_masters(settings.get("QualificationRequirements", [])))
 
 
-def sync_hit(hit: dict, assignments: list[dict], at: datetime) -> None:
-    """assignment 수에 맞춰 HIT 의 MTurk 필드를 다시 맞춘다 (handlers.ts 의 syncHit)."""
+def sync_hit(hit: dict, assignments: list[dict], at: datetime, in_progress: int = 0) -> None:
+    """assignment 수에 맞춰 HIT 의 MTurk 필드를 다시 맞춘다 (handlers.ts 의 syncHit). assignments 는 검수 상태의 것이고,
+    in_progress 는 worker 가 받아 푸는 중인 수다 (MTurk 의 NumberOfAssignmentsPending)."""
     counts = count_by_status(a.get("AssignmentStatus", "") for a in assignments)
-    hit["NumberOfAssignmentsPending"] = 0
+    hit["NumberOfAssignmentsPending"] = in_progress
     hit["NumberOfAssignmentsCompleted"] = counts.approved + counts.rejected
-    hit["NumberOfAssignmentsAvailable"] = max(0, hit["MaxAssignments"] - len(assignments))
+    hit["NumberOfAssignmentsAvailable"] = max(0, hit["MaxAssignments"] - len(assignments) - in_progress)
     hit["HITStatus"] = "Reviewable" if is_expired(hit["Expiration"], at) or hit["NumberOfAssignmentsAvailable"] == 0 else "Assignable"
+
+
+def resync_hits(store: Store, hit_ids: list[str], at: datetime) -> None:
+    """HIT 들의 MTurk 필드를 지금의 assignment 에 맞춰 다시 저장한다 (검수, worker 의 받기·제출·반납 뒤)."""
+    by_hit = store.assignments_of_hits(hit_ids)
+    in_progress = store.in_progress_of_hits(hit_ids)
+    for hit_id in dict.fromkeys(hit_ids):
+        hit = store.get_hit(hit_id)
+        if hit is not None:
+            sync_hit(hit, by_hit.get(hit_id, []), at, in_progress.get(hit_id, 0))
+            store.update_hit(hit)
 
 
 def find_batch(store: Store, id: str) -> dict:

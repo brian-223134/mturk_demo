@@ -763,10 +763,3 @@ details.menu-disabled > summary {
   font-size: 20px;
   font-weight: 600;
 }
-.iaa-change-row th,
-.iaa-change-row td {
-  background: #fafaf9;
-}
-.iaa-change {
-  font-weight: 600;
-}

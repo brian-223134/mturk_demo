@@ -1,12 +1,13 @@
-// Results 의 annotator 간 일치도(IAA). backend 의 getResults 가 주는 iaa = { submitted, approved } 를 표의 행으로 바꾼다.
-// 범위: 제출 전체(검수 대기, 승인, 반려 모두)와 승인만. 지표: Fleiss' κ(투표가 정확히 target 인 문항만), Krippendorff's α(투표 2개 이상인
-// 문항 모두, nominal). DOM 을 쓰지 않으므로 Node 에서 테스트한다.
+// Results 의 annotator 간 일치도(IAA). backend 의 getResults 가 주는 iaa = { approved, pending, submitted } 를 표의 행으로 바꾼다.
+// 범위: 승인된 응답, 승인하지 않은 제출(검수 대기), 검수 대기 + 승인. 반려된 응답은 어느 범위에도 없다.
+// 지표: Fleiss' κ(투표가 정확히 target 인 문항만), Krippendorff's α(투표 2개 이상인 문항 모두, nominal). DOM 을 쓰지 않으므로 Node 에서 테스트한다.
 
 import { formatFixed } from '../../components/format.js';
 
 export const IAA_SCOPES = [
-  { key: 'submitted', label: 'All submitted', detail: 'pending, approved and rejected' },
-  { key: 'approved', label: 'Approved only', detail: 'after review' },
+  { key: 'approved', label: 'Approved', detail: 'approved responses' },
+  { key: 'pending', label: 'Submitted, not approved', detail: 'waiting for review' },
+  { key: 'submitted', label: 'Submitted, with approved', detail: 'waiting for review + approved' },
 ];
 
 /** Landis & Koch (1977) 의 구간. 해석을 돕는 관례일 뿐 기준은 아니다. */
@@ -27,19 +28,6 @@ export function alphaBand(alpha) {
 }
 
 const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
-
-/** 승인만 − 제출 전체. 둘 중 하나라도 없으면 null. 검수로 일치도가 얼마나 바뀌었는지 본다 */
-export function iaaChange(iaa, metric) {
-  const before = iaa?.submitted?.[metric];
-  const after = iaa?.approved?.[metric];
-  return isNumber(before) && isNumber(after) ? after - before : null;
-}
-
-export function formatChange(change) {
-  if (!isNumber(change)) return '—';
-  const text = Math.abs(change).toFixed(3);
-  return change > 0 ? `+${text}` : change < 0 ? `−${text}` : '±0.000';
-}
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 

@@ -39,6 +39,7 @@ from agent.prompt_variants import EXAMPLE_RAW, prompt_candidates
 from app.agent_jobs.models import (INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, Job, JobInput, PlannerInfo, group_info,
                                    new_group_id, now_iso)
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
+from app.auth import current_user
 from app.errors import ApiError, invalid
 from app.settings import ALLOW_API_VARIABLE, Settings
 
@@ -288,7 +289,7 @@ async def create_job(request: Request) -> dict:
         job = build_job(runner, fields, planner)
     finally:
         await fields.close()
-    return {"job": runner.submit(job)}
+    return {"job": runner.submit(job, current_user(request)["id"])}
 
 
 @router.post("/job-groups", status_code=202)
@@ -317,7 +318,8 @@ async def create_job_group(request: Request) -> dict:
         raise
     finally:
         await fields.close()
-    return {"group": {"id": group_id, "size": len(jobs)}, "jobs": [runner.submit(job) for job in jobs]}
+    owner_id = current_user(request)["id"]
+    return {"group": {"id": group_id, "size": len(jobs)}, "jobs": [runner.submit(job, owner_id) for job in jobs]}
 
 
 @router.put("/job-groups/{group_id}/choice")

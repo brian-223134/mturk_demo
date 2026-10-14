@@ -161,7 +161,7 @@ def krippendorff_alpha(units: list[list[str]]) -> float | None:
 
 
 def agreement_scope(items: list[VotedItem], target: int, assignments: int, workers: int) -> dict:
-    """한 범위(제출 전체, 승인만)의 IAA. κ 는 투표 수가 정확히 target 인 문항만(summarize_results 와 같은 기준),
+    """한 범위(승인, 검수 대기, 검수 대기 + 승인)의 IAA. κ 는 투표 수가 정확히 target 인 문항만(summarize_results 와 같은 기준),
     α 는 투표가 2개 이상인 모든 문항으로 계산한다. 그래서 반려 뒤 재모집으로 표가 target 보다 많아진 HIT 도 α 에는 들어간다."""
     full = [item.votes for item in items if len(item.votes) == target]
     kappa = fleiss_kappa(full)

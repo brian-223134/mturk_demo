@@ -30,7 +30,7 @@ def test_list_hits_items_and_queries(client: TestClient) -> None:
     first = client.get(f"/api/batches/{F1}/hits", params=list_query()).json()
     assert first["total"] == 40 and len(first["items"]) == 25
     item = first["items"][0]
-    assert "input" not in item and set(item["progress"]) == {"submitted", "approved", "rejected", "open", "completed", "shortfall"}
+    assert "input" not in item and set(item["progress"]) == {"submitted", "approved", "rejected", "open", "completed", "shortfall", "inProgress"}
     assert len(item["inputPreview"]["retrieved_chunk"]) <= 201 and item["inputPreview"]["retrieved_chunk"].endswith("…")
     full = client.get(f"/api/hits/{item['HITId']}").json()
     assert len(full["input"]["retrieved_chunk"]) > 1000
@@ -46,7 +46,7 @@ def test_list_hits_items_and_queries(client: TestClient) -> None:
     # F1 의 0번 행: MaxAssignments 6, 반려 3, 검수 대기 2, 열린 자리 1. 검수 대기가 목표를 채울 수도 있어 아직 부족분은 없다
     row0 = client.get(f"/api/batches/{F1}/hits", params=list_query(page_size=1, sort="rowIndex:asc")).json()["items"][0]
     assert row0["MaxAssignments"] == 6 and row0["expired"] is True
-    assert row0["progress"] == {"submitted": 2, "approved": 0, "rejected": 3, "open": 1, "completed": False, "shortfall": 0}
+    assert row0["progress"] == {"submitted": 2, "approved": 0, "rejected": 3, "open": 1, "completed": False, "shortfall": 0, "inProgress": 0}
 
     stuck = client.get(f"/api/batches/{F1}/hits", params=list_query(page_size=100, filters={"incomplete": True})).json()
     assert [[h["rowIndex"], h["progress"]["shortfall"], h["progress"]["open"], h["expired"]] for h in stuck["items"]] == [
@@ -220,7 +220,7 @@ def test_top_up_fill_to_target_after_rejection(client: TestClient) -> None:
     pending = client.get(f"/api/batches/{F1}/assignments", params=list_query(page_size=10, filters={"HITId": row0["HITId"], "AssignmentStatus": "Submitted"})).json()
     client.post("/api/assignments/reject", json={"ids": [a["AssignmentId"] for a in pending["items"]], "feedback": "Failed to pass the attention check task."})
     rejected = client.get(f"/api/batches/{F1}/hits", params=list_query(page_size=1, filters={"HITId": row0["HITId"]})).json()["items"][0]
-    assert rejected["progress"] == {"submitted": 0, "approved": 0, "rejected": 5, "open": 1, "completed": False, "shortfall": 2}   # 반려해도 자리는 다시 열리지 않는다
+    assert rejected["progress"] == {"submitted": 0, "approved": 0, "rejected": 5, "open": 1, "completed": False, "shortfall": 2, "inProgress": 0}   # 반려해도 자리는 다시 열리지 않는다
 
     result = client.post("/api/hits/add-assignments", json={"hitIds": [row0["HITId"]], "mode": "fill-to-target"})
     assert result.status_code == 200
@@ -320,38 +320,51 @@ def test_fleiss_kappa_matches_statsmodels(client: TestClient) -> None:
         assert round(results["fleissKappa"], 6) == kappa, batch_id
 
 
-# 시작 데이터의 두 범위 IAA. krippendorff 0.8 과 statsmodels 0.14 패키지로 따로 계산한 값과 소수 여섯째 자리까지 같다
-# (attention 문항 제외, κ 는 투표 3건인 문항만, α 는 투표 2건 이상인 문항 모두).
+# 시작 데이터의 세 범위 IAA (승인, 검수 대기, 검수 대기 + 승인. 반려는 어느 범위에도 없다). krippendorff 0.8 과 statsmodels 0.14
+# 패키지로 따로 계산한 값과 소수 여섯째 자리까지 같다 (attention 문항 제외, κ 는 투표 3건인 문항만, α 는 투표 2건 이상인 문항 모두).
+# (응답 수, worker 수, 문항 수, κ 문항 수, κ, α 문항 수, α). 투표가 모자라 계산할 수 없으면 None
 IAA_REFERENCE = {
-    "batch-1000001": {"submitted": (132, 31, 520, 310, 0.598084, 520, 0.411499), "approved": (108, 27, 420, 420, 0.730594, 420, 0.730808)},
-    "batch-1000002": {"submitted": (51, 20, 326, 274, 0.867540, 326, 0.741161), "approved": (48, 19, 326, 326, 0.856749, 326, 0.856896)},
-    "batch-1000003": {"submitted": (48, 21, 241, 241, 0.938407, 241, 0.938492), "approved": (48, 21, 241, 241, 0.938407, 241, 0.938492)},
+    "batch-1000001": {"approved": (108, 27, 420, 420, 0.730594, 420, 0.730808),
+                      "pending": (6, 6, 70, 0, None, 70, 0.242277),
+                      "submitted": (114, 29, 490, 420, 0.730594, 490, 0.710026)},
+    "batch-1000002": {"approved": (48, 19, 326, 326, 0.856749, 326, 0.856896),
+                      "pending": (0, 0, 0, 0, None, 0, None),
+                      "submitted": (48, 19, 326, 326, 0.856749, 326, 0.856896)},
+    "batch-1000003": {"approved": (48, 21, 241, 241, 0.938407, 241, 0.938492),
+                      "pending": (0, 0, 0, 0, None, 0, None),
+                      "submitted": (48, 21, 241, 241, 0.938407, 241, 0.938492)},
 }
 
 
+def rounded(value):
+    return None if value is None else round(value, 6)
+
+
 @pytest.mark.parametrize("batch_id", sorted(IAA_REFERENCE))
-def test_results_iaa_for_submitted_and_approved(client: TestClient, batch_id: str) -> None:
-    """제출 전체(검수 대기·승인·반려)와 승인만의 Fleiss' κ, Krippendorff's α. 승인 범위의 κ 는 위의 fleissKappa 와 같다."""
+def test_results_iaa_for_three_scopes(client: TestClient, batch_id: str) -> None:
+    """승인, 검수 대기(승인 제외), 검수 대기 + 승인의 Fleiss' κ, Krippendorff's α. 승인 범위의 κ 는 위의 fleissKappa 와 같다."""
     results = client.get(f"/api/batches/{batch_id}/results").json()
     iaa = results["iaa"]
-    assert iaa["submitted"]["statuses"] == ["Submitted", "Approved", "Rejected"] and iaa["approved"]["statuses"] == ["Approved"]
+    assert list(iaa) == ["approved", "pending", "submitted"]
+    assert [iaa[key]["statuses"] for key in iaa] == [["Approved"], ["Submitted"], ["Submitted", "Approved"]]
     for scope, (assignments, workers, items, kappa_items, kappa, alpha_items, alpha) in IAA_REFERENCE[batch_id].items():
         got = iaa[scope]
         assert (got["assignments"], got["workers"], got["items"], got["kappaItemCount"], got["alphaItemCount"]) == (assignments, workers, items, kappa_items, alpha_items), scope
-        assert round(got["fleissKappa"], 6) == kappa and round(got["krippendorffAlpha"], 6) == alpha, scope
+        assert (rounded(got["fleissKappa"]), rounded(got["krippendorffAlpha"])) == (kappa, alpha), scope
     assert iaa["approved"]["fleissKappa"] == results["fleissKappa"] and iaa["approved"]["kappaItemCount"] == results["kappaItemCount"]
 
 
 def test_results_iaa_follows_review(client: TestClient) -> None:
-    """검수 대기 응답을 반려하면 제출 전체 범위에는 그대로 남고, 승인하면 승인 범위에 들어간다."""
+    """검수 대기 응답을 승인하면 검수 대기에서 승인으로 옮겨 가고, 반려하면 세 범위 모두에서 빠진다."""
     pending = client.get(f"/api/batches/{F1}/assignments", params=list_query(page_size=50, filters={"AssignmentStatus": "Submitted"})).json()["items"]
     before = client.get(f"/api/batches/{F1}/results").json()["iaa"]
     client.post("/api/assignments/approve", json={"ids": [a["AssignmentId"] for a in pending[:3]]})
     client.post("/api/assignments/reject", json={"ids": [a["AssignmentId"] for a in pending[3:]], "feedback": "Poor Quality."})
     after = client.get(f"/api/batches/{F1}/results").json()["iaa"]
-    assert after["submitted"]["assignments"] == before["submitted"]["assignments"] == 132
-    assert after["submitted"]["krippendorffAlpha"] == before["submitted"]["krippendorffAlpha"]
+    assert (before["pending"]["assignments"], after["pending"]["assignments"]) == (6, 0)
+    assert after["pending"]["krippendorffAlpha"] is None
     assert after["approved"]["assignments"] == before["approved"]["assignments"] + 3
+    assert after["submitted"]["assignments"] == before["submitted"]["assignments"] - 3 == 111
 
 
 def test_export_mturk_csv(client: TestClient) -> None:

@@ -1,4 +1,4 @@
-"""Job 의 모양. GET /api/agent/jobs/{id} 가 돌려주는 JSON 과 job 폴더의 job.json 이 같은 형태다.
+"""Job 의 모양. GET /api/agent/jobs/{id} 가 돌려주는 JSON 과 DB 의 agent_jobs.doc 이 같은 형태다 (예전의 job.json 도 같다).
 
     {"id": "job-YYYYMMDD-HHMMSS-<4 hex>", "name", "status": queued|running|succeeded|failed,
      "created_at", "started_at", "finished_at",
@@ -23,7 +23,7 @@ STEP_NAMES = ("profile", "plan", "preprocess", "render", "validate")
 # files 목록에서 앞에 두는 이름과 순서. 그 밖의 파일(plan_request.json 등)은 이름순으로 뒤에 붙는다.
 KNOWN_FILES = ("profile.json", "profile.md", "task_spec.json", "hits.csv", "settings.json", "items.jsonl",
                "summary.json", "template.html", "validation.json")
-JOB_FILE = "job.json"
+JOB_FILE = "job.json"   # 예전에 상태를 쓰던 파일. 지금은 켤 때 DB 로 가져오기만 한다
 INPUT_DIR = "input"
 PROMPT_TEXT_FILE = "prompt_text.md"   # prompt_text 로 받은 본문을 input/ 에 저장하는 이름
 PROMPT_TEXT_MARKER = "prompt_text"    # input.prompt 에 적는 표시

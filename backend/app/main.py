@@ -1,9 +1,11 @@
 """FastAPI 앱. uvicorn app.main:app 으로 띄운다 (backend/Dockerfile).
 
-    브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ 이 앱 ──┬─▶ SQLite (DB_PATH), 비어 있으면 DATA_DIR 로 채움
-                                                       └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/
+    브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ 이 앱 ──┬─▶ PostgreSQL (DATABASE_URL), 비어 있으면 DATA_DIR 로 채움
+                                                       └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/ (상태는 DB 의 agent_jobs)
 
 create_app() 이 설정을 읽고 라우터와 오류 봉투, 요청 로그를 붙인다. DB 초기화와 job worker 는 lifespan 에서 시작한다.
+콘솔 REST 와 agent job API 는 admin, requester 계정만, /api/worker/* 는 worker 계정만 부른다 (app/auth.py).
+health 와 /api/auth/* 는 로그인 전에도 부른다.
 """
 
 from __future__ import annotations
@@ -16,10 +18,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__
+from app.accounts import CONSOLE_ROLES
 from app.agent_jobs.runner import JobRunner
+from app.auth import require_roles
 from app.db import Database
 from app.errors import install_error_handlers
+from app.routers.accounts import build_account_router
 from app.routers.agent_jobs import router as agent_router
+from app.routers.worker import build_worker_router
 from app.routers.console import build_console_router
 from app.routes import API_PREFIX
 from app.settings import Settings
@@ -69,22 +75,30 @@ class RequestLogMiddleware:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     configure_logging()
-    db = Database(settings.db_path, settings.data_dir)
-    runner = JobRunner(settings)
+    db = Database(settings.database_url, settings.data_dir)
+    runner = JobRunner(settings, db)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         db.initialize()  # data/ 나 DB 에 문제가 있으면 여기서 바로 드러난다
-        runner.start()
+        try:
+            runner.start()
+        except BaseException:
+            db.close()
+            raise
         counts = db.counts()
         log.info("backend %s  %s", __version__, f"{API_PREFIX}/health")
         log.info("  data    %s", settings.data_dir)
-        log.info("  db      %s  (%s)", settings.db_path, "restored" if db.source == "snapshot" else "seeded from data/")
+        log.info("  db      %s  (%s)", db.target, "restored" if db.source == "snapshot" else "seeded from data/")
         log.info("  state   %s", ", ".join(f"{n} {k}" for k, n in counts.items()))
+        roles = db.user_role_counts()
+        log.info("  users   %s  (worker sign-up: %s)%s", ", ".join(f"{roles.get(r, 0)} {r}" for r in ("admin", "requester", "worker")),
+                 settings.worker_signup, "" if roles.get("admin") else "  no admin yet: python -m app.users create-admin")
         log.info("  jobs    %s  (OpenRouter calls %s)", settings.jobs_dir,
                  "allowed: AGENT_ALLOW_API=1" if settings.api_allowed else "not allowed: AGENT_ALLOW_API is not 1")
         yield
         runner.stop()
+        db.close()
 
     app = FastAPI(
         title="MTurk Console backend",
@@ -99,8 +113,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.runner = runner
     install_error_handlers(app)
     app.add_middleware(RequestLogMiddleware)
-    app.include_router(build_console_router(), prefix=API_PREFIX)
-    app.include_router(agent_router, prefix=API_PREFIX)
+    console_only = [require_roles(*CONSOLE_ROLES)]
+    app.include_router(build_console_router(console_only), prefix=API_PREFIX)
+    app.include_router(agent_router, prefix=API_PREFIX, dependencies=console_only)
+    app.include_router(build_account_router(), prefix=API_PREFIX)
+    app.include_router(build_worker_router(), prefix=API_PREFIX)
     return app
 
 

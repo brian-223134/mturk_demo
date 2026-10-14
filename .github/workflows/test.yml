@@ -21,13 +21,29 @@ concurrency:
 
 jobs:
   # FastAPI 백엔드 (backend/tests). pytest.ini 의 pythonpath 로 저장소 루트의 agent 도 import 하고,
-  # 대조용으로 data/, environment/models/, prototype 의 routes.ts 와 domain 테스트를 읽는다
+  # 대조용으로 data/, environment/models/, prototype 의 routes.ts 와 domain 테스트를 읽는다.
+  # DB 는 service container 의 PostgreSQL 이다 (docker-compose.yml 의 db-test 와 같은 이미지와 계정). 테스트마다 schema 를 새로 만든다
   backend:
     name: backend (pytest)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: mturk_test
+          POSTGRES_USER: mturk
+          POSTGRES_PASSWORD: mturk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mturk -d mturk_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     env:
       AGENT_ALLOW_API: "0"
+      TEST_DATABASE_URL: postgresql://mturk:mturk@localhost:5432/mturk_test
     defaults:
       run:
         working-directory: backend

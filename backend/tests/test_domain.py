@@ -76,11 +76,21 @@ def test_summarize_progress() -> None:
         hit_progress(4, AssignmentCounts(1, 1, 1), 3),
     ])
     assert summary == {
-        "hitsTotal": 2, "hitsCompleted": 1, "submitted": 1, "approved": 4, "rejected": 1, "open": 1, "rejectRate": 1 / 5,
+        "hitsTotal": 2, "hitsCompleted": 1, "submitted": 1, "approved": 4, "rejected": 1, "open": 1, "rejectRate": 1 / 5, "inProgress": 0,
     }
     assert summarize_progress([]) == {
-        "hitsTotal": 0, "hitsCompleted": 0, "submitted": 0, "approved": 0, "rejected": 0, "open": 0, "rejectRate": None,
+        "hitsTotal": 0, "hitsCompleted": 0, "submitted": 0, "approved": 0, "rejected": 0, "open": 0, "rejectRate": None, "inProgress": 0,
     }
+
+
+def test_in_progress_assignments() -> None:
+    """worker 가 푸는 중인 assignment(Accepted)는 자리를 차지하고 부족분에 들어가지 않는다. 반납과 시간 초과는 세지 않는다."""
+    counts = count_by_status(["Approved", "Accepted", "Returned", "Abandoned", "Submitted"])
+    assert counts == AssignmentCounts(submitted=1, approved=1, rejected=0, in_progress=1)
+    progress = hit_progress(3, counts, target=3)
+    assert (progress.open, progress.shortfall, progress.in_progress) == (0, 0, 1)
+    assert hit_progress(3, AssignmentCounts(0, 1, 1, 0), 3).shortfall == 1
+    assert summarize_progress([progress])["inProgress"] == 1
 
 
 # ---- cost.test.ts -----------------------------------------------------------------------------

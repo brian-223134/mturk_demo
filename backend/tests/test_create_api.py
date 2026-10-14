@@ -131,7 +131,7 @@ def test_create_batch_makes_hits_and_holds_the_cost(client: TestClient) -> None:
     listed = client.get("/api/batches").json()
     assert listed[0]["batch"]["id"] == batch["id"]                  # 최근 batch 가 맨 위
     assert listed[0]["status"] == "in_progress" and listed[0]["needsReview"] is False
-    assert listed[0]["progress"] == {"hitsTotal": 10, "hitsCompleted": 0, "submitted": 0, "approved": 0, "rejected": 0, "open": 30, "rejectRate": None}
+    assert listed[0]["progress"] == {"hitsTotal": 10, "hitsCompleted": 0, "submitted": 0, "approved": 0, "rejected": 0, "open": 30, "rejectRate": None, "inProgress": 0}
     assert listed[0]["cost"] == {"spentCents": 0, "estimatedCents": 30 * 12}
 
     hits = client.get(f"/api/batches/{batch['id']}/hits", params=list_query(page_size=100, sort="rowIndex:asc")).json()

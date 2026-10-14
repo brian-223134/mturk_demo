@@ -1,61 +1,64 @@
-"""SQLite 문서 저장소. 레코드 전체는 doc(JSON) 컬럼에 두고, 자주 찾는 값만 컬럼으로 꺼내 색인한다
+"""PostgreSQL 문서 저장소. 레코드 전체는 doc(JSON) 컬럼에 두고, 자주 찾는 값만 컬럼으로 꺼내 색인한다
 (prototype/server/sqliteSnapshot.ts 와 같은 생각). 데이터 모델(prototype/src/api/types.ts)이 바뀌어도 스키마를 고칠 일이 적다.
+스키마는 backend/app/migrations/ 의 SQL 파일이 정한다 (app/schema.py 가 켤 때 적용).
 
-DB 가 비어 있으면 처음 켤 때 data/ 폴더(seed.py)를 올린다. 그 뒤로는 DB 의 내용이 기준이고, 다시 켜면 그대로 이어진다.
-health 의 source 는 이번 프로세스의 상태가 어디서 왔는지다: "seed"(방금 data/ 를 올렸다) 또는 "snapshot"(DB 에 있던 것).
+DB 에 seed 기록(meta.seededAt)이 없으면 처음 켤 때 data/ 폴더(seed.py)를 올린다. 그 뒤로는 DB 의 내용이 기준이고, 다시 켜면
+그대로 이어진다. health 의 source 는 이번 프로세스의 상태가 어디서 왔는지다: "seed"(방금 data/ 를 올렸다) 또는 "snapshot"(DB 에 있던 것).
 
 읽기와 쓰기는 Store 에 있다. Store 는 연결 하나에 묶여 있어서, 핸들러가 검증(읽기)과 변경(쓰기)을 한 트랜잭션 안에서 하고
 도중에 오류가 나면 전부 되돌린다 (프로토타입의 write() 가 "검증을 마친 뒤에 상태를 고쳐라" 라고 한 것을 DB 가 보장한다).
 
-    with db.transaction(write=True) as store:      # BEGIN IMMEDIATE … COMMIT (예외면 ROLLBACK)
+    with db.transaction(write=True) as store:      # BEGIN … 쓰기 잠금 … COMMIT (예외면 ROLLBACK)
         batch = store.get_batch(id) or raise …
         store.update_hit(hit)
-    db.get_batch(id)                                # 한 번짜리 읽기는 Database 가 Store 의 메서드를 그대로 감싸 준다
+    db.get_batch(id)                                # 한 번짜리 호출은 Database 가 Store 의 메서드를 그대로 감싸 준다
 
-연결은 호출마다 새로 연다 (요청은 여러 스레드에서 처리되고, agent job 의 worker 스레드도 있다). 파일은 volume 에 두고
-WAL 모드를 켠다. 문서는 저장하기 전에 JS 처럼 정수 값의 실수(1.0)를 정수(1)로 바꾼다.
+쓰기 트랜잭션은 advisory lock(WRITE_LOCK)으로 하나씩 줄을 세운다. 핸들러는 "읽고 확인한 뒤 고친다" 는 모양이라, 예전 SQLite 의
+BEGIN IMMEDIATE 처럼 쓰기끼리 겹치지 않아야 확인한 값이 그대로 유효하다. 읽기 트랜잭션은 REPEATABLE READ, READ ONLY 라서
+한 핸들러 안의 여러 조회가 같은 시점을 본다.
 
-    sqlite3 var/backend.sqlite "SELECT status, COUNT(*) FROM assignments GROUP BY status"
+연결은 pool(psycopg_pool)에서 빌린다. 요청은 여러 스레드에서 처리되고 agent job 의 worker 스레드도 있다. pool 은 initialize()
+가 열고 close() 가 닫는다. 문서는 저장하기 전에 JS 처럼 정수 값의 실수(1.0)를 정수(1)로 바꾼다.
+
+    docker compose exec db psql -U mturk -c "SELECT status, COUNT(*) FROM assignments GROUP BY status"
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator
+from typing import Callable, Iterable, Iterator
+
+import psycopg
+from psycopg.conninfo import conninfo_to_dict
+from psycopg.rows import dict_row
+from psycopg.types.json import Json
+from psycopg_pool import ConnectionPool, PoolTimeout
 
 from app.domain.js import normalize_numbers
 from app.domain.progress import AssignmentCounts
+from app.schema import apply_migrations
 from app.seed import SeedState, assemble_state, read_seed_files
 
 log = logging.getLogger("backend")
 
-SCHEMA_VERSION = 1
+WRITE_LOCK = 7270301   # pg_advisory_xact_lock 키: 쓰기 트랜잭션을 하나씩
+INIT_LOCK = 7270302    # pg_advisory_lock 키: 여러 프로세스가 함께 켜져도 스키마 이전과 seed 는 한 번만
+CONNECT_TIMEOUT = 30   # 초. 처음 켤 때 DB 를 기다리는 시간
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS meta        (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS templates   (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, updated_at TEXT NOT NULL, doc TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS batches     (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, doc TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS hits        (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, batch_id TEXT NOT NULL, row_index INTEGER NOT NULL,
-                                        max_assignments INTEGER NOT NULL, expiration TEXT NOT NULL, doc TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS assignments (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, hit_id TEXT NOT NULL, worker_id TEXT NOT NULL,
-                                        status TEXT NOT NULL, submit_time TEXT NOT NULL, doc TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS pools       (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, doc TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS workers     (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, doc TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS account     (id TEXT PRIMARY KEY, doc TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS hits_batch         ON hits (batch_id);
-CREATE INDEX IF NOT EXISTS assignments_hit    ON assignments (hit_id);
-CREATE INDEX IF NOT EXISTS assignments_worker ON assignments (worker_id);
-CREATE INDEX IF NOT EXISTS assignments_status ON assignments (status);
-"""
-
-COLLECTIONS = ("templates", "batches", "hits", "assignments", "pools", "workers")
+# seed 가 채우는 테이블. reseed 는 이것만 비운다 (agent_jobs 와 계정은 seed 데이터가 아니다)
+SEED_TABLES = ("templates", "batches", "hits", "assignments", "pools", "workers", "account", "meta")
+COUNTED_TABLES = ("templates", "batches", "hits", "assignments", "pools")   # assignments 는 REVIEWABLE 만 센다
+# Requester 화면이 보는 assignment (검수할 수 있는 상태). worker 가 푸는 중(Accepted)이거나 내려놓은(Returned, Abandoned) 것은 뺀다
+REVIEWABLE = "status IN ('Submitted', 'Approved', 'Rejected')"
+# worker 가 제한 시간 안에 푸는 중인 assignment. 시간이 지난 Accepted 는 자리를 차지하지 않는다 (나중에 Abandoned 로 바꾼다)
+ACTIVE = "status = 'Accepted' AND deadline > now()"
+WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_", "use_", "touch_", "record_", "claim_")
 
 
 def dumps(value: object) -> str:
@@ -63,12 +66,22 @@ def dumps(value: object) -> str:
     return json.dumps(normalize_numbers(value), ensure_ascii=False, separators=(",", ":"))
 
 
-def loads(text: str) -> Any:
-    return json.loads(text)
+def as_json(value: object) -> Json:
+    """JSON 컬럼에 넣을 값."""
+    return Json(value, dumps=dumps)
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def describe_url(url: str) -> str:
+    """로그에 쓰는 접속 대상 (비밀번호는 빼고 host:port/dbname)."""
+    try:
+        parts = conninfo_to_dict(url)
+    except psycopg.ProgrammingError:
+        return "(invalid DATABASE_URL)"
+    return f"{parts.get('host') or 'localhost'}:{parts.get('port') or 5432}/{parts.get('dbname') or ''}"
 
 
 @dataclass(frozen=True)
@@ -84,18 +97,18 @@ class HitRow:
 class Store:
     """연결 하나 위의 읽기와 쓰기. Database.transaction() 이 만들어 준다."""
 
-    def __init__(self, connection: sqlite3.Connection):
+    def __init__(self, connection: psycopg.Connection):
         self.connection = connection
 
+    def _rows(self, sql: str, params: tuple = ()) -> list[dict]:
+        return self.connection.execute(sql, params).fetchall()
+
     def _docs(self, sql: str, params: tuple = ()) -> list[dict]:
-        return [loads(row["doc"]) for row in self.connection.execute(sql, params).fetchall()]
+        return [row["doc"] for row in self._rows(sql, params)]
 
     def _doc(self, sql: str, params: tuple = ()) -> dict | None:
         row = self.connection.execute(sql, params).fetchone()
-        return loads(row["doc"]) if row else None
-
-    def _next_seq(self, table: str) -> int:
-        return self.connection.execute(f"SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM {table}").fetchone()["n"]
+        return row["doc"] if row else None
 
     # ---- templates --------------------------------------------------------------------------
 
@@ -104,21 +117,21 @@ class Store:
         return self._docs("SELECT doc FROM templates ORDER BY updated_at DESC, seq")
 
     def get_template(self, id: str) -> dict | None:
-        return self._doc("SELECT doc FROM templates WHERE id = ?", (id,))
+        return self._doc("SELECT doc FROM templates WHERE id = %s", (id,))
 
     def template_ids(self) -> set[str]:
-        return {row["id"] for row in self.connection.execute("SELECT id FROM templates")}
+        return {row["id"] for row in self._rows("SELECT id FROM templates")}
 
-    def insert_template(self, template: dict) -> None:
-        self.connection.execute("INSERT INTO templates (id, seq, name, updated_at, doc) VALUES (?, ?, ?, ?, ?)",
-                                (template["id"], self._next_seq("templates"), template["name"], template["updatedAt"], dumps(template)))
+    def insert_template(self, template: dict, owner_id: str | None = None) -> None:
+        self.connection.execute("INSERT INTO templates (id, name, updated_at, owner_id, doc) VALUES (%s, %s, %s, %s, %s)",
+                                (template["id"], template["name"], template["updatedAt"], owner_id, as_json(template)))
 
     def update_template(self, template: dict) -> None:
-        self.connection.execute("UPDATE templates SET name = ?, updated_at = ?, doc = ? WHERE id = ?",
-                                (template["name"], template["updatedAt"], dumps(template), template["id"]))
+        self.connection.execute("UPDATE templates SET name = %s, updated_at = %s, doc = %s WHERE id = %s",
+                                (template["name"], template["updatedAt"], as_json(template), template["id"]))
 
     def delete_template(self, id: str) -> bool:
-        return self.connection.execute("DELETE FROM templates WHERE id = ?", (id,)).rowcount > 0
+        return self.connection.execute("DELETE FROM templates WHERE id = %s", (id,)).rowcount > 0
 
     # ---- batches ----------------------------------------------------------------------------
 
@@ -127,104 +140,167 @@ class Store:
         return self._docs("SELECT doc FROM batches ORDER BY seq")
 
     def get_batch(self, id: str) -> dict | None:
-        return self._doc("SELECT doc FROM batches WHERE id = ?", (id,))
+        return self._doc("SELECT doc FROM batches WHERE id = %s", (id,))
 
     def batch_ids(self) -> set[str]:
-        return {row["id"] for row in self.connection.execute("SELECT id FROM batches")}
+        return {row["id"] for row in self._rows("SELECT id FROM batches")}
 
     def batch_names(self) -> dict[str, str]:
-        return {row["id"]: row["name"] for row in self.connection.execute("SELECT id, name FROM batches")}
+        return {row["id"]: row["name"] for row in self._rows("SELECT id, name FROM batches ORDER BY seq")}
 
-    def insert_batch(self, batch: dict) -> None:
-        self.connection.execute("INSERT INTO batches (id, seq, name, created_at, doc) VALUES (?, ?, ?, ?, ?)",
-                                (batch["id"], self._next_seq("batches"), batch["name"], batch["createdAt"], dumps(batch)))
+    def insert_batch(self, batch: dict, owner_id: str | None = None) -> None:
+        self.connection.execute("INSERT INTO batches (id, name, created_at, owner_id, doc) VALUES (%s, %s, %s, %s, %s)",
+                                (batch["id"], batch["name"], batch["createdAt"], owner_id, as_json(batch)))
+
+    def owner_of_batch(self, id: str) -> str | None:
+        row = self.connection.execute("SELECT owner_id FROM batches WHERE id = %s", (id,)).fetchone()
+        return row["owner_id"] if row else None
 
     # ---- hits -------------------------------------------------------------------------------
 
     def hits_of_batch(self, batch_id: str) -> list[HitRow]:
-        rows = self.connection.execute(
-            "SELECT id, max_assignments, expiration, row_index FROM hits WHERE batch_id = ? ORDER BY seq", (batch_id,)).fetchall()
+        rows = self._rows("SELECT id, max_assignments, expiration, row_index FROM hits WHERE batch_id = %s ORDER BY seq",
+                          (batch_id,))
         return [HitRow(row["id"], row["max_assignments"], row["expiration"], row["row_index"]) for row in rows]
 
     def hit_docs_of_batch(self, batch_id: str) -> list[dict]:
-        return self._docs("SELECT doc FROM hits WHERE batch_id = ? ORDER BY seq", (batch_id,))
+        return self._docs("SELECT doc FROM hits WHERE batch_id = %s ORDER BY seq", (batch_id,))
 
     def get_hit(self, id: str) -> dict | None:
-        return self._doc("SELECT doc FROM hits WHERE id = ?", (id,))
+        return self._doc("SELECT doc FROM hits WHERE id = %s", (id,))
 
     def insert_hits(self, hits: Iterable[dict]) -> None:
-        seq = self._next_seq("hits")
-        self.connection.executemany(
-            "INSERT INTO hits (id, seq, batch_id, row_index, max_assignments, expiration, doc) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(h["HITId"], seq + i, h["batchId"], h["rowIndex"], h["MaxAssignments"], h["Expiration"], dumps(h))
-             for i, h in enumerate(hits)])
+        with self.connection.cursor() as cursor:
+            cursor.executemany(
+                "INSERT INTO hits (id, batch_id, row_index, max_assignments, expiration, doc) VALUES (%s, %s, %s, %s, %s, %s)",
+                [(h["HITId"], h["batchId"], h["rowIndex"], h["MaxAssignments"], h["Expiration"], as_json(h)) for h in hits])
 
     def update_hit(self, hit: dict) -> None:
-        self.connection.execute("UPDATE hits SET max_assignments = ?, expiration = ?, doc = ? WHERE id = ?",
-                                (hit["MaxAssignments"], hit["Expiration"], dumps(hit), hit["HITId"]))
+        self.connection.execute("UPDATE hits SET max_assignments = %s, expiration = %s, doc = %s WHERE id = %s",
+                                (hit["MaxAssignments"], hit["Expiration"], as_json(hit), hit["HITId"]))
 
     # ---- assignments ------------------------------------------------------------------------
 
+    # Requester 화면이 읽는 메서드는 검수할 수 있는 상태(REVIEWABLE)만 돌려준다. worker 쪽은 아래 "worker 의 작업" 에 있다.
+
     def assignment_counts_of_batch(self, batch_id: str) -> dict[str, AssignmentCounts]:
-        """HIT id → 상태별 assignment 수. Submitted, Approved 가 아닌 상태는 모두 rejected 로 센다."""
-        rows = self.connection.execute(
-            "SELECT a.hit_id AS hit_id, a.status AS status, COUNT(*) AS n FROM assignments a "
-            "JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = ? GROUP BY a.hit_id, a.status", (batch_id,)).fetchall()
+        """HIT id → 상태별 assignment 수. Submitted, Approved 가 아닌 검수 상태는 rejected 로, 제한 시간 안의 Accepted 는
+        in_progress 로 센다. Returned, Abandoned 와 시간이 지난 Accepted 는 세지 않는다."""
+        rows = self._rows(
+            "SELECT a.hit_id AS hit_id, CASE WHEN a.status = 'Accepted' THEN 'InProgress' ELSE a.status END AS status, COUNT(*) AS n "
+            f"FROM assignments a JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = %s AND (a.{REVIEWABLE} OR (a.{ACTIVE})) "
+            "GROUP BY 1, 2", (batch_id,))
         counts: dict[str, dict[str, int]] = {}
         for row in rows:
-            bucket = counts.setdefault(row["hit_id"], {"submitted": 0, "approved": 0, "rejected": 0})
-            key = {"Submitted": "submitted", "Approved": "approved"}.get(row["status"], "rejected")
+            bucket = counts.setdefault(row["hit_id"], {"submitted": 0, "approved": 0, "rejected": 0, "in_progress": 0})
+            key = {"Submitted": "submitted", "Approved": "approved", "InProgress": "in_progress"}.get(row["status"], "rejected")
             bucket[key] += row["n"]
         return {hit_id: AssignmentCounts(**bucket) for hit_id, bucket in counts.items()}
 
+    def in_progress_of_hits(self, hit_ids: Iterable[str]) -> dict[str, int]:
+        """HIT id → worker 가 제한 시간 안에 푸는 중인 assignment 수 (없으면 키가 없다)."""
+        rows = self._rows(f"SELECT hit_id, COUNT(*) AS n FROM assignments WHERE hit_id = ANY(%s) AND {ACTIVE} GROUP BY hit_id",
+                          (list(set(hit_ids)),))
+        return {row["hit_id"]: row["n"] for row in rows}
+
     def assignments_of_batch(self, batch_id: str) -> list[dict]:
         """batch 의 assignment 전부 (저장 순서)."""
-        return self._docs("SELECT a.doc AS doc FROM assignments a JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = ? ORDER BY a.seq",
-                          (batch_id,))
+        return self._docs(f"SELECT a.doc AS doc FROM assignments a JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = %s AND a.{REVIEWABLE} "
+                          "ORDER BY a.seq", (batch_id,))
 
     def assignments_of_hits(self, hit_ids: Iterable[str]) -> dict[str, list[dict]]:
         """HIT id → 그 HIT 의 assignment 목록 (저장 순서). assignment 가 없는 HIT 는 키가 없다."""
         grouped: dict[str, list[dict]] = {}
-        for hit_id in set(hit_ids):
-            docs = self._docs("SELECT doc FROM assignments WHERE hit_id = ? ORDER BY seq", (hit_id,))
-            if docs:
-                grouped[hit_id] = docs
+        for row in self._rows(f"SELECT hit_id, doc FROM assignments WHERE hit_id = ANY(%s) AND {REVIEWABLE} ORDER BY seq",
+                              (list(set(hit_ids)),)):
+            grouped.setdefault(row["hit_id"], []).append(row["doc"])
         return grouped
 
     def get_assignments(self, ids: Iterable[str]) -> dict[str, dict]:
-        """id → 문서. 없는 id 는 빠진다."""
-        found: dict[str, dict] = {}
-        for id in ids:
-            if id not in found:
-                doc = self._doc("SELECT doc FROM assignments WHERE id = ?", (id,))
-                if doc is not None:
-                    found[id] = doc
-        return found
+        """id → 문서 (요청한 순서). 없는 id 는 빠진다."""
+        wanted = list(dict.fromkeys(ids))
+        found = {row["id"]: row["doc"] for row in self._rows(f"SELECT id, doc FROM assignments WHERE id = ANY(%s) AND {REVIEWABLE}",
+                                                              (wanted,))}
+        return {id: found[id] for id in wanted if id in found}
 
     def assignments_of_worker(self, worker_id: str) -> list[tuple[dict, str, int]]:
         """(assignment, batchId, rowIndex) 목록 (저장 순서)."""
-        rows = self.connection.execute(
+        rows = self._rows(
             "SELECT a.doc AS doc, h.batch_id AS batch_id, h.row_index AS row_index FROM assignments a "
-            "JOIN hits h ON h.id = a.hit_id WHERE a.worker_id = ? ORDER BY a.seq", (worker_id,)).fetchall()
-        return [(loads(row["doc"]), row["batch_id"], row["row_index"]) for row in rows]
+            f"JOIN hits h ON h.id = a.hit_id WHERE a.worker_id = %s AND a.{REVIEWABLE} ORDER BY a.seq", (worker_id,))
+        return [(row["doc"], row["batch_id"], row["row_index"]) for row in rows]
 
     def assignment_records(self) -> list[tuple[dict, str, int]]:
         """모든 assignment 를 (assignment, batchId, rowIndex) 로 (저장 순서). worker 지표 계산용."""
-        rows = self.connection.execute(
+        rows = self._rows(
             "SELECT a.doc AS doc, h.batch_id AS batch_id, h.row_index AS row_index FROM assignments a "
-            "JOIN hits h ON h.id = a.hit_id ORDER BY a.seq").fetchall()
-        return [(loads(row["doc"]), row["batch_id"], row["row_index"]) for row in rows]
+            f"JOIN hits h ON h.id = a.hit_id WHERE a.{REVIEWABLE} ORDER BY a.seq")
+        return [(row["doc"], row["batch_id"], row["row_index"]) for row in rows]
 
     def worker_ids_with_assignments(self) -> list[str]:
         """응답을 낸 worker (처음 나온 순서)."""
         seen: dict[str, None] = {}
-        for row in self.connection.execute("SELECT worker_id FROM assignments ORDER BY seq"):
+        for row in self._rows(f"SELECT worker_id FROM assignments WHERE {REVIEWABLE} ORDER BY seq"):
             seen.setdefault(row["worker_id"], None)
         return list(seen)
 
     def update_assignment(self, assignment: dict) -> None:
-        self.connection.execute("UPDATE assignments SET status = ?, submit_time = ?, doc = ? WHERE id = ?",
-                                (assignment["AssignmentStatus"], assignment["SubmitTime"], dumps(assignment), assignment["AssignmentId"]))
+        self.connection.execute("UPDATE assignments SET status = %s, submit_time = %s, deadline = %s, doc = %s WHERE id = %s",
+                                (assignment["AssignmentStatus"], assignment.get("SubmitTime"), assignment.get("Deadline"),
+                                 as_json(assignment), assignment["AssignmentId"]))
+
+    # ---- worker 의 작업 (app/domain/tasks.py, routers/worker.py). 모든 상태를 본다 ------------------------
+
+    def insert_assignment(self, assignment: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO assignments (id, hit_id, worker_id, status, submit_time, deadline, doc) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (assignment["AssignmentId"], assignment["HITId"], assignment["WorkerId"], assignment["AssignmentStatus"],
+             assignment.get("SubmitTime"), assignment.get("Deadline"), as_json(assignment)))
+
+    def any_assignment(self, id: str) -> dict | None:
+        """상태와 상관없이 assignment 하나."""
+        return self._doc("SELECT doc FROM assignments WHERE id = %s", (id,))
+
+    def assignment_for(self, hit_id: str, worker_id: str) -> dict | None:
+        """이 worker 의 이 HIT assignment (상태와 상관없이). 같은 worker 는 HIT 하나에 하나다."""
+        return self._doc("SELECT doc FROM assignments WHERE hit_id = %s AND worker_id = %s", (hit_id, worker_id))
+
+    def worker_task_rows(self, worker_id: str) -> list[dict]:
+        """worker 의 assignment 전부와 그 HIT 의 batch (받은 순서의 역순). 키: doc, batch_id, row_index."""
+        return self._rows(
+            "SELECT a.doc AS doc, h.batch_id AS batch_id, h.row_index AS row_index FROM assignments a "
+            "JOIN hits h ON h.id = a.hit_id WHERE a.worker_id = %s ORDER BY a.seq DESC", (worker_id,))
+
+    def hit_slots(self, worker_id: str, batch_id: str | None = None) -> list[dict]:
+        """HIT 마다 자리 사용과 이 worker 의 몫 (저장 순서). 키: id, batch_id, row_index, max_assignments, expiration,
+        used(검수 상태 + 푸는 중), mine(이 worker 가 이미 받았거나 냈는지)."""
+        where = "WHERE h.batch_id = %(batch)s" if batch_id is not None else ""
+        return self._rows(
+            "SELECT h.id, h.batch_id, h.row_index, h.max_assignments, h.expiration, "
+            f"COUNT(a.id) FILTER (WHERE a.{REVIEWABLE} OR (a.{ACTIVE})) AS used, "
+            f"COALESCE(BOOL_OR(a.worker_id = %(worker)s AND (a.{REVIEWABLE} OR (a.{ACTIVE}))), false) AS mine "
+            f"FROM hits h LEFT JOIN assignments a ON a.hit_id = h.id {where} GROUP BY h.id ORDER BY h.seq",
+            {"worker": worker_id, "batch": batch_id})
+
+    def stale_accepted(self) -> list[dict]:
+        """제한 시간이 지난 Accepted (Abandoned 로 바꿀 것)."""
+        return self._docs("SELECT doc FROM assignments WHERE status = 'Accepted' AND deadline <= now() ORDER BY seq")
+
+    def blocked_by(self, requester_id: str, worker_id: str) -> bool:
+        row = self.connection.execute("SELECT blocked FROM requester_workers WHERE requester_id = %s AND worker_id = %s",
+                                      (requester_id, worker_id)).fetchone()
+        return bool(row and row["blocked"])
+
+    def owners_of_batches(self) -> dict[str, str | None]:
+        return {row["id"]: row["owner_id"] for row in self._rows("SELECT id, owner_id FROM batches")}
+
+    def blockers_of(self, worker_id: str) -> set[str]:
+        """이 worker 를 차단한 Requester 의 id."""
+        return {row["requester_id"] for row in self._rows(
+            "SELECT requester_id FROM requester_workers WHERE worker_id = %s AND blocked", (worker_id,))}
+
+    def display_names(self) -> dict[str, str]:
+        return {row["id"]: row["display_name"] for row in self._rows("SELECT id, display_name FROM users")}
 
     # ---- pools ------------------------------------------------------------------------------
 
@@ -232,28 +308,40 @@ class Store:
         return self._docs("SELECT doc FROM pools ORDER BY seq")
 
     def get_pool(self, id: str) -> dict | None:
-        return self._doc("SELECT doc FROM pools WHERE id = ?", (id,))
+        return self._doc("SELECT doc FROM pools WHERE id = %s", (id,))
 
-    def insert_pool(self, pool: dict) -> None:
-        self.connection.execute("INSERT INTO pools (id, seq, name, doc) VALUES (?, ?, ?, ?)",
-                                (pool["id"], self._next_seq("pools"), pool["name"], dumps(pool)))
+    def insert_pool(self, pool: dict, owner_id: str | None = None) -> None:
+        self.connection.execute("INSERT INTO pools (id, name, owner_id, doc) VALUES (%s, %s, %s, %s)",
+                                (pool["id"], pool["name"], owner_id, as_json(pool)))
 
     def update_pool(self, pool: dict) -> None:
-        self.connection.execute("UPDATE pools SET name = ?, doc = ? WHERE id = ?", (pool["name"], dumps(pool), pool["id"]))
+        self.connection.execute("UPDATE pools SET name = %s, doc = %s WHERE id = %s", (pool["name"], as_json(pool), pool["id"]))
 
-    # ---- workers (콘솔이 worker 에 붙인 정보: blocked, note, blockReason) -----------------------
+    # ---- workers (Requester 가 worker 에 붙인 정보: blocked, note, blockReason) -------------------
+    # requester_id 를 주면 그 Requester 의 정보(requester_workers), None 이면 주인 없는 예전 정보(workers: seed 와 계정 이전 데이터)
 
-    def worker_meta(self, worker_id: str) -> dict | None:
-        return self._doc("SELECT doc FROM workers WHERE id = ?", (worker_id,))
+    def worker_meta(self, worker_id: str, requester_id: str | None = None) -> dict | None:
+        if requester_id is None:
+            return self._doc("SELECT doc FROM workers WHERE id = %s", (worker_id,))
+        return self._doc("SELECT doc FROM requester_workers WHERE requester_id = %s AND worker_id = %s", (requester_id, worker_id))
 
-    def all_worker_meta(self) -> dict[str, dict]:
+    def all_worker_meta(self, requester_id: str | None = None) -> dict[str, dict]:
         """WorkerId → meta (저장 순서)."""
-        rows = self.connection.execute("SELECT id, doc FROM workers ORDER BY seq").fetchall()
-        return {row["id"]: loads(row["doc"]) for row in rows}
+        if requester_id is None:
+            return {row["id"]: row["doc"] for row in self._rows("SELECT id, doc FROM workers ORDER BY seq")}
+        rows = self._rows("SELECT worker_id, doc FROM requester_workers WHERE requester_id = %s ORDER BY updated_at, worker_id",
+                          (requester_id,))
+        return {row["worker_id"]: row["doc"] for row in rows}
 
-    def set_worker_meta(self, worker_id: str, meta: dict) -> None:
-        if self.connection.execute("UPDATE workers SET doc = ? WHERE id = ?", (dumps(meta), worker_id)).rowcount == 0:
-            self.connection.execute("INSERT INTO workers (id, seq, doc) VALUES (?, ?, ?)", (worker_id, self._next_seq("workers"), dumps(meta)))
+    def set_worker_meta(self, worker_id: str, meta: dict, requester_id: str | None = None) -> None:
+        if requester_id is None:
+            self.connection.execute("INSERT INTO workers (id, doc) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc",
+                                    (worker_id, as_json(meta)))
+            return
+        self.connection.execute(
+            "INSERT INTO requester_workers (requester_id, worker_id, blocked, doc) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (requester_id, worker_id) DO UPDATE SET blocked = EXCLUDED.blocked, doc = EXCLUDED.doc, updated_at = now()",
+            (requester_id, worker_id, bool(meta.get("blocked")), as_json(meta)))
 
     # ---- account ----------------------------------------------------------------------------
 
@@ -261,122 +349,312 @@ class Store:
         return self._doc("SELECT doc FROM account WHERE id = 'account'") or {}
 
     def set_account(self, account: dict) -> None:
-        self.connection.execute("UPDATE account SET doc = ? WHERE id = 'account'", (dumps(account),))
+        self.connection.execute("UPDATE account SET doc = %s WHERE id = 'account'", (as_json(account),))
 
     def counts(self) -> dict[str, int]:
         """health 에 보이는 규모. workers 는 응답을 낸 worker, pool 에 든 worker, 메모가 붙은 worker 의 합집합이다."""
-        result = {table: self.connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]
-                  for table in ("templates", "batches", "hits", "assignments", "pools")}
-        worker_ids = {row["worker_id"] for row in self.connection.execute("SELECT DISTINCT worker_id FROM assignments")}
-        worker_ids.update(row["id"] for row in self.connection.execute("SELECT id FROM workers"))
-        for row in self.connection.execute("SELECT doc FROM pools"):
-            worker_ids.update(loads(row["doc"]).get("workerIds", []))
+        result = {table: self.connection.execute(f"SELECT COUNT(*) AS n FROM {table}"
+                                                 + (f" WHERE {REVIEWABLE}" if table == "assignments" else "")).fetchone()["n"]
+                  for table in COUNTED_TABLES}
+        worker_ids = {row["worker_id"] for row in self._rows(f"SELECT DISTINCT worker_id FROM assignments WHERE {REVIEWABLE}")}
+        worker_ids.update(row["id"] for row in self._rows("SELECT id FROM workers"))
+        worker_ids.update(row["worker_id"] for row in self._rows("SELECT worker_id FROM requester_workers"))
+        for pool in self._docs("SELECT doc FROM pools"):
+            worker_ids.update(pool.get("workerIds", []))
         result["workers"] = len(worker_ids)
         return result
 
+    # ---- agent jobs (job.json 과 같은 모양의 문서) -----------------------------------------------
+
+    def list_jobs(self) -> list[dict]:
+        """접수 순서 (created_at, id)."""
+        return self._docs("SELECT doc FROM agent_jobs ORDER BY created_at, id")
+
+    def get_job(self, id: str) -> dict | None:
+        return self._doc("SELECT doc FROM agent_jobs WHERE id = %s", (id,))
+
+    def job_ids(self) -> set[str]:
+        return {row["id"] for row in self._rows("SELECT id FROM agent_jobs")}
+
+    def save_job(self, job: dict, owner_id: str | None = None) -> None:
+        """job 을 저장한다. owner_id 는 처음 저장할 때만 적는다 (상태를 고칠 때는 그대로 둔다)."""
+        group = job.get("group") or {}
+        self.connection.execute(
+            "INSERT INTO agent_jobs (id, created_at, status, group_id, owner_id, doc) VALUES (%s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, group_id = EXCLUDED.group_id, doc = EXCLUDED.doc",
+            (job["id"], job["created_at"], job["status"], group.get("id"), owner_id, as_json(job)))
+
+    def owner_of_job(self, id: str) -> str | None:
+        row = self.connection.execute("SELECT owner_id FROM agent_jobs WHERE id = %s", (id,)).fetchone()
+        return row["owner_id"] if row else None
+
+    # ---- 계정 (users, worker_profiles, sessions, invitations). 모양은 app/accounts.py 가 정한다 ---------
+
+    _USER_SELECT = ("SELECT u.id, u.email, u.password_hash, u.display_name, u.role, u.status, u.email_verified_at, u.created_at, "
+                    "u.last_login_at, w.worker_id FROM users u LEFT JOIN worker_profiles w ON w.user_id = u.id")
+
+    def get_user(self, id: str) -> dict | None:
+        return self.connection.execute(f"{self._USER_SELECT} WHERE u.id = %s", (id,)).fetchone()
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        return self.connection.execute(f"{self._USER_SELECT} WHERE u.email = %s", (email,)).fetchone()
+
+    def list_users(self) -> list[dict]:
+        return self._rows(f"{self._USER_SELECT} ORDER BY u.created_at, u.id")
+
+    def user_count(self) -> int:
+        return self.connection.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+
+    def user_role_counts(self) -> dict[str, int]:
+        return {row["role"]: row["n"] for row in self._rows("SELECT role, COUNT(*) AS n FROM users GROUP BY role")}
+
+    def insert_user(self, user: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO users (id, email, password_hash, display_name, role, status, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (user["id"], user["email"], user["password_hash"], user["display_name"], user["role"], user["status"], user["created_at"]))
+
+    def insert_worker_profile(self, user_id: str, worker_id: str) -> None:
+        self.connection.execute("INSERT INTO worker_profiles (user_id, worker_id) VALUES (%s, %s)", (user_id, worker_id))
+
+    def worker_id_in_use(self, worker_id: str) -> bool:
+        """계정, 응답, 메모, pool 어디에든 이미 나온 WorkerId 인지 (새 worker 계정의 ID 가 seed worker 와 겹치지 않게)."""
+        row = self.connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM worker_profiles WHERE worker_id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM assignments WHERE worker_id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM workers WHERE id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM requester_workers WHERE worker_id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM pools WHERE doc::text LIKE '%%' || %(id)s || '%%') AS used", {"id": worker_id}).fetchone()
+        return bool(row["used"])
+
+    def set_user_status(self, id: str, status: str) -> None:
+        self.connection.execute("UPDATE users SET status = %s WHERE id = %s", (status, id))
+
+    def set_user_password(self, id: str, password_hash: str) -> None:
+        self.connection.execute("UPDATE users SET password_hash = %s WHERE id = %s", (password_hash, id))
+
+    def record_login(self, id: str, at: datetime) -> None:
+        self.connection.execute("UPDATE users SET last_login_at = %s WHERE id = %s", (at, id))
+
+    def insert_session(self, token_hash: str, user_id: str, at: datetime, expires_at: datetime, user_agent: str | None) -> None:
+        self.connection.execute(
+            "INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, expires_at, user_agent) VALUES (%s, %s, %s, %s, %s, %s)",
+            (token_hash, user_id, at, at, expires_at, user_agent))
+
+    def get_session(self, token_hash: str) -> dict | None:
+        """세션과 그 사용자. 키: token_hash, user_id, last_seen_at, expires_at, user (get_user 와 같은 모양)."""
+        row = self.connection.execute("SELECT token_hash, user_id, last_seen_at, expires_at FROM sessions WHERE token_hash = %s",
+                                      (token_hash,)).fetchone()
+        if row is None:
+            return None
+        return {**row, "user": self.get_user(row["user_id"])}
+
+    def touch_session(self, token_hash: str, at: datetime) -> None:
+        self.connection.execute("UPDATE sessions SET last_seen_at = %s WHERE token_hash = %s", (at, token_hash))
+
+    def delete_session(self, token_hash: str) -> bool:
+        return self.connection.execute("DELETE FROM sessions WHERE token_hash = %s", (token_hash,)).rowcount > 0
+
+    def delete_sessions_of(self, user_id: str) -> int:
+        return self.connection.execute("DELETE FROM sessions WHERE user_id = %s", (user_id,)).rowcount
+
+    def delete_stale_sessions(self, now: datetime, idle_since: datetime) -> int:
+        """절대 만료가 지났거나 idle_since 이후로 쓰이지 않은 세션을 지운다."""
+        return self.connection.execute("DELETE FROM sessions WHERE expires_at <= %s OR last_seen_at < %s", (now, idle_since)).rowcount
+
+    _INVITATION_SELECT = ("SELECT i.id, i.role, i.email, i.note, i.created_at, i.expires_at, i.used_at, "
+                          "c.email AS created_by_email, u.email AS used_by_email FROM invitations i "
+                          "LEFT JOIN users c ON c.id = i.created_by LEFT JOIN users u ON u.id = i.used_by")
+
+    def insert_invitation(self, invitation: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO invitations (id, code_hash, role, email, note, created_by, created_at, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (invitation["id"], invitation["code_hash"], invitation["role"], invitation["email"], invitation["note"],
+             invitation["created_by"], invitation["created_at"], invitation["expires_at"]))
+
+    def get_invitation(self, id: str) -> dict | None:
+        return self.connection.execute(f"{self._INVITATION_SELECT} WHERE i.id = %s", (id,)).fetchone()
+
+    def get_invitation_by_code(self, code_hash: str) -> dict | None:
+        return self.connection.execute(f"{self._INVITATION_SELECT} WHERE i.code_hash = %s", (code_hash,)).fetchone()
+
+    def list_invitations(self) -> list[dict]:
+        return self._rows(f"{self._INVITATION_SELECT} ORDER BY i.created_at DESC, i.id")
+
+    def use_invitation(self, id: str, user_id: str, at: datetime) -> bool:
+        """아직 쓰지 않은 코드면 쓴 것으로 적는다. 이미 쓰였으면 False (동시에 두 명이 같은 코드로 가입하는 것을 막는다)."""
+        return self.connection.execute("UPDATE invitations SET used_by = %s, used_at = %s WHERE id = %s AND used_at IS NULL",
+                                       (user_id, at, id)).rowcount > 0
+
+    def delete_invitation(self, id: str) -> bool:
+        """쓰지 않은 코드만 지운다."""
+        return self.connection.execute("DELETE FROM invitations WHERE id = %s AND used_at IS NULL", (id,)).rowcount > 0
+
+    def claim_unowned(self, user_id: str) -> dict[str, int]:
+        """주인 없는 데이터(seed, 계정 이전)를 user 의 것으로 한다. 예전 workers 의 메모와 차단은 requester_workers 로 옮긴다."""
+        claimed = {table: self.connection.execute(f"UPDATE {table} SET owner_id = %s WHERE owner_id IS NULL", (user_id,)).rowcount
+                   for table in ("templates", "batches", "pools", "agent_jobs")}
+        legacy = self.all_worker_meta(None)
+        for worker_id, meta in legacy.items():
+            self.set_worker_meta(worker_id, meta, user_id)
+        self.connection.execute("DELETE FROM workers")
+        claimed["workers"] = len(legacy)
+        return claimed
+
 
 class Database:
-    def __init__(self, path: Path, data_dir: Path):
-        self.path = Path(path)
+    def __init__(self, url: str, data_dir: Path, *, max_connections: int = 10):
+        self.url = url
         self.data_dir = Path(data_dir)
+        self.max_connections = max_connections
         self.source = "seed"
         self.seeded_at: str | None = None
+        self._pool: ConnectionPool | None = None
         self._init_lock = threading.Lock()
+
+    @property
+    def target(self) -> str:
+        return describe_url(self.url)
 
     # ---- 연결 -------------------------------------------------------------------------------
 
-    @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.path, timeout=30)
-        connection.row_factory = sqlite3.Row
+    def open(self) -> None:
+        """pool 을 연다. DB 에 닿지 않으면 CONNECT_TIMEOUT 초 뒤에 접속 대상을 적은 오류를 낸다."""
+        if self._pool is not None:
+            return
+        pool = ConnectionPool(self.url, min_size=1, max_size=self.max_connections, open=False, name="backend",
+                              kwargs={"autocommit": True, "row_factory": dict_row}, check=ConnectionPool.check_connection)
         try:
+            pool.open(wait=True, timeout=CONNECT_TIMEOUT)
+        except PoolTimeout:
+            pool.close()
+            raise RuntimeError(f"cannot connect to PostgreSQL at {self.target} within {CONNECT_TIMEOUT} s (check DATABASE_URL)") from None
+        self._pool = pool
+
+    def close(self) -> None:
+        if self._pool is not None:
+            self._pool.close()
+            self._pool = None
+
+    @contextmanager
+    def connect(self) -> Iterator[psycopg.Connection]:
+        """autocommit 연결 하나 (스키마 이전, seed, 시험용). 트랜잭션은 쓰는 쪽이 연다."""
+        if self._pool is None:
+            raise RuntimeError("the database is not open (call initialize() first)")
+        with self._pool.connection() as connection:
             yield connection
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
 
     @contextmanager
     def transaction(self, write: bool = False) -> Iterator[Store]:
-        """Store 를 연결 하나에 묶어 준다. write=True 면 BEGIN IMMEDIATE 로 시작해 다른 쓰기와 직렬화한다."""
-        with self.connect() as connection:
+        """Store 를 트랜잭션 하나에 묶어 준다. write=True 면 쓰기 잠금을 잡아 다른 쓰기와 줄을 세운다."""
+        with self.connect() as connection, connection.transaction():
             if write:
-                connection.execute("BEGIN IMMEDIATE")
+                connection.execute("SELECT pg_advisory_xact_lock(%s)", (WRITE_LOCK,))
+            else:
+                connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             yield Store(connection)
 
     def __getattr__(self, name: str) -> Callable:
-        """Store 의 메서드를 한 번짜리 트랜잭션으로 감싸 그대로 쓸 수 있게 한다 (db.get_batch(id) 처럼)."""
+        """Store 의 메서드를 한 번짜리 트랜잭션으로 감싸 그대로 쓸 수 있게 한다 (db.get_batch(id) 처럼).
+        이름이 WRITE_PREFIXES(insert_, update_, delete_, set_, save_ 등)로 시작하면 쓰기 트랜잭션이다."""
         method = getattr(Store, name, None)
         if name.startswith("_") or method is None:
             raise AttributeError(name)
+        write = name.startswith(WRITE_PREFIXES)
 
         def call(*args, **kwargs):
-            with self.transaction() as store:
+            with self.transaction(write=write) as store:
                 return method(store, *args, **kwargs)
 
         return call
 
+    # ---- 시작 -------------------------------------------------------------------------------
+
+    def prepare(self) -> list[str]:
+        """pool 을 열고 스키마 이전만 한다 (seed 는 하지 않는다). 이번에 적용한 이전 파일 목록."""
+        self.open()
+        with self.connect() as connection:
+            connection.execute("SELECT pg_advisory_lock(%s)", (INIT_LOCK,))
+            try:
+                return apply_migrations(connection)
+            finally:
+                connection.execute("SELECT pg_advisory_unlock(%s)", (INIT_LOCK,))
+
     def initialize(self) -> None:
-        """스키마를 만들고, DB 가 비어 있으면 data/ 를 올린다. 프로세스마다 한 번 부른다."""
+        """pool 을 열고, 스키마를 이전하고, seed 기록이 없으면 data/ 를 올린다. 프로세스마다 한 번 부른다.
+        실패하면 pool 을 닫고 오류를 그대로 올린다."""
         with self._init_lock:
-            if self.path.name != ":memory:":
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.connect() as connection:
-                connection.execute("PRAGMA journal_mode = WAL")
-                connection.executescript(SCHEMA)
-                version = self._meta(connection, "version")
-                if version == str(SCHEMA_VERSION):
-                    self.source = "snapshot"
-                    self.seeded_at = self._meta(connection, "seededAt")
-                    return
-                if version is not None:
-                    log.warning("DB schema version %s differs from %s; reseeding from %s", version, SCHEMA_VERSION, self.data_dir)
-            self.reseed()
+            try:
+                self.open()
+                with self.connect() as connection:
+                    connection.execute("SELECT pg_advisory_lock(%s)", (INIT_LOCK,))
+                    try:
+                        applied = apply_migrations(connection)
+                        if applied:
+                            log.info("  schema  applied %s", ", ".join(applied))
+                        seeded_at = self._meta(connection, "seededAt")
+                        if seeded_at is None:
+                            self._seed(connection)
+                        else:
+                            self.source = "snapshot"
+                            self.seeded_at = seeded_at
+                    finally:
+                        connection.execute("SELECT pg_advisory_unlock(%s)", (INIT_LOCK,))
+            except BaseException:
+                self.close()
+                raise
 
     def reseed(self) -> None:
-        """DB 를 비우고 data/ 를 다시 올린다."""
-        state = assemble_state(read_seed_files(self.data_dir))
+        """seed 테이블을 비우고 data/ 를 다시 올린다 (agent job 과 계정은 남는다)."""
         with self.connect() as connection:
-            self._write_state(connection, state)
-        self.source = "seed"
-        self.seeded_at = self._meta_value("seededAt")
+            self._seed(connection)
 
-    # ---- seed 쓰기 ---------------------------------------------------------------------------
+    def _seed(self, connection: psycopg.Connection) -> None:
+        state = assemble_state(read_seed_files(self.data_dir))
+        seeded_at = now_iso()
+        write_state(connection, state, seeded_at)
+        self.source = "seed"
+        self.seeded_at = seeded_at
 
     @staticmethod
-    def _meta(connection: sqlite3.Connection, key: str) -> str | None:
-        row = connection.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    def _meta(connection: psycopg.Connection, key: str) -> str | None:
+        row = connection.execute("SELECT value FROM meta WHERE key = %s", (key,)).fetchone()
         return row["value"] if row else None
 
-    def _meta_value(self, key: str) -> str | None:
-        with self.connect() as connection:
-            return self._meta(connection, key)
 
-    def _write_state(self, connection: sqlite3.Connection, state: SeedState) -> None:
-        for table in (*COLLECTIONS, "account", "meta"):
-            connection.execute(f"DELETE FROM {table}")
-        connection.executemany(
-            "INSERT INTO templates (id, seq, name, updated_at, doc) VALUES (?, ?, ?, ?, ?)",
-            [(t["id"], i, t["name"], t["updatedAt"], dumps(t)) for i, t in enumerate(state.templates)])
-        connection.executemany(
-            "INSERT INTO batches (id, seq, name, created_at, doc) VALUES (?, ?, ?, ?, ?)",
-            [(b["id"], i, b["name"], b["createdAt"], dumps(b)) for i, b in enumerate(state.batches)])
-        connection.executemany(
-            "INSERT INTO hits (id, seq, batch_id, row_index, max_assignments, expiration, doc) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(h["HITId"], i, h["batchId"], h["rowIndex"], h["MaxAssignments"], h["Expiration"], dumps(h))
-             for i, h in enumerate(state.hits)])
-        connection.executemany(
-            "INSERT INTO assignments (id, seq, hit_id, worker_id, status, submit_time, doc) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(a["AssignmentId"], i, a["HITId"], a["WorkerId"], a["AssignmentStatus"], a["SubmitTime"], dumps(a))
-             for i, a in enumerate(state.assignments)])
-        connection.executemany(
-            "INSERT INTO pools (id, seq, name, doc) VALUES (?, ?, ?, ?)",
-            [(p["id"], i, p["name"], dumps(p)) for i, p in enumerate(state.pools)])
-        connection.executemany(
-            "INSERT INTO workers (id, seq, doc) VALUES (?, ?, ?)",
-            [(worker_id, i, dumps(meta)) for i, (worker_id, meta) in enumerate(state.worker_meta.items())])
-        connection.execute("INSERT INTO account (id, doc) VALUES ('account', ?)", (dumps(state.account),))
-        connection.executemany("INSERT INTO meta (key, value) VALUES (?, ?)",
-                               [("version", str(SCHEMA_VERSION)), ("seededAt", now_iso())])
+def write_state(connection: psycopg.Connection, state: SeedState, seeded_at: str) -> None:
+    """seed 테이블을 비우고 state 로 채운다 (트랜잭션 하나). seed 와 예전 SQLite 가져오기(legacy_import)가 함께 쓴다.
+    목록의 순서(seq)는 state 의 순서대로 매겨진다."""
+    with connection.transaction():
+        connection.execute("SELECT pg_advisory_xact_lock(%s)", (WRITE_LOCK,))
+        connection.execute(f"TRUNCATE {', '.join(SEED_TABLES)} RESTART IDENTITY")
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                "INSERT INTO templates (id, name, updated_at, doc) VALUES (%s, %s, %s, %s)",
+                [(t["id"], t["name"], t["updatedAt"], as_json(t)) for t in state.templates])
+            cursor.executemany(
+                "INSERT INTO batches (id, name, created_at, doc) VALUES (%s, %s, %s, %s)",
+                [(b["id"], b["name"], b["createdAt"], as_json(b)) for b in state.batches])
+            cursor.executemany(
+                "INSERT INTO hits (id, batch_id, row_index, max_assignments, expiration, doc) VALUES (%s, %s, %s, %s, %s, %s)",
+                [(h["HITId"], h["batchId"], h["rowIndex"], h["MaxAssignments"], h["Expiration"], as_json(h)) for h in state.hits])
+            cursor.executemany(
+                "INSERT INTO assignments (id, hit_id, worker_id, status, submit_time, doc) VALUES (%s, %s, %s, %s, %s, %s)",
+                [(a["AssignmentId"], a["HITId"], a["WorkerId"], a["AssignmentStatus"], a["SubmitTime"], as_json(a))
+                 for a in state.assignments])
+            cursor.executemany(
+                "INSERT INTO pools (id, name, doc) VALUES (%s, %s, %s)",
+                [(p["id"], p["name"], as_json(p)) for p in state.pools])
+            cursor.executemany(
+                "INSERT INTO workers (id, doc) VALUES (%s, %s)",
+                [(worker_id, as_json(meta)) for worker_id, meta in state.worker_meta.items()])
+        connection.execute("INSERT INTO account (id, doc) VALUES ('account', %s)", (as_json(state.account),))
+        connection.execute("INSERT INTO meta (key, value) VALUES ('seededAt', %s)", (seeded_at,))
+
+
+def table_names(connection: psycopg.Connection) -> set[str]:
+    """현재 search_path 의 첫 schema 에 있는 테이블 이름 (시험과 진단용)."""
+    rows = connection.execute(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()").fetchall()
+    return {row["table_name"] for row in rows}
+

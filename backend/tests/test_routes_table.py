@@ -11,8 +11,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.routes import API_PREFIX, API_ROUTES, fastapi_path, path_param_names
-from helpers import ROUTES_TS, parse_ts_routes
+from app.routes import ACCOUNT_ROUTES, API_PREFIX, API_ROUTES, WORKER_ROUTES, fastapi_path, path_param_names
+from helpers import ROUTES_JS, ROUTES_TS, parse_ts_routes
 
 NO_SUCH_ROUTE = "No such route: "
 
@@ -84,3 +84,17 @@ def test_mock_routes_are_not_registered(app: FastAPI, client: TestClient, routes
         full = API_PREFIX + fastapi_path(path)
         assert method.lower() not in paths.get(full, {}), f"{name} must not be registered"
         assert is_unrouted(probe(client, method, full)), f"{name}: {method} {full} must not be routed"
+
+
+@pytest.mark.parametrize("table_name, table", [("ACCOUNT_ROUTES", ACCOUNT_ROUTES), ("WORKER_ROUTES", WORKER_ROUTES)])
+def test_backend_only_routes_match_frontend_and_are_registered(app: FastAPI, client: TestClient, table_name: str, table: dict) -> None:
+    """계정 API 와 worker API 의 표가 frontend 의 같은 이름 표(routes.js)와 이름, 메서드, 경로, 인자 순서까지 같고, 모두 등록되어 있다."""
+    assert ROUTES_JS.is_file(), f"routes.js not found: {ROUTES_JS}"
+    expected = parse_ts_routes(ROUTES_JS.read_text(encoding="utf-8"), table_name, end_marker="\n};")
+    actual = {name: (route.method, route.path, route.args) for name, route in table.items()}
+    assert list(actual.items()) == list(expected.items())
+    paths = app.openapi()["paths"]
+    for name, route in table.items():
+        operation = paths.get(API_PREFIX + fastapi_path(route.path), {}).get(route.method.lower())
+        assert operation is not None and operation["operationId"] == name, name
+        assert not is_unrouted(probe(client, route.method, API_PREFIX + fastapi_path(route.path))), name

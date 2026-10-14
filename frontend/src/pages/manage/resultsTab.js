@@ -1,4 +1,4 @@
-// Results 탭: annotator 간 일치도(IAA: 제출 전체와 승인만의 Fleiss' κ, Krippendorff's α), 문항별 투표와 majority, 만장일치 비율,
+// Results 탭: annotator 간 일치도(IAA: 승인, 검수 대기, 검수 대기 + 승인의 Fleiss' κ, Krippendorff's α), 문항별 투표와 majority, 만장일치 비율,
 // 라벨 분포, export. 문항 표와 분포는 Approved assignment 의 실제 문항만 센다. 계산은 서버가 하고 화면은 보여주기만 한다.
 
 import { api } from '../../api-client/client.js';
@@ -13,7 +13,7 @@ import { CATEGORY_COLORS, stackedBar } from '../../components/stackedBar.js';
 import { num, pager, table } from '../../components/table.js';
 import { toast } from '../../components/toast.js';
 import { replace } from '../../components/render.js';
-import { IAA_SCOPES, formatChange, iaaChange, iaaRow, kappaBand } from './iaa.js';
+import { IAA_SCOPES, iaaRow, kappaBand } from './iaa.js';
 import { errorText } from './shared.js';
 
 export { kappaBand };
@@ -47,7 +47,7 @@ function stat(label, value, attrs = {}) {
   return el('div', { className: 'stat', ...attrs }, el('div', { className: 'stat-label' }, label), el('div', { className: 'stat-value tabular' }, value));
 }
 
-/** 범위(행) × 지표(열) 표. 아래 행은 승인만 − 제출 전체로, 검수로 일치도가 얼마나 바뀌었는지 보인다. */
+/** 범위(행) × 지표(열) 표. 범위는 승인, 검수 대기, 검수 대기 + 승인이고 반려된 응답은 어디에도 넣지 않는다. */
 function iaaCard(iaa, target) {
   const metric = (value, band, coverage) =>
     el('div', { className: 'iaa-metric' }, el('span', { className: 'iaa-value tabular' }, value), el('span', { className: 'muted small' }, band), el('div', { className: 'muted small' }, coverage));
@@ -62,7 +62,6 @@ function iaaCard(iaa, target) {
       el('td', { className: 'muted' }, row.responses),
     );
   });
-  const change = (m) => el('span', { className: 'iaa-change tabular' }, formatChange(iaaChange(iaa, m)));
   return el(
     'section',
     { className: 'card iaa-card', id: 'iaa' },
@@ -71,11 +70,11 @@ function iaaCard(iaa, target) {
       'table',
       { className: 'table iaa-table' },
       el('thead', {}, el('tr', {}, el('th', {}, 'Responses counted'), el('th', { title: 'Items with exactly the target number of votes' }, "Fleiss' κ"), el('th', { title: 'Every item with two or more votes (nominal)' }, "Krippendorff's α"), el('th', {}, ''))),
-      el('tbody', {}, rows, el('tr', { className: 'iaa-change-row' }, el('th', { scope: 'row' }, 'Change after review', el('div', { className: 'muted small' }, 'approved − all submitted')), el('td', {}, change('fleissKappa')), el('td', {}, change('krippendorffAlpha')), el('td', {}, ''))),
+      el('tbody', {}, rows),
     ),
     muted(
       `κ counts only items with exactly ${target} votes, so HITs that got an extra vote after a rejection and top-up are left out of it. ` +
-        'α counts every item with two or more votes, so it is the fairer before/after comparison. Attention and free-text items are excluded from both. ' +
+        'α counts every item with two or more votes. Rejected responses are left out of every row, and attention and free-text items are excluded from both. ' +
         'Bands: κ after Landis & Koch (1977); α after Krippendorff (reliable ≥ 0.800, tentative ≥ 0.667).',
     ),
   );

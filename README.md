@@ -3,7 +3,7 @@
 Amazon Mechanical Turk(MTurk)로 진행하던 annotation 작업을 **만들고, 게시하고, 검수하고, worker를 관리**하는 웹 콘솔입니다.
 
 실제 MTurk에는 연동하지 않습니다. MTurk의 용어와 화면 구성, 그리고 HIT, assignment, reward, qualification, attention check 같은 annotation 설정 방식을 차용한 자체 annotation 콘솔을 목표로 합니다.
-지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있고, worker가 HIT를 푸는 화면은 아직 없습니다.
+지금은 **mock 단계**라서 익명화한 예시 데이터 위에서 모든 화면과 흐름을 직접 눌러 볼 수 있습니다. Requester와 Worker는 각자 계정으로 로그인하며, Requester가 게시한 batch의 HIT를 worker가 받아 풀고 제출하면 그 응답이 Requester의 검수 화면에 들어옵니다.
 
 콘솔은 mono-repo로 구성되어 있습니다. 주 화면은 `frontend/`(vanilla JavaScript)와 `backend/`(FastAPI)이고, 원본 데이터에서 annotation 템플릿과 HIT를 자동으로 만드는 파이프라인이 `agent/`에 있습니다. 화면과 REST 계약을 처음 설계할 때 만든 React 프로토타입은 `prototype/`에 남아 있습니다.
 
@@ -22,9 +22,18 @@ docker compose up -d --build frontend backend
 ```
 
 - `frontend`: 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api` 요청을 `backend`로 전달합니다.
-- `backend`: FastAPI 백엔드입니다 (http://localhost:8000/api/health). 처음 실행될 때 [data/](data/)의 시작 데이터로 SQLite DB를 채우고, agent 파이프라인을 job API로 노출합니다.
+- `backend`: FastAPI 백엔드입니다 (http://localhost:8000/api/health). 처음 실행될 때 [data/](data/)의 시작 데이터로 DB를 채우고, agent 파이프라인을 job API로 노출합니다.
+- `db`: PostgreSQL입니다. `backend`를 띄우면 함께 뜹니다.
 
-게시, 승인과 반려, pool 편집 같은 변경 사항은 Docker volume의 SQLite에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다).
+처음에는 계정이 없으므로 admin 계정을 명령으로 만든 뒤 로그인합니다. 비밀번호는 명령이 물어봅니다.
+
+```bash
+docker compose exec backend python -m app.users create-admin --email <이메일> --name "<이름>"
+```
+
+처음 만든 admin은 이미 있던 데이터(시작 데이터와 그동안 만든 Project, batch, pool)의 주인이 됩니다. 연구실의 다른 Requester는 admin이 `Users` 탭에서 만든 초대 코드로 가입하고, worker는 가입 화면에서 바로 가입합니다. 가입 방식은 설정으로 바꿀 수 있습니다([backend/README.md](backend/README.md#계정)).
+
+게시, 승인과 반려, pool 편집 같은 변경 사항과 자동 생성 job의 상태는 PostgreSQL(Docker volume `backend-pg`)에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다). 이전 버전에서 SQLite에 쌓은 데이터를 옮기는 방법은 [backend/README.md](backend/README.md#db)에 있습니다.
 
 원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
@@ -74,9 +83,17 @@ Docker 없이 실행하려면 Node 24 이상이 필요합니다 (Node에 내장�
 
 화면의 글자는 MTurk의 용어와 맞추기 위해 영어로 표시합니다. 이 문서에서 `이렇게 표시한 글자`는 화면에 보이는 그대로입니다.
 
+### 로그인과 계정
+
+- **`Sign in`, `Create an account`**: 로그인하지 않으면 로그인 화면이 열립니다. 가입할 때 계정 종류(`Worker` 또는 `Requester`)를 고르며, Requester는 초대 코드가 있어야 합니다. 로그인 ID는 이메일입니다.
+- **Requester**: 아래의 Create, Manage, Worker Pool을 씁니다. Project와 batch는 연구실의 Requester가 함께 보고, 누가 만들었는지는 기록됩니다.
+- **Admin**: Requester 화면에 `Users` 탭이 더 있습니다. 초대 코드를 만들고(코드는 만들 때 한 번만 보입니다), 계정을 정지하거나 다시 활성화합니다.
+- **Worker**: 아래의 [Worker 화면](#worker-화면-hit-받아-풀기)이 열립니다. Requester 화면에는 worker의 이메일과 이름 대신 Worker ID만 보입니다.
+
 ### 상단 바
 
 - **`MOCK` 배지**: 현재 환경을 나타냅니다. mock에서는 항상 `MOCK`입니다. `SANDBOX`(파랑)와 `PRODUCTION`(빨강)은 시험 환경과 실제 환경을 구분하기 위해 남겨 둔 값입니다.
+- **계정 메뉴**: 오른쪽 끝의 이름을 누르면 이메일과 `Sign out`이 보입니다.
 - **`Balance`**: 잔액입니다. batch를 게시하거나 응답을 추가로 모집하면 비용이 미리 차감되고, 응답을 반려하면 그만큼 돌아옵니다. 잔액이 부족하면 게시와 재모집을 할 수 없습니다.
 - 프로토타입 콘솔에는 오른쪽 위에 **`Mock tools`**(가짜 응답 만들기, 상태 내보내기와 불러오기, `Reset to fixtures`)가 더 있습니다.
 
@@ -102,7 +119,7 @@ starter 템플릿은 콘솔이 제공하는 `<ann-*>` 요소로 쓴 짧은 HTML�
 
 batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으로 나뉘어 있습니다.
 
-- **`Overview`**: 진행률, 응답 현황, 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
+- **`Overview`**: 진행률, 응답 현황(worker가 지금 풀고 있는 `In progress` 포함), 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
 - **`Review`**: 응답을 검수하는 화면입니다.
   - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 검수합니다. 검수 대기 응답마다 `Approve` / `Reject` 라디오가 있고, 기본 정렬(`Row`)에서는 같은 HIT의 응답이 하나로 묶여 HIT 칸의 `Approve all` / `Reject all`로 그 HIT의 worker 전원을 한 번에 정할 수 있습니다. 고른 결정은 페이지를 넘겨도 남으며, 표 위의 `Submit … decisions…`로 한 번에 제출합니다. `Reject attention-failed`는 attention check를 틀린 검수 대기 응답을 모두 `Reject`로 골라 둡니다.
   - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 batch를 게시할 때 `Review settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
@@ -111,7 +128,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
   - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
   - 반려한 응답은 30일 안에 승인으로 되돌릴 수 있습니다 (반려된 행의 `Revert…`).
 - **`HITs`**: HIT별로 승인, 반려, 검수 대기, 남은 자리 수와 완료 여부를 보여 줍니다. 미완료 HIT만 골라 볼 수 있고, 선택한 HIT의 응답을 추가로 모집할 수 있습니다. 처음에 응답 수를 10개 미만으로 만든 HIT는 합계를 9개보다 늘릴 수 없다는 MTurk의 제약도 반영되어 있어, 이를 넘는 요청은 이유와 함께 건너뜁니다.
-- **`Results`**: annotator 간 일치도(Fleiss' κ, Krippendorff's α)를 제출된 응답 전체와 승인된 응답만으로 나누어 보여 주고, 문항별 투표와 majority, 만장일치 비율, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
+- **`Results`**: annotator 간 일치도(Fleiss' κ, Krippendorff's α)를 승인된 응답, 아직 승인하지 않은 제출(검수 대기), 둘을 합친 것의 세 범위로 나누어 보여 주고(반려된 응답은 어디에도 넣지 않습니다), 문항별 투표와 majority, 만장일치 비율, 라벨 분포를 보여 줍니다. MTurk 결과 CSV 형식이나 라벨 JSON으로 내보낼 수 있습니다.
 
 결과 집계에는 승인된(Approved) 응답의 실제 문항만 들어가며, attention 문항은 제외합니다. κ와 만장일치 비율은 표 수가 목표(HIT당 응답 수)와 같은 문항만으로 계산합니다.
 화면에 나오는 숫자를 읽는 방법은 [콘솔의 값 읽기](docs/reading-the-console.md)에 시작 데이터의 실제 값으로 정리되어 있습니다.
@@ -121,11 +138,21 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 오른쪽 위의 버튼으로 `Workers`와 `Pools` 화면을 오갑니다.
 
 - **Worker 목록**: 모든 batch를 합산한 worker별 지표를 보여 줍니다. 제출, 승인, 반려 수와 반려율, attention 실패율, 작업 시간 중앙값, majority 일치율, 참여한 batch 수, 마지막 활동일을 볼 수 있습니다. 정렬, 검색, 필터를 지원하고, 여러 명을 선택해 pool에 넣거나 뺄 수 있습니다.
-- **차단(`Block…`)**: 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다. MTurk에서 차단이 worker 계정에 불이익을 주던 것을 따라, 차단을 마지막 수단으로 두는 설계입니다.
+- **차단(`Block…`)**: 차단 창의 기본 선택지는 "Excluded pool에 추가"이며, 그래도 차단하려면 사유를 입력해야 합니다. MTurk에서 차단이 worker 계정에 불이익을 주던 것을 따라, 차단을 마지막 수단으로 두는 설계입니다. 차단과 메모는 MTurk처럼 Requester마다 따로이며, 다른 Requester가 차단했는지는 보이지 않습니다.
 - **Pools**: pool을 만들고 구성원을 확인하거나 뺄 수 있습니다. `Fill by criteria…`는 조건(최소 승인 수, 최대 attention 실패율, 최소 일치율 등)을 입력하면 **해당하는 worker가 몇 명인지 먼저 보여 주고**, 확인한 뒤에 추가합니다.
 - **Worker 상세**: 지표 요약, batch별 참여 이력, 메모를 볼 수 있습니다. batch 이름을 누르면 그 worker의 응답만 걸러진 Review 화면으로 이동합니다.
 
 pool은 Project의 `Enter Properties`(Worker requirements)에서 "이 pool의 worker만 참여" 또는 "이 pool의 worker는 제외"로 지정합니다. MTurk의 custom Qualification과 같은 역할입니다.
+
+### Worker 화면: HIT 받아 풀기
+
+worker 계정으로 로그인하면 MTurk의 worker 사이트처럼 HIT를 고르고 풉니다.
+
+- **`HITs`**: 받을 수 있는 HIT가 남은 batch 목록입니다. 제목, Requester, 보상, 제한 시간, 남은 HIT 수를 보고 `Accept & Work`로 HIT 하나를 받습니다. 이미 풀고 있는 HIT가 있으면 `Continue`로 이어서 합니다.
+- **작업 화면**: Requester가 만든 템플릿이 그대로 열리고, 위쪽에 보상과 남은 시간, `Return HIT`(반납)가 있습니다. 템플릿의 `Submit`을 누르면 제출되고, 기본으로 같은 batch의 다음 HIT가 이어서 열립니다. 제한 시간이 지나면 제출할 수 없고 그 HIT는 다시 다른 worker에게 열립니다.
+- **`Your HITs`**: 제출한 HIT의 상태(검수 대기, 승인, 반려)와 받을 금액, 반려 사유를 봅니다.
+- 같은 HIT는 한 번만 풀 수 있고, HIT마다 정한 인원(`MaxAssignments`)이 차면 더 받을 수 없습니다. Requester가 차단한 worker와 pool 조건에 맞지 않는 worker에게는 그 batch가 보이지 않습니다.
+- 작업 화면에는 템플릿이 쓰는 입력 컬럼만 보냅니다. 정답이 든 컬럼(attention 기대 답 컬럼, 대조 기준 컬럼)은 페이지 소스에도 남지 않으며, Requester는 게시할 때 `Confirm and publish`의 `Workers receive`에서 어떤 컬럼이 가는지 확인합니다.
 
 ## 예시 파일로 mock 테스팅 해보기
 
@@ -233,8 +260,8 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 브라우저 ──▶ frontend (nginx) ── frontend/src 를 그대로 서빙, /elements/(<ann-*> 요소, starter), /example/(예시 파일)
                │ /api
                ▼
-            backend (FastAPI) ──▶ SQLite (Docker volume backend-db), 처음 한 번 data/ 로 채움
-               └─▶ agent/ (import) ──▶ output/jobs/<job id>/  (자동 생성 job 의 입력과 결과)
+            backend (FastAPI) ──▶ db (PostgreSQL, Docker volume backend-pg), 처음 한 번 data/ 로 채움
+               └─▶ agent/ (import) ──▶ output/jobs/<job id>/  (자동 생성 job 의 입력과 결과. 상태는 db 에)
 ```
 
 REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, backend(`backend/app/routes.py`)와 frontend(`frontend/src/api-client/routes.js`)가 같은 표를 따릅니다. 테스트가 세 표가 어긋나지 않는지 확인합니다.
@@ -294,7 +321,9 @@ production 콘솔에서 전체 흐름을 한 번 따라가 보는 순서입니�
    이렇게 만든 pool은 Project의 `Enter Properties`에서 참여 또는 제외로 지정합니다.
 8. **API 확인**: 터미널에서 `curl localhost:8000/api/batches`로 방금 게시한 batch가 REST 응답에 있는 것을 확인할 수 있습니다.
 
-worker가 HIT를 푸는 화면은 아직 없어서 production 콘솔에서 새로 게시한 batch에는 응답이 들어오지 않습니다. 검수 흐름은 시작 데이터의 batch로 보거나, 프로토타입 콘솔의 **Mock tools → Generate fake submissions…**로 가짜 응답을 만들어 확인합니다.
+9. **Worker로 풀어 보기**: 다른 브라우저(또는 시크릿 창)에서 `Create an account`로 worker 계정을 만들고, 6번에서 게시한 batch를 `HITs`에서 받아 풀어 제출합니다. Requester 창의 그 batch `Review` 탭에 응답이 들어오고, 승인하면 worker의 `Your HITs`에 승인과 금액이 보입니다.
+
+시작 데이터의 batch 세 개는 모두 만료되어 worker의 `HITs` 목록에는 보이지 않습니다.
 
 ## 폴더 구조
 
@@ -331,7 +360,7 @@ example/            Create에 올려 볼 예시 템플릿과 CSV
 docs/               Create의 사용 방법(production, 프로토타입), <ann-*> 요소, 화면에 나오는 값을 읽는 방법, prompt 실험
 environment/        agent의 모델 설정(models/)과, OpenRouter 키를 두는 .env (.env 는 저장소에 들어가지 않습니다)
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
-docker-compose.yml  frontend, backend, agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
+docker-compose.yml  frontend, backend, db(PostgreSQL), agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
 .github/workflows/  main 으로의 push 와 pull request 마다 테스트를 돌리는 GitHub Actions (test.yml)
 
 저장소에 들어가지 않는 폴더 (.gitignore)

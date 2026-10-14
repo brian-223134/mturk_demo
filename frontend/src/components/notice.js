@@ -18,6 +18,8 @@ const ERROR_TITLES = {
   NETWORK: ['error', 'Cannot reach the API server'],
   NOT_FOUND: ['warning', 'Not found'],
   INVALID_REQUEST: ['error', 'Invalid request'],
+  UNAUTHORIZED: ['warning', 'Sign in required'],
+  FORBIDDEN: ['warning', 'Not allowed for this account'],
   UNKNOWN: ['error', 'Request failed'],
 };
 
