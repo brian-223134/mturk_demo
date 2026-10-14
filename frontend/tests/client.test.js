@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it } from 'node:test';
 
-import { AUTH_REQUIRED_EVENT, ApiError, BASE_URL, admin, agent, api, auth, call, createJob, createJobGroup, fileUrl, isApiError } from '../src/api-client/client.js';
+import { AUTH_REQUIRED_EVENT, ApiError, BASE_URL, admin, agent, api, auth, call, createJob, createJobGroup, fileUrl, isApiError, worker } from '../src/api-client/client.js';
 import { API_ROUTES } from '../src/api-client/routes.js';
 
 let originalFetch;
@@ -285,5 +285,30 @@ describe('계정 API 와 세션이 끝났을 때', () => {
         ['DELETE', '/api/admin/invitations/inv-1', undefined],
       ],
     );
+  });
+
+  it('worker 는 /api/worker/… 로 보내고, 401 이면 auth:required 이벤트를 보낸다', async () => {
+    const calls = stubFetch(() => json(200, {}));
+    await worker.listHitGroups();
+    await worker.acceptHit('batch 1');
+    await worker.submitAssignment('A1', [{ name: 'q', value: 'x' }]);
+    await worker.returnAssignment('A1');
+    assert.deepEqual(
+      calls.map((c) => [c.init.method, c.url, c.init.body && JSON.parse(c.init.body)]),
+      [
+        ['GET', '/api/worker/hit-groups', undefined],
+        ['POST', '/api/worker/hit-groups/batch%201/accept', {}],
+        ['POST', '/api/worker/assignments/A1/submit', { answers: [{ name: 'q', value: 'x' }] }],
+        ['POST', '/api/worker/assignments/A1/return', {}],
+      ],
+    );
+    const { events, restore } = stubEvents();
+    try {
+      stubFetch(unauthorized);
+      await rejection(worker.listMyAssignments());
+      assert.deepEqual(events, [AUTH_REQUIRED_EVENT]);
+    } finally {
+      restore();
+    }
   });
 });

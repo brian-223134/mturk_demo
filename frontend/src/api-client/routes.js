@@ -73,6 +73,16 @@ export const ACCOUNT_ROUTES = {
   deleteInvitation: { method: 'DELETE', path: '/admin/invitations/:id', args: ['id'] },
 };
 
+/** worker 의 작업 API. backend 에만 있고 worker 계정만 부른다 (backend/app/routes.py 의 WORKER_ROUTES 와 같다). */
+export const WORKER_ROUTES = {
+  listHitGroups: { method: 'GET', path: '/worker/hit-groups', args: [] },
+  acceptHit: { method: 'POST', path: '/worker/hit-groups/:batchId/accept', args: ['batchId'] },
+  listMyAssignments: { method: 'GET', path: '/worker/assignments', args: [] },
+  getMyAssignment: { method: 'GET', path: '/worker/assignments/:id', args: ['id'] },
+  submitAssignment: { method: 'POST', path: '/worker/assignments/:id/submit', args: ['id', 'answers'] },
+  returnAssignment: { method: 'POST', path: '/worker/assignments/:id/return', args: ['id'] },
+};
+
 const PARAM = /:([A-Za-z]+)/g;
 
 export function pathParamNames(path) {

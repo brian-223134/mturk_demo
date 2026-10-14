@@ -873,6 +873,62 @@ p.muted {
   gap: 8px;
 }
 
+/* worker 화면: HIT 목록, 작업 화면, Your HITs */
+.worker-id-inline {
+  font-size: 13px;
+}
+.hit-title {
+  font-weight: 600;
+}
+.task-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px 24px;
+}
+.task-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.task-head p {
+  margin: 0;
+}
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+.task-clock {
+  font-size: 16px;
+}
+.task-message:not(:empty) {
+  margin-bottom: 12px;
+}
+.task-frame .preview-frame {
+  width: 100%;
+  background: #fff;
+}
+.worker-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.worker-summary .stat {
+  min-width: 160px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.worker-summary .stat + .stat {
+  margin: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+
 @media (max-width: 720px) {
   .content {
     padding: 16px;

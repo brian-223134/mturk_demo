@@ -134,6 +134,7 @@ export function renderOverview(panel, ctx) {
         { key: 'approved', label: 'Approved', value: progress.approved, color: STATUS_COLORS.good },
         { key: 'submitted', label: 'Submitted', value: progress.submitted, color: STATUS_COLORS.warning },
         { key: 'rejected', label: 'Rejected', value: progress.rejected, color: STATUS_COLORS.critical },
+        { key: 'in-progress', label: 'In progress', value: progress.inProgress ?? 0, color: '#2a78d6' },
         { key: 'open', label: 'Open', value: progress.open, color: STATUS_COLORS.neutral },
       ]),
     ),

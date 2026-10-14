@@ -19,7 +19,10 @@ const TABS = [
   { key: 'workers', label: 'Worker Pool', href: '/workers' },
 ];
 const ADMIN_TABS = [{ key: 'users', label: 'Users', href: '/admin/users' }];
-const WORKER_TABS = [{ key: 'worker-home', label: 'HITs', href: '/worker' }];
+const WORKER_TABS = [
+  { key: 'worker-home', label: 'HITs', href: '/worker' },
+  { key: 'worker-history', label: 'Your HITs', href: '/worker/history' },
+];
 
 async function signOut() {
   try {

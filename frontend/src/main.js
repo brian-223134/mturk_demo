@@ -1,6 +1,6 @@
 // 시작점: 로그인 상태(GET /api/auth/me)를 보고 역할에 맞는 레이아웃과 경로를 등록한다.
 //   로그인 안 함  /login, /signup. 다른 경로는 /login?next=… 로 보낸다
-//   worker       /worker. 다른 경로는 /worker 로 보낸다
+//   worker       /worker(HITs), /worker/assignments/:assignmentId(작업 화면), /worker/history(Your HITs). 다른 경로는 /worker 로
 //   requester    콘솔 (Create, Manage, Worker Pool). admin 은 Users(/admin/users)도
 // 계정 API 가 없는 서버(prototype 의 mock API, API_UPSTREAM)에 붙었으면 예전처럼 로그인 없이 콘솔을 그린다.
 // 콘솔이나 agent API 가 401 을 돌려주면(세션이 끝남) 페이지를 새로 불러 로그인 화면으로 보낸다.
@@ -50,7 +50,9 @@ function startPublic() {
 function startWorker(session) {
   const layout = createWorkerLayout(root, session);
   configure({ container: layout.content, onNavigate: layout.setActive, onNotFound: () => navigate('/worker', { replace: true }) });
-  route('/worker', withSession(session, workerPages.renderHome), { tab: 'worker-home' });
+  route('/worker', withSession(session, workerPages.renderHits), { tab: 'worker-home' });
+  route('/worker/history', withSession(session, workerPages.renderHistory), { tab: 'worker-history' });
+  route('/worker/assignments/:assignmentId', withSession(session, workerPages.renderTask), { tab: 'worker-home' });
 }
 
 function startConsole(session) {
