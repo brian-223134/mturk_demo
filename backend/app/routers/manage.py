@@ -7,6 +7,7 @@ prototype/src/api/mock/handlers.ts 의 listHits … exportBatch 와 같은 검�
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from typing import Callable
 
@@ -22,7 +23,8 @@ from app.domain.progress import AssignmentCounts, count_by_status, hit_progress,
 from app.domain.reference import agreement_with_reference, majority_reference, map_reference_to_answers, parse_reference_cell
 from app.errors import invalid, not_found
 from app.routers.common import (adjust_balance, after_seconds, answer_kinds_by_hit, body_field, db_of, ensure_balance, find_batch,
-                                hit_unit_cost, iso, list_query_of, no_content, now, read_body, string_array, sync_hit)
+                                hit_unit_cost, iso, list_query_of, no_content, now, read_body, resync_hits, string_array,
+                                sync_hit)
 
 REJECTION_OVERRIDE_DAYS = 30   # MTurk: 반려 번복은 30일 이내
 INPUT_PREVIEW_CHARS = 200
@@ -31,7 +33,7 @@ INPUT_PREVIEW_CHARS = 200
 def _progress_json(max_assignments: int, counts: AssignmentCounts, target: int) -> dict:
     progress = hit_progress(max_assignments, counts, target)
     return {"submitted": progress.submitted, "approved": progress.approved, "rejected": progress.rejected,
-            "open": progress.open, "completed": progress.completed, "shortfall": progress.shortfall}
+            "open": progress.open, "completed": progress.completed, "shortfall": progress.shortfall, "inProgress": progress.in_progress}
 
 
 def _find_assignments(store: Store, ids: object) -> list[dict]:
@@ -46,15 +48,6 @@ def _find_assignments(store: Store, ids: object) -> list[dict]:
             raise not_found("Assignment", id)
         targets.append(found[id])
     return targets
-
-
-def _resync_hits(store: Store, hit_ids: list[str], at) -> None:
-    by_hit = store.assignments_of_hits(hit_ids)
-    for hit_id in dict.fromkeys(hit_ids):
-        hit = store.get_hit(hit_id)
-        if hit is not None:
-            sync_hit(hit, by_hit.get(hit_id, []), at)
-            store.update_hit(hit)
 
 
 APPROVED_STATUSES = ("Approved",)
@@ -237,7 +230,7 @@ async def approve_assignments(request: Request) -> list[dict]:
         for assignment in {a["AssignmentId"]: a for a in targets}.values():
             store.update_assignment(assignment)
         adjust_balance(store, -reapproval_cents)
-        _resync_hits(store, [a["HITId"] for a in targets], at)
+        resync_hits(store, [a["HITId"] for a in targets], at)
         return targets
 
 
@@ -267,7 +260,7 @@ async def reject_assignments(request: Request) -> list[dict]:
         for assignment in {a["AssignmentId"]: a for a in targets}.values():
             store.update_assignment(assignment)
         adjust_balance(store, refund_cents)
-        _resync_hits(store, [a["HITId"] for a in targets], at)
+        resync_hits(store, [a["HITId"] for a in targets], at)
         return targets
 
 
@@ -289,6 +282,7 @@ async def add_assignments(request: Request) -> dict:
         hits: dict[str, dict] = {}
         batches: dict[str, dict] = {}
         by_hit = store.assignments_of_hits(hit_ids)
+        in_progress = store.in_progress_of_hits(hit_ids)
         plans = []
         for hit_id in hit_ids:
             hit = hits.get(hit_id) or store.get_hit(hit_id)
@@ -296,8 +290,9 @@ async def add_assignments(request: Request) -> dict:
                 raise not_found("HIT", hit_id)
             hits[hit_id] = hit
             batch = batches.get(hit["batchId"]) or batches.setdefault(hit["batchId"], find_batch(store, hit["batchId"]))
-            progress = hit_progress(hit["MaxAssignments"], count_by_status(a.get("AssignmentStatus", "") for a in by_hit.get(hit_id, [])),
-                                    batch["settings"]["MaxAssignments"])
+            counts = replace(count_by_status(a.get("AssignmentStatus", "") for a in by_hit.get(hit_id, [])),
+                             in_progress=in_progress.get(hit_id, 0))
+            progress = hit_progress(hit["MaxAssignments"], counts, batch["settings"]["MaxAssignments"])
             plan = plan_top_up(hit["MaxAssignments"], hit["initialMaxAssignments"], progress.shortfall, mode)
             # 부족분은 없지만 만료되어 막힌 HIT: 남은 자리가 worker 에게 보이지 않아 영영 완료되지 않는다. 게시 기간만 연장한다.
             reopen_only = (mode == "fill-to-target" and plan.add == 0 and is_expired(hit["Expiration"], at)
@@ -315,7 +310,7 @@ async def add_assignments(request: Request) -> dict:
             expiration_extended = is_expired(hit["Expiration"], at)
             if expiration_extended:
                 hit["Expiration"] = iso(after_seconds(at, batch["settings"]["LifetimeInSeconds"]))
-            sync_hit(hit, by_hit.get(hit["HITId"], []), at)
+            sync_hit(hit, by_hit.get(hit["HITId"], []), at, in_progress.get(hit["HITId"], 0))
             store.update_hit(hit)
             result["added"].append({"HITId": hit["HITId"], "count": plan.add, "expirationExtended": expiration_extended})
         return result
@@ -331,10 +326,11 @@ async def expire_batch(request: Request, id: str) -> Response:
         at = now()
         hits = store.hit_docs_of_batch(id)
         by_hit = store.assignments_of_hits([hit["HITId"] for hit in hits])
+        in_progress = store.in_progress_of_hits([hit["HITId"] for hit in hits])
         for hit in hits:
             if not is_expired(hit["Expiration"], at):
                 hit["Expiration"] = iso(at)
-            sync_hit(hit, by_hit.get(hit["HITId"], []), at)
+            sync_hit(hit, by_hit.get(hit["HITId"], []), at, in_progress.get(hit["HITId"], 0))
             store.update_hit(hit)
     return no_content()
 

@@ -53,7 +53,11 @@ CONNECT_TIMEOUT = 30   # 초. 처음 켤 때 DB 를 기다리는 시간
 
 # seed 가 채우는 테이블. reseed 는 이것만 비운다 (agent_jobs 와 계정은 seed 데이터가 아니다)
 SEED_TABLES = ("templates", "batches", "hits", "assignments", "pools", "workers", "account", "meta")
-COUNTED_TABLES = ("templates", "batches", "hits", "assignments", "pools")
+COUNTED_TABLES = ("templates", "batches", "hits", "assignments", "pools")   # assignments 는 REVIEWABLE 만 센다
+# Requester 화면이 보는 assignment (검수할 수 있는 상태). worker 가 푸는 중(Accepted)이거나 내려놓은(Returned, Abandoned) 것은 뺀다
+REVIEWABLE = "status IN ('Submitted', 'Approved', 'Rejected')"
+# worker 가 제한 시간 안에 푸는 중인 assignment. 시간이 지난 Accepted 는 자리를 차지하지 않는다 (나중에 Abandoned 로 바꾼다)
+ACTIVE = "status = 'Accepted' AND deadline > now()"
 WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_", "use_", "touch_", "record_", "claim_")
 
 
@@ -177,61 +181,126 @@ class Store:
 
     # ---- assignments ------------------------------------------------------------------------
 
+    # Requester 화면이 읽는 메서드는 검수할 수 있는 상태(REVIEWABLE)만 돌려준다. worker 쪽은 아래 "worker 의 작업" 에 있다.
+
     def assignment_counts_of_batch(self, batch_id: str) -> dict[str, AssignmentCounts]:
-        """HIT id → 상태별 assignment 수. Submitted, Approved 가 아닌 상태는 모두 rejected 로 센다."""
+        """HIT id → 상태별 assignment 수. Submitted, Approved 가 아닌 검수 상태는 rejected 로, 제한 시간 안의 Accepted 는
+        in_progress 로 센다. Returned, Abandoned 와 시간이 지난 Accepted 는 세지 않는다."""
         rows = self._rows(
-            "SELECT a.hit_id AS hit_id, a.status AS status, COUNT(*) AS n FROM assignments a "
-            "JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = %s GROUP BY a.hit_id, a.status", (batch_id,))
+            "SELECT a.hit_id AS hit_id, CASE WHEN a.status = 'Accepted' THEN 'InProgress' ELSE a.status END AS status, COUNT(*) AS n "
+            f"FROM assignments a JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = %s AND (a.{REVIEWABLE} OR (a.{ACTIVE})) "
+            "GROUP BY 1, 2", (batch_id,))
         counts: dict[str, dict[str, int]] = {}
         for row in rows:
-            bucket = counts.setdefault(row["hit_id"], {"submitted": 0, "approved": 0, "rejected": 0})
-            key = {"Submitted": "submitted", "Approved": "approved"}.get(row["status"], "rejected")
+            bucket = counts.setdefault(row["hit_id"], {"submitted": 0, "approved": 0, "rejected": 0, "in_progress": 0})
+            key = {"Submitted": "submitted", "Approved": "approved", "InProgress": "in_progress"}.get(row["status"], "rejected")
             bucket[key] += row["n"]
         return {hit_id: AssignmentCounts(**bucket) for hit_id, bucket in counts.items()}
 
+    def in_progress_of_hits(self, hit_ids: Iterable[str]) -> dict[str, int]:
+        """HIT id → worker 가 제한 시간 안에 푸는 중인 assignment 수 (없으면 키가 없다)."""
+        rows = self._rows(f"SELECT hit_id, COUNT(*) AS n FROM assignments WHERE hit_id = ANY(%s) AND {ACTIVE} GROUP BY hit_id",
+                          (list(set(hit_ids)),))
+        return {row["hit_id"]: row["n"] for row in rows}
+
     def assignments_of_batch(self, batch_id: str) -> list[dict]:
         """batch 의 assignment 전부 (저장 순서)."""
-        return self._docs("SELECT a.doc AS doc FROM assignments a JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = %s "
+        return self._docs(f"SELECT a.doc AS doc FROM assignments a JOIN hits h ON h.id = a.hit_id WHERE h.batch_id = %s AND a.{REVIEWABLE} "
                           "ORDER BY a.seq", (batch_id,))
 
     def assignments_of_hits(self, hit_ids: Iterable[str]) -> dict[str, list[dict]]:
         """HIT id → 그 HIT 의 assignment 목록 (저장 순서). assignment 가 없는 HIT 는 키가 없다."""
         grouped: dict[str, list[dict]] = {}
-        for row in self._rows("SELECT hit_id, doc FROM assignments WHERE hit_id = ANY(%s) ORDER BY seq", (list(set(hit_ids)),)):
+        for row in self._rows(f"SELECT hit_id, doc FROM assignments WHERE hit_id = ANY(%s) AND {REVIEWABLE} ORDER BY seq",
+                              (list(set(hit_ids)),)):
             grouped.setdefault(row["hit_id"], []).append(row["doc"])
         return grouped
 
     def get_assignments(self, ids: Iterable[str]) -> dict[str, dict]:
         """id → 문서 (요청한 순서). 없는 id 는 빠진다."""
         wanted = list(dict.fromkeys(ids))
-        found = {row["id"]: row["doc"] for row in self._rows("SELECT id, doc FROM assignments WHERE id = ANY(%s)", (wanted,))}
+        found = {row["id"]: row["doc"] for row in self._rows(f"SELECT id, doc FROM assignments WHERE id = ANY(%s) AND {REVIEWABLE}",
+                                                              (wanted,))}
         return {id: found[id] for id in wanted if id in found}
 
     def assignments_of_worker(self, worker_id: str) -> list[tuple[dict, str, int]]:
         """(assignment, batchId, rowIndex) 목록 (저장 순서)."""
         rows = self._rows(
             "SELECT a.doc AS doc, h.batch_id AS batch_id, h.row_index AS row_index FROM assignments a "
-            "JOIN hits h ON h.id = a.hit_id WHERE a.worker_id = %s ORDER BY a.seq", (worker_id,))
+            f"JOIN hits h ON h.id = a.hit_id WHERE a.worker_id = %s AND a.{REVIEWABLE} ORDER BY a.seq", (worker_id,))
         return [(row["doc"], row["batch_id"], row["row_index"]) for row in rows]
 
     def assignment_records(self) -> list[tuple[dict, str, int]]:
         """모든 assignment 를 (assignment, batchId, rowIndex) 로 (저장 순서). worker 지표 계산용."""
         rows = self._rows(
             "SELECT a.doc AS doc, h.batch_id AS batch_id, h.row_index AS row_index FROM assignments a "
-            "JOIN hits h ON h.id = a.hit_id ORDER BY a.seq")
+            f"JOIN hits h ON h.id = a.hit_id WHERE a.{REVIEWABLE} ORDER BY a.seq")
         return [(row["doc"], row["batch_id"], row["row_index"]) for row in rows]
 
     def worker_ids_with_assignments(self) -> list[str]:
         """응답을 낸 worker (처음 나온 순서)."""
         seen: dict[str, None] = {}
-        for row in self._rows("SELECT worker_id FROM assignments ORDER BY seq"):
+        for row in self._rows(f"SELECT worker_id FROM assignments WHERE {REVIEWABLE} ORDER BY seq"):
             seen.setdefault(row["worker_id"], None)
         return list(seen)
 
     def update_assignment(self, assignment: dict) -> None:
-        self.connection.execute("UPDATE assignments SET status = %s, submit_time = %s, doc = %s WHERE id = %s",
-                                (assignment["AssignmentStatus"], assignment["SubmitTime"], as_json(assignment),
-                                 assignment["AssignmentId"]))
+        self.connection.execute("UPDATE assignments SET status = %s, submit_time = %s, deadline = %s, doc = %s WHERE id = %s",
+                                (assignment["AssignmentStatus"], assignment.get("SubmitTime"), assignment.get("Deadline"),
+                                 as_json(assignment), assignment["AssignmentId"]))
+
+    # ---- worker 의 작업 (app/domain/tasks.py, routers/worker.py). 모든 상태를 본다 ------------------------
+
+    def insert_assignment(self, assignment: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO assignments (id, hit_id, worker_id, status, submit_time, deadline, doc) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (assignment["AssignmentId"], assignment["HITId"], assignment["WorkerId"], assignment["AssignmentStatus"],
+             assignment.get("SubmitTime"), assignment.get("Deadline"), as_json(assignment)))
+
+    def any_assignment(self, id: str) -> dict | None:
+        """상태와 상관없이 assignment 하나."""
+        return self._doc("SELECT doc FROM assignments WHERE id = %s", (id,))
+
+    def assignment_for(self, hit_id: str, worker_id: str) -> dict | None:
+        """이 worker 의 이 HIT assignment (상태와 상관없이). 같은 worker 는 HIT 하나에 하나다."""
+        return self._doc("SELECT doc FROM assignments WHERE hit_id = %s AND worker_id = %s", (hit_id, worker_id))
+
+    def worker_task_rows(self, worker_id: str) -> list[dict]:
+        """worker 의 assignment 전부와 그 HIT 의 batch (받은 순서의 역순). 키: doc, batch_id, row_index."""
+        return self._rows(
+            "SELECT a.doc AS doc, h.batch_id AS batch_id, h.row_index AS row_index FROM assignments a "
+            "JOIN hits h ON h.id = a.hit_id WHERE a.worker_id = %s ORDER BY a.seq DESC", (worker_id,))
+
+    def hit_slots(self, worker_id: str, batch_id: str | None = None) -> list[dict]:
+        """HIT 마다 자리 사용과 이 worker 의 몫 (저장 순서). 키: id, batch_id, row_index, max_assignments, expiration,
+        used(검수 상태 + 푸는 중), mine(이 worker 가 이미 받았거나 냈는지)."""
+        where = "WHERE h.batch_id = %(batch)s" if batch_id is not None else ""
+        return self._rows(
+            "SELECT h.id, h.batch_id, h.row_index, h.max_assignments, h.expiration, "
+            f"COUNT(a.id) FILTER (WHERE a.{REVIEWABLE} OR (a.{ACTIVE})) AS used, "
+            f"COALESCE(BOOL_OR(a.worker_id = %(worker)s AND (a.{REVIEWABLE} OR (a.{ACTIVE}))), false) AS mine "
+            f"FROM hits h LEFT JOIN assignments a ON a.hit_id = h.id {where} GROUP BY h.id ORDER BY h.seq",
+            {"worker": worker_id, "batch": batch_id})
+
+    def stale_accepted(self) -> list[dict]:
+        """제한 시간이 지난 Accepted (Abandoned 로 바꿀 것)."""
+        return self._docs("SELECT doc FROM assignments WHERE status = 'Accepted' AND deadline <= now() ORDER BY seq")
+
+    def blocked_by(self, requester_id: str, worker_id: str) -> bool:
+        row = self.connection.execute("SELECT blocked FROM requester_workers WHERE requester_id = %s AND worker_id = %s",
+                                      (requester_id, worker_id)).fetchone()
+        return bool(row and row["blocked"])
+
+    def owners_of_batches(self) -> dict[str, str | None]:
+        return {row["id"]: row["owner_id"] for row in self._rows("SELECT id, owner_id FROM batches")}
+
+    def blockers_of(self, worker_id: str) -> set[str]:
+        """이 worker 를 차단한 Requester 의 id."""
+        return {row["requester_id"] for row in self._rows(
+            "SELECT requester_id FROM requester_workers WHERE worker_id = %s AND blocked", (worker_id,))}
+
+    def display_names(self) -> dict[str, str]:
+        return {row["id"]: row["display_name"] for row in self._rows("SELECT id, display_name FROM users")}
 
     # ---- pools ------------------------------------------------------------------------------
 
@@ -284,8 +353,10 @@ class Store:
 
     def counts(self) -> dict[str, int]:
         """health 에 보이는 규모. workers 는 응답을 낸 worker, pool 에 든 worker, 메모가 붙은 worker 의 합집합이다."""
-        result = {table: self.connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"] for table in COUNTED_TABLES}
-        worker_ids = {row["worker_id"] for row in self._rows("SELECT DISTINCT worker_id FROM assignments")}
+        result = {table: self.connection.execute(f"SELECT COUNT(*) AS n FROM {table}"
+                                                 + (f" WHERE {REVIEWABLE}" if table == "assignments" else "")).fetchone()["n"]
+                  for table in COUNTED_TABLES}
+        worker_ids = {row["worker_id"] for row in self._rows(f"SELECT DISTINCT worker_id FROM assignments WHERE {REVIEWABLE}")}
         worker_ids.update(row["id"] for row in self._rows("SELECT id FROM workers"))
         worker_ids.update(row["worker_id"] for row in self._rows("SELECT worker_id FROM requester_workers"))
         for pool in self._docs("SELECT doc FROM pools"):

@@ -23,21 +23,21 @@ EXPECTED_BATCHES = {
         "status": "completed",
         "needsReview": False,
         "progress": {"hitsTotal": 16, "hitsCompleted": 16, "submitted": 0, "approved": 48, "rejected": 0, "open": 0,
-                     "rejectRate": 0},
+                     "rejectRate": 0, "inProgress": 0},
         "cost": {"spentCents": 576, "estimatedCents": 576},       # 48 × 12
     },
     "batch-1000002": {
         "status": "completed",
         "needsReview": False,
         "progress": {"hitsTotal": 16, "hitsCompleted": 16, "submitted": 0, "approved": 48, "rejected": 3, "open": 0,
-                     "rejectRate": 3 / 51},
+                     "rejectRate": 3 / 51, "inProgress": 0},
         "cost": {"spentCents": 288, "estimatedCents": 288},       # 48 × 6
     },
     "batch-1000001": {
         "status": "expired",
         "needsReview": True,
         "progress": {"hitsTotal": 40, "hitsCompleted": 36, "submitted": 6, "approved": 108, "rejected": 18, "open": 6,
-                     "rejectRate": 18 / 126},
+                     "rejectRate": 18 / 126, "inProgress": 0},
         "cost": {"spentCents": 648, "estimatedCents": 720},       # 108 × 6, (108 + 6 + 6) × 6
     },
 }

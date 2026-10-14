@@ -77,6 +77,16 @@ ACCOUNT_ROUTES: dict[str, RouteDef] = {
     "deleteInvitation": RouteDef("DELETE", "/admin/invitations/:id", ("id",)),
 }
 
+# worker 의 작업 API. backend 에만 있고 worker 계정만 부른다. frontend/src/api-client/routes.js 의 WORKER_ROUTES 와 같다.
+WORKER_ROUTES: dict[str, RouteDef] = {
+    "listHitGroups": RouteDef("GET", "/worker/hit-groups", ()),
+    "acceptHit": RouteDef("POST", "/worker/hit-groups/:batchId/accept", ("batchId",)),
+    "listMyAssignments": RouteDef("GET", "/worker/assignments", ()),
+    "getMyAssignment": RouteDef("GET", "/worker/assignments/:id", ("id",)),
+    "submitAssignment": RouteDef("POST", "/worker/assignments/:id/submit", ("id", "answers")),
+    "returnAssignment": RouteDef("POST", "/worker/assignments/:id/return", ("id",)),
+}
+
 
 def path_param_names(path: str) -> list[str]:
     return PARAM_RE.findall(path)

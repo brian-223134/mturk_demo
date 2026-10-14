@@ -4,7 +4,8 @@
                                                        └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/ (상태는 DB 의 agent_jobs)
 
 create_app() 이 설정을 읽고 라우터와 오류 봉투, 요청 로그를 붙인다. DB 초기화와 job worker 는 lifespan 에서 시작한다.
-콘솔 REST 와 agent job API 는 admin, requester 계정만 부른다 (app/auth.py). health 와 /api/auth/* 는 로그인 전에도 부른다.
+콘솔 REST 와 agent job API 는 admin, requester 계정만, /api/worker/* 는 worker 계정만 부른다 (app/auth.py).
+health 와 /api/auth/* 는 로그인 전에도 부른다.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from app.db import Database
 from app.errors import install_error_handlers
 from app.routers.accounts import build_account_router
 from app.routers.agent_jobs import router as agent_router
+from app.routers.worker import build_worker_router
 from app.routers.console import build_console_router
 from app.routes import API_PREFIX
 from app.settings import Settings
@@ -115,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_console_router(console_only), prefix=API_PREFIX)
     app.include_router(agent_router, prefix=API_PREFIX, dependencies=console_only)
     app.include_router(build_account_router(), prefix=API_PREFIX)
+    app.include_router(build_worker_router(), prefix=API_PREFIX)
     return app
 
 

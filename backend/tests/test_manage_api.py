@@ -30,7 +30,7 @@ def test_list_hits_items_and_queries(client: TestClient) -> None:
     first = client.get(f"/api/batches/{F1}/hits", params=list_query()).json()
     assert first["total"] == 40 and len(first["items"]) == 25
     item = first["items"][0]
-    assert "input" not in item and set(item["progress"]) == {"submitted", "approved", "rejected", "open", "completed", "shortfall"}
+    assert "input" not in item and set(item["progress"]) == {"submitted", "approved", "rejected", "open", "completed", "shortfall", "inProgress"}
     assert len(item["inputPreview"]["retrieved_chunk"]) <= 201 and item["inputPreview"]["retrieved_chunk"].endswith("…")
     full = client.get(f"/api/hits/{item['HITId']}").json()
     assert len(full["input"]["retrieved_chunk"]) > 1000
@@ -46,7 +46,7 @@ def test_list_hits_items_and_queries(client: TestClient) -> None:
     # F1 의 0번 행: MaxAssignments 6, 반려 3, 검수 대기 2, 열린 자리 1. 검수 대기가 목표를 채울 수도 있어 아직 부족분은 없다
     row0 = client.get(f"/api/batches/{F1}/hits", params=list_query(page_size=1, sort="rowIndex:asc")).json()["items"][0]
     assert row0["MaxAssignments"] == 6 and row0["expired"] is True
-    assert row0["progress"] == {"submitted": 2, "approved": 0, "rejected": 3, "open": 1, "completed": False, "shortfall": 0}
+    assert row0["progress"] == {"submitted": 2, "approved": 0, "rejected": 3, "open": 1, "completed": False, "shortfall": 0, "inProgress": 0}
 
     stuck = client.get(f"/api/batches/{F1}/hits", params=list_query(page_size=100, filters={"incomplete": True})).json()
     assert [[h["rowIndex"], h["progress"]["shortfall"], h["progress"]["open"], h["expired"]] for h in stuck["items"]] == [
@@ -220,7 +220,7 @@ def test_top_up_fill_to_target_after_rejection(client: TestClient) -> None:
     pending = client.get(f"/api/batches/{F1}/assignments", params=list_query(page_size=10, filters={"HITId": row0["HITId"], "AssignmentStatus": "Submitted"})).json()
     client.post("/api/assignments/reject", json={"ids": [a["AssignmentId"] for a in pending["items"]], "feedback": "Failed to pass the attention check task."})
     rejected = client.get(f"/api/batches/{F1}/hits", params=list_query(page_size=1, filters={"HITId": row0["HITId"]})).json()["items"][0]
-    assert rejected["progress"] == {"submitted": 0, "approved": 0, "rejected": 5, "open": 1, "completed": False, "shortfall": 2}   # 반려해도 자리는 다시 열리지 않는다
+    assert rejected["progress"] == {"submitted": 0, "approved": 0, "rejected": 5, "open": 1, "completed": False, "shortfall": 2, "inProgress": 0}   # 반려해도 자리는 다시 열리지 않는다
 
     result = client.post("/api/hits/add-assignments", json={"hitIds": [row0["HITId"]], "mode": "fill-to-target"})
     assert result.status_code == 200
