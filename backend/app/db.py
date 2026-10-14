@@ -51,10 +51,10 @@ WRITE_LOCK = 7270301   # pg_advisory_xact_lock 키: 쓰기 트랜잭션을 하�
 INIT_LOCK = 7270302    # pg_advisory_lock 키: 여러 프로세스가 함께 켜져도 스키마 이전과 seed 는 한 번만
 CONNECT_TIMEOUT = 30   # 초. 처음 켤 때 DB 를 기다리는 시간
 
-# seed 가 채우는 테이블. reseed 는 이것만 비운다 (agent_jobs 는 seed 데이터가 아니다)
+# seed 가 채우는 테이블. reseed 는 이것만 비운다 (agent_jobs 와 계정은 seed 데이터가 아니다)
 SEED_TABLES = ("templates", "batches", "hits", "assignments", "pools", "workers", "account", "meta")
 COUNTED_TABLES = ("templates", "batches", "hits", "assignments", "pools")
-WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_")
+WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_", "use_", "touch_", "record_")
 
 
 def dumps(value: object) -> str:
@@ -293,6 +293,108 @@ class Store:
             "ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, group_id = EXCLUDED.group_id, doc = EXCLUDED.doc",
             (job["id"], job["created_at"], job["status"], group.get("id"), as_json(job)))
 
+    # ---- 계정 (users, worker_profiles, sessions, invitations). 모양은 app/accounts.py 가 정한다 ---------
+
+    _USER_SELECT = ("SELECT u.id, u.email, u.password_hash, u.display_name, u.role, u.status, u.email_verified_at, u.created_at, "
+                    "u.last_login_at, w.worker_id FROM users u LEFT JOIN worker_profiles w ON w.user_id = u.id")
+
+    def get_user(self, id: str) -> dict | None:
+        return self.connection.execute(f"{self._USER_SELECT} WHERE u.id = %s", (id,)).fetchone()
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        return self.connection.execute(f"{self._USER_SELECT} WHERE u.email = %s", (email,)).fetchone()
+
+    def list_users(self) -> list[dict]:
+        return self._rows(f"{self._USER_SELECT} ORDER BY u.created_at, u.id")
+
+    def user_count(self) -> int:
+        return self.connection.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+
+    def user_role_counts(self) -> dict[str, int]:
+        return {row["role"]: row["n"] for row in self._rows("SELECT role, COUNT(*) AS n FROM users GROUP BY role")}
+
+    def insert_user(self, user: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO users (id, email, password_hash, display_name, role, status, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (user["id"], user["email"], user["password_hash"], user["display_name"], user["role"], user["status"], user["created_at"]))
+
+    def insert_worker_profile(self, user_id: str, worker_id: str) -> None:
+        self.connection.execute("INSERT INTO worker_profiles (user_id, worker_id) VALUES (%s, %s)", (user_id, worker_id))
+
+    def worker_id_in_use(self, worker_id: str) -> bool:
+        """계정, 응답, 메모, pool 어디에든 이미 나온 WorkerId 인지 (새 worker 계정의 ID 가 seed worker 와 겹치지 않게)."""
+        row = self.connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM worker_profiles WHERE worker_id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM assignments WHERE worker_id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM workers WHERE id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM requester_workers WHERE worker_id = %(id)s) "
+            "OR EXISTS (SELECT 1 FROM pools WHERE doc::text LIKE '%%' || %(id)s || '%%') AS used", {"id": worker_id}).fetchone()
+        return bool(row["used"])
+
+    def set_user_status(self, id: str, status: str) -> None:
+        self.connection.execute("UPDATE users SET status = %s WHERE id = %s", (status, id))
+
+    def set_user_password(self, id: str, password_hash: str) -> None:
+        self.connection.execute("UPDATE users SET password_hash = %s WHERE id = %s", (password_hash, id))
+
+    def record_login(self, id: str, at: datetime) -> None:
+        self.connection.execute("UPDATE users SET last_login_at = %s WHERE id = %s", (at, id))
+
+    def insert_session(self, token_hash: str, user_id: str, at: datetime, expires_at: datetime, user_agent: str | None) -> None:
+        self.connection.execute(
+            "INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, expires_at, user_agent) VALUES (%s, %s, %s, %s, %s, %s)",
+            (token_hash, user_id, at, at, expires_at, user_agent))
+
+    def get_session(self, token_hash: str) -> dict | None:
+        """세션과 그 사용자. 키: token_hash, user_id, last_seen_at, expires_at, user (get_user 와 같은 모양)."""
+        row = self.connection.execute("SELECT token_hash, user_id, last_seen_at, expires_at FROM sessions WHERE token_hash = %s",
+                                      (token_hash,)).fetchone()
+        if row is None:
+            return None
+        return {**row, "user": self.get_user(row["user_id"])}
+
+    def touch_session(self, token_hash: str, at: datetime) -> None:
+        self.connection.execute("UPDATE sessions SET last_seen_at = %s WHERE token_hash = %s", (at, token_hash))
+
+    def delete_session(self, token_hash: str) -> bool:
+        return self.connection.execute("DELETE FROM sessions WHERE token_hash = %s", (token_hash,)).rowcount > 0
+
+    def delete_sessions_of(self, user_id: str) -> int:
+        return self.connection.execute("DELETE FROM sessions WHERE user_id = %s", (user_id,)).rowcount
+
+    def delete_stale_sessions(self, now: datetime, idle_since: datetime) -> int:
+        """절대 만료가 지났거나 idle_since 이후로 쓰이지 않은 세션을 지운다."""
+        return self.connection.execute("DELETE FROM sessions WHERE expires_at <= %s OR last_seen_at < %s", (now, idle_since)).rowcount
+
+    _INVITATION_SELECT = ("SELECT i.id, i.role, i.email, i.note, i.created_at, i.expires_at, i.used_at, "
+                          "c.email AS created_by_email, u.email AS used_by_email FROM invitations i "
+                          "LEFT JOIN users c ON c.id = i.created_by LEFT JOIN users u ON u.id = i.used_by")
+
+    def insert_invitation(self, invitation: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO invitations (id, code_hash, role, email, note, created_by, created_at, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (invitation["id"], invitation["code_hash"], invitation["role"], invitation["email"], invitation["note"],
+             invitation["created_by"], invitation["created_at"], invitation["expires_at"]))
+
+    def get_invitation(self, id: str) -> dict | None:
+        return self.connection.execute(f"{self._INVITATION_SELECT} WHERE i.id = %s", (id,)).fetchone()
+
+    def get_invitation_by_code(self, code_hash: str) -> dict | None:
+        return self.connection.execute(f"{self._INVITATION_SELECT} WHERE i.code_hash = %s", (code_hash,)).fetchone()
+
+    def list_invitations(self) -> list[dict]:
+        return self._rows(f"{self._INVITATION_SELECT} ORDER BY i.created_at DESC, i.id")
+
+    def use_invitation(self, id: str, user_id: str, at: datetime) -> bool:
+        """아직 쓰지 않은 코드면 쓴 것으로 적는다. 이미 쓰였으면 False (동시에 두 명이 같은 코드로 가입하는 것을 막는다)."""
+        return self.connection.execute("UPDATE invitations SET used_by = %s, used_at = %s WHERE id = %s AND used_at IS NULL",
+                                       (user_id, at, id)).rowcount > 0
+
+    def delete_invitation(self, id: str) -> bool:
+        """쓰지 않은 코드만 지운다."""
+        return self.connection.execute("DELETE FROM invitations WHERE id = %s AND used_at IS NULL", (id,)).rowcount > 0
+
 
 class Database:
     def __init__(self, url: str, data_dir: Path, *, max_connections: int = 10):
@@ -348,7 +450,7 @@ class Database:
 
     def __getattr__(self, name: str) -> Callable:
         """Store 의 메서드를 한 번짜리 트랜잭션으로 감싸 그대로 쓸 수 있게 한다 (db.get_batch(id) 처럼).
-        이름이 insert_, update_, delete_, set_, save_ 로 시작하면 쓰기 트랜잭션이다."""
+        이름이 WRITE_PREFIXES(insert_, update_, delete_, set_, save_ 등)로 시작하면 쓰기 트랜잭션이다."""
         method = getattr(Store, name, None)
         if name.startswith("_") or method is None:
             raise AttributeError(name)
@@ -397,7 +499,7 @@ class Database:
                 raise
 
     def reseed(self) -> None:
-        """seed 테이블을 비우고 data/ 를 다시 올린다 (agent job 은 남는다)."""
+        """seed 테이블을 비우고 data/ 를 다시 올린다 (agent job 과 계정은 남는다)."""
         with self.connect() as connection:
             self._seed(connection)
 

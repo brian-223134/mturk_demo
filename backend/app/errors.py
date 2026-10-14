@@ -1,6 +1,8 @@
 """오류 봉투. prototype/server/app.ts 와 같은 모양이다: 상태 코드는 code 로 정하고 본문은 {"error": {"code", "message"}}.
 
     400 INVALID_REQUEST   잘못된 요청 (FastAPI 의 422 검증 오류도 여기로 바꾼다)
+    401 UNAUTHORIZED      로그인하지 않았거나 세션이 끝났다, 이메일이나 비밀번호가 틀렸다
+    403 FORBIDDEN         로그인했지만 이 역할로는 쓸 수 없는 경로, 정지된 계정
     404 NOT_FOUND         없는 자원, 없는 경로
     501 NOT_IMPLEMENTED   경로 표에는 있지만 아직 구현하지 않은 경로 (routers/console.py 의 stub)
     500 UNKNOWN           그 밖의 예외
@@ -21,6 +23,8 @@ log = logging.getLogger("backend")
 STATUS = {
     "NOT_FOUND": 404,
     "INVALID_REQUEST": 400,
+    "UNAUTHORIZED": 401,
+    "FORBIDDEN": 403,
     "NOT_IMPLEMENTED": 501,
     "NETWORK": 502,
     "UNKNOWN": 500,

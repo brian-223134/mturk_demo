@@ -122,10 +122,12 @@ def make_stub(name: str, route: RouteDef) -> Callable:
     return not_implemented
 
 
-def build_console_router() -> APIRouter:
+def build_console_router(dependencies: list | None = None) -> APIRouter:
+    """health 는 누구나, 경로 표의 경로는 dependencies(로그인과 역할 검사)를 거친다."""
     router = APIRouter()
     router.add_api_route("/health", health, methods=["GET"], name="health", operation_id="health")
     for name, route in API_ROUTES.items():
         endpoint = IMPLEMENTED.get(name) or make_stub(name, route)
-        router.add_api_route(fastapi_path(route.path), endpoint, methods=[route.method], name=name, operation_id=name)
+        router.add_api_route(fastapi_path(route.path), endpoint, methods=[route.method], name=name, operation_id=name,
+                             dependencies=dependencies or [])
     return router

@@ -4,6 +4,7 @@
                                                        └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/ (상태는 DB 의 agent_jobs)
 
 create_app() 이 설정을 읽고 라우터와 오류 봉투, 요청 로그를 붙인다. DB 초기화와 job worker 는 lifespan 에서 시작한다.
+콘솔 REST 와 agent job API 는 admin, requester 계정만 부른다 (app/auth.py). health 와 /api/auth/* 는 로그인 전에도 부른다.
 """
 
 from __future__ import annotations
@@ -16,9 +17,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__
+from app.accounts import CONSOLE_ROLES
 from app.agent_jobs.runner import JobRunner
+from app.auth import require_roles
 from app.db import Database
 from app.errors import install_error_handlers
+from app.routers.accounts import build_account_router
 from app.routers.agent_jobs import router as agent_router
 from app.routers.console import build_console_router
 from app.routes import API_PREFIX
@@ -85,6 +89,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.info("  data    %s", settings.data_dir)
         log.info("  db      %s  (%s)", db.target, "restored" if db.source == "snapshot" else "seeded from data/")
         log.info("  state   %s", ", ".join(f"{n} {k}" for k, n in counts.items()))
+        roles = db.user_role_counts()
+        log.info("  users   %s  (worker sign-up: %s)%s", ", ".join(f"{roles.get(r, 0)} {r}" for r in ("admin", "requester", "worker")),
+                 settings.worker_signup, "" if roles.get("admin") else "  no admin yet: python -m app.users create-admin")
         log.info("  jobs    %s  (OpenRouter calls %s)", settings.jobs_dir,
                  "allowed: AGENT_ALLOW_API=1" if settings.api_allowed else "not allowed: AGENT_ALLOW_API is not 1")
         yield
@@ -104,8 +111,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.runner = runner
     install_error_handlers(app)
     app.add_middleware(RequestLogMiddleware)
-    app.include_router(build_console_router(), prefix=API_PREFIX)
-    app.include_router(agent_router, prefix=API_PREFIX)
+    console_only = [require_roles(*CONSOLE_ROLES)]
+    app.include_router(build_console_router(console_only), prefix=API_PREFIX)
+    app.include_router(agent_router, prefix=API_PREFIX, dependencies=console_only)
+    app.include_router(build_account_router(), prefix=API_PREFIX)
     return app
 
 
