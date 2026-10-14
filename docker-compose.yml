@@ -18,13 +18,16 @@
 #                                                        ./data (JSON + HTML)
 #
 # Production 뼈대 (frontend/, backend/):
-#   docker compose up --build              frontend + backend → http://localhost:3000   (vanilla JS 화면, FastAPI)
+#   docker compose up --build              frontend + backend + db → http://localhost:3000   (vanilla JS 화면, FastAPI, PostgreSQL)
 #   브라우저 ──▶ frontend (nginx: frontend/src 정적 파일, /api 프록시) ──▶ backend (FastAPI: 콘솔 REST + agent job API)
-#                                                                          ├─▶ SQLite (volume "backend-db"), 처음 한 번 ./data 로 채움
+#                                                                          ├─▶ db (PostgreSQL, volume "backend-pg"), 처음 한 번 ./data 로 채움
 #                                                                          └─▶ agent/ (import) → ./output/jobs/<job id>/
 #   API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api    frontend 를 prototype 의 mock API 에 붙여 본다
-#   docker compose run --rm backend-test                backend 테스트 (pytest, 테스트 이미지 안에만 설치)
+#   docker compose run --rm backend-test                backend 테스트 (pytest, 테스트 이미지 안에만 설치. db-test 가 함께 뜬다)
 #   docker compose run --rm frontend-test               frontend 테스트 (node:test, npm 의존성 없음)
+#   docker compose exec db psql -U mturk               DB 를 직접 들여다본다
+#   docker compose run --rm backend python -m app.legacy_import /app/var/backend.sqlite --replace
+#                                                        예전 SQLite(volume "backend-db")의 콘솔 데이터를 db 로 옮긴다 (backend/README.md)
 #
 # 처음 상태로 완전히 돌리려면: 화면의 Mock tools → Reset to fixtures, 또는 `docker compose down -v` (DB volume 삭제).
 
@@ -146,6 +149,26 @@ services:
       - ./environment:/work/environment:ro
 
   # ── Production 뼈대 ─────────────────────────────────────────────────────────
+  # backend 의 PostgreSQL. 데이터는 volume backend-pg 에 남는다. 계정과 비밀번호는 이 PC 안에서만 쓰는 개발용 값이고,
+  # 바꾸려면 셸이나 저장소 루트의 .env 에 POSTGRES_PASSWORD 를 준다 (처음 volume 을 만들 때만 적용된다).
+  # psql 이나 호스트의 pytest 가 붙을 수 있게 이 PC 에만(127.0.0.1) 연다.
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: mturk
+      POSTGRES_USER: mturk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mturk}
+    volumes:
+      # postgres 18 이미지는 /var/lib/postgresql/18/docker 에 데이터를 둔다. 상위 폴더를 volume 으로 잡는다
+      - backend-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mturk -d mturk"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+
   # FastAPI 백엔드. 콘솔 REST(/api/…)는 prototype/src/api/http/routes.ts 의 경로 표를 그대로 구현하고,
   # agent 파이프라인은 /api/agent/jobs 로 노출한다 (agent/ 를 import). 의존성은 backend/requirements.txt 로 이미지 안에만 설치한다.
   # 코드는 bind mount 로 쓰므로 고쳐도 다시 빌드할 필요가 없다 (uvicorn --reload). OpenRouter 호출은 서버 스위치 AGENT_ALLOW_API 가
@@ -158,11 +181,14 @@ services:
     env_file:
       - path: ./environment/.env
         required: false
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       # 셸에서 주지 않으면 빈 값이고, 그때는 environment/.env 의 AGENT_ALLOW_API 를 따른다 (backend/app/settings.py)
       AGENT_ALLOW_API: ${AGENT_ALLOW_API:-}
       DATA_DIR: /app/data
-      DB_PATH: /app/var/backend.sqlite
+      DATABASE_URL: postgresql://mturk:${POSTGRES_PASSWORD:-mturk}@db:5432/mturk
       OUTPUT_DIR: /app/output
       MODELS_DIR: /app/environment/models
       ENV_FILE: /app/environment/.env
@@ -175,15 +201,16 @@ services:
       - ./environment:/app/environment:ro
       # agent job 의 입력과 결과 (output/jobs/<job id>/), gitignore 됨
       - ./output:/app/output
-      # SQLite. prototype 의 db volume 과 별개다
-      - backend-db:/app/var
+      # 예전 SQLite 저장소. 이제는 python -m app.legacy_import 로 옮길 때만 읽는다 (읽기 전용). prototype 의 db volume 과 별개다
+      - backend-db:/app/var:ro
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
 
   # backend 의 pytest 테스트 (backend/tests). 실행 이미지 위에 backend/requirements-dev.txt(pytest, httpx2)만 더 설치한
   # backend/Dockerfile 의 test stage 로 만든다. 코드(backend/, agent/)와 data/, 모델 설정, 그리고 대조용으로 읽는 prototype 의
   # 경로 표(routes.ts)와 domain 테스트는 읽기 전용 bind mount 라 고쳐도 다시 빌드할 필요가 없다 (requirements*.txt 를 바꿨을 때만).
-  # SQLite 와 job 출력은 pytest 의 임시 폴더(/tmp, tmpfs)에 만들고, OpenRouter 는 부르지 않는다 (AGENT_ALLOW_API=0 고정).
+  # DB 는 db-test 의 PostgreSQL 에 테스트마다 schema 를 만들어 쓰고 지운다. job 출력은 pytest 의 임시 폴더(/tmp, tmpfs)에 만들고,
+  # OpenRouter 는 부르지 않는다 (AGENT_ALLOW_API=0 고정).
   #   docker compose build backend-test
   #   docker compose run --rm backend-test                          전체
   #   docker compose run --rm backend-test pytest -q tests/test_console_api.py   일부만
@@ -194,8 +221,12 @@ services:
       dockerfile: backend/Dockerfile
       target: test
     image: mturk-console:backend-test
+    depends_on:
+      db-test:
+        condition: service_healthy
     environment:
       AGENT_ALLOW_API: "0"
+      TEST_DATABASE_URL: postgresql://mturk:mturk@db-test:5432/mturk_test
     volumes:
       - ./backend:/app/backend:ro
       - ./agent:/app/agent:ro
@@ -204,8 +235,29 @@ services:
       - ./prototype/src/api/http/routes.ts:/app/prototype/src/api/http/routes.ts:ro
       - ./prototype/src/domain:/app/prototype/src/domain:ro
     tmpfs:
-      # pytest 의 tmp_path (DB, job 출력, data/ 의 깨진 사본)
+      # pytest 의 tmp_path (job 출력, data/ 의 깨진 사본, 예전 SQLite 파일)
       - /tmp
+
+  # backend 테스트용 PostgreSQL. 데이터는 메모리(tmpfs)에만 두고 디스크 동기화를 꺼서 빠르게 돈다. 컨테이너를 지우면 사라진다.
+  # 호스트에서 pytest 를 돌릴 때는 `docker compose --profile test up -d db-test` 로 띄우고
+  # TEST_DATABASE_URL=postgresql://mturk:mturk@127.0.0.1:5433/mturk_test 를 준다.
+  db-test:
+    profiles: [test]
+    image: postgres:18-alpine
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    environment:
+      POSTGRES_DB: mturk_test
+      POSTGRES_USER: mturk
+      POSTGRES_PASSWORD: mturk
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mturk -d mturk_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:${TEST_DB_PORT:-5433}:5432"
 
   # vanilla JS 화면. 빌드 단계가 없어 frontend/src 를 그대로 서빙하고, /api 는 backend 로 넘긴다.
   # 개발 중에는 bind mount 로 파일을 고치면 새로고침만으로 반영된다. API_UPSTREAM 을 바꾸면 prototype 의 mock API 에도 붙는다.
@@ -245,3 +297,4 @@ services:
 volumes:
   db:
   backend-db:
+  backend-pg:

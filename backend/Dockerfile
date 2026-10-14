@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY agent /app/agent
 COPY backend/app /app/backend/app
 
-# SQLite(volume backend-db)와 agent job 결과(./output) 가 붙는 자리
+# 예전 SQLite(volume backend-db, 가져오기용 읽기 전용)와 agent job 결과(./output) 가 붙는 자리
 RUN mkdir -p /app/var /app/output
 
 EXPOSE 8000

@@ -15,6 +15,8 @@ from agent.planner.openrouter import api_allowed
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOW_API_VARIABLE = "AGENT_ALLOW_API"
 JOB_WORKERS_DEFAULT = 3   # 후보 3개(POST /api/agent/job-groups)가 한꺼번에 돌 수 있게
+# 호스트에서 그냥 띄울 때의 접속 정보. docker compose 의 db 서비스가 127.0.0.1:5432 로 열려 있다고 본다 (개발용 계정)
+DATABASE_URL_DEFAULT = "postgresql://mturk:mturk@127.0.0.1:5432/mturk"
 
 
 def _path(name: str, default: Path) -> Path:
@@ -33,7 +35,7 @@ def _positive_int(name: str, default: int) -> int:
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path      # 시작 데이터 (data/)
-    db_path: Path       # SQLite 파일. 비어 있으면 data_dir 로 채운다
+    database_url: str   # PostgreSQL 접속 정보 (DATABASE_URL). seed 기록이 없으면 data_dir 로 채운다
     output_dir: Path    # agent job 의 입력과 결과 (<output_dir>/jobs/<job id>/)
     models_dir: Path    # 모델 설정 yaml (environment/models/)
     env_file: Path      # OPENROUTER_KEY, AGENT_MODEL 이 든 env 파일 (environment/.env)
@@ -45,7 +47,7 @@ class Settings:
         env_file = _path("ENV_FILE", REPO_ROOT / "environment" / ".env")
         return cls(
             data_dir=_path("DATA_DIR", REPO_ROOT / "data"),
-            db_path=_path("DB_PATH", REPO_ROOT / "var" / "backend.sqlite"),
+            database_url=os.environ.get("DATABASE_URL", "").strip() or DATABASE_URL_DEFAULT,
             output_dir=_path("OUTPUT_DIR", REPO_ROOT / "output"),
             models_dir=_path("MODELS_DIR", REPO_ROOT / "environment" / "models"),
             env_file=env_file,

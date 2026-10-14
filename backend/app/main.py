@@ -1,6 +1,6 @@
 """FastAPI 앱. uvicorn app.main:app 으로 띄운다 (backend/Dockerfile).
 
-    브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ 이 앱 ──┬─▶ SQLite (DB_PATH), 비어 있으면 DATA_DIR 로 채움
+    브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ 이 앱 ──┬─▶ PostgreSQL (DATABASE_URL), 비어 있으면 DATA_DIR 로 채움
                                                        └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/
 
 create_app() 이 설정을 읽고 라우터와 오류 봉투, 요청 로그를 붙인다. DB 초기화와 job worker 는 lifespan 에서 시작한다.
@@ -69,22 +69,27 @@ class RequestLogMiddleware:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     configure_logging()
-    db = Database(settings.db_path, settings.data_dir)
+    db = Database(settings.database_url, settings.data_dir)
     runner = JobRunner(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         db.initialize()  # data/ 나 DB 에 문제가 있으면 여기서 바로 드러난다
-        runner.start()
+        try:
+            runner.start()
+        except BaseException:
+            db.close()
+            raise
         counts = db.counts()
         log.info("backend %s  %s", __version__, f"{API_PREFIX}/health")
         log.info("  data    %s", settings.data_dir)
-        log.info("  db      %s  (%s)", settings.db_path, "restored" if db.source == "snapshot" else "seeded from data/")
+        log.info("  db      %s  (%s)", db.target, "restored" if db.source == "snapshot" else "seeded from data/")
         log.info("  state   %s", ", ".join(f"{n} {k}" for k, n in counts.items()))
         log.info("  jobs    %s  (OpenRouter calls %s)", settings.jobs_dir,
                  "allowed: AGENT_ALLOW_API=1" if settings.api_allowed else "not allowed: AGENT_ALLOW_API is not 1")
         yield
         runner.stop()
+        db.close()
 
     app = FastAPI(
         title="MTurk Console backend",

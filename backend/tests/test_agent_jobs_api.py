@@ -230,14 +230,13 @@ def test_mismatched_spec_fails_at_preprocess(client: TestClient) -> None:
     assert job["summary"] is None and job["validation"] is None
 
 
-def test_jobs_persist_across_restart(make_client, make_settings) -> None:
-    """job.json 덕분에 서버를 다시 켜도 (다른 앱이 같은 output_dir 를 열어도) job 이 같은 상태와 파일로 보인다."""
+def test_jobs_persist_across_restart(make_client) -> None:
+    """job.json 덕분에 서버를 다시 켜도 job 이 같은 상태와 파일로 보인다."""
     with make_client() as client:
         job = wait_for_job(client, submit_example(client, name="kept")["id"])
         assert job["status"] == "succeeded"
 
-    reopened = make_settings(db_path=make_settings().db_path.with_name("second.sqlite"))  # output_dir 는 같다
-    with make_client(db_path=reopened.db_path) as client:
+    with make_client() as client:
         again = client.get(f"{JOBS}/{job['id']}")
         assert again.status_code == 200
         assert again.json()["status"] == "succeeded"
