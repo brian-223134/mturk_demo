@@ -4,6 +4,9 @@ handlers.ts 의 listWorkers … unblockWorkers 와 같은 검증과 결과다.
 worker 목록은 모든 assignment 를 훑어 지표(app/domain/worker_stats.py)를 계산한 것이다. 응답이 없어도 pool 에 들어 있거나
 메모·차단이 붙은 worker 는 빈 지표(EMPTY_STATS)로 목록에 나온다. 기본 순서는 응답에 처음 나온 순서, 그 뒤에 pool 의 worker,
 그 뒤에 메모가 붙은 worker 다 (프로토타입의 buildWorkers 와 같다).
+
+메모와 차단(blocked, blockReason, note)은 로그인한 Requester 의 것만 보이고 고친다 (Requester 별 차단, requester_workers).
+다른 Requester 가 차단했는지는 보이지 않는다. pool 은 연구실 공용이다.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from typing import Callable
 
 from fastapi import Request, Response
 
+from app.auth import current_user
 from app.db import Store
 from app.domain.answer_kinds import answer_kinds
 from app.domain.js import js_number_of, js_string, locale_key, slug
@@ -23,8 +27,8 @@ from app.routers.common import (answer_kinds_by_hit, body_field, db_of, find_poo
                                 read_body, string_array, unique_slug_id)
 
 
-def build_workers(store: Store) -> list[dict]:
-    """Worker 목록 (WorkerId, stats, poolIds, blocked, note)."""
+def build_workers(store: Store, requester_id: str | None) -> list[dict]:
+    """Worker 목록 (WorkerId, stats, poolIds, blocked, note). blocked 와 note 는 requester_id 의 것."""
     kinds_of = {batch["id"]: answer_kinds_by_hit(store, batch) for batch in store.list_batches()}
     fallback = answer_kinds(None)
 
@@ -36,7 +40,7 @@ def build_workers(store: Store) -> list[dict]:
                for assignment, batch_id, row_index in store.assignment_records()]
     stats = compute_worker_stats(records)
     pools = store.list_pools()
-    meta = store.all_worker_meta()
+    meta = store.all_worker_meta(requester_id)
 
     ids: dict[str, None] = dict.fromkeys(stats)
     for pool in pools:
@@ -51,8 +55,8 @@ def build_workers(store: Store) -> list[dict]:
     } for worker_id in ids]
 
 
-def find_worker(store: Store, id: str) -> dict:
-    for worker in build_workers(store):
+def find_worker(store: Store, id: str, requester_id: str | None) -> dict:
+    for worker in build_workers(store, requester_id):
         if worker["WorkerId"] == id:
             return worker
     raise not_found("Worker", id)
@@ -79,16 +83,18 @@ WORKER_FILTERS = {
 
 async def list_workers(request: Request) -> dict:
     query = list_query_of(request)
+    requester_id = current_user(request)["id"]
     with db_of(request).transaction() as store:
-        workers = build_workers(store)
+        workers = build_workers(store, requester_id)
     return apply_list_query(workers, query, WORKER_FILTERS)
 
 
 async def get_worker(request: Request, id: str) -> dict:
     """WorkerDetail: Worker + blockReason(있을 때만) + batch 별 이력 + 최근 제출부터의 assignment 요약."""
+    requester_id = current_user(request)["id"]
     with db_of(request).transaction() as store:
-        worker = find_worker(store, id)
-        meta = store.worker_meta(id) or {}
+        worker = find_worker(store, id, requester_id)
+        meta = store.worker_meta(id, requester_id) or {}
         names = store.batch_names()
         own = store.assignments_of_worker(id)
     own.sort(key=lambda entry: locale_key(js_string(entry[0].get("SubmitTime", ""))), reverse=True)
@@ -117,8 +123,8 @@ async def get_worker(request: Request, id: str) -> dict:
     return detail
 
 
-def _meta_of(store: Store, worker_id: str) -> dict:
-    return store.worker_meta(worker_id) or {"blocked": False, "note": ""}
+def _meta_of(store: Store, worker_id: str, requester_id: str) -> dict:
+    return store.worker_meta(worker_id, requester_id) or {"blocked": False, "note": ""}
 
 
 async def update_worker_note(request: Request, id: str) -> dict:
@@ -126,11 +132,12 @@ async def update_worker_note(request: Request, id: str) -> dict:
     note = body_field(body, "note")
     if not isinstance(note, str):
         raise invalid('"note" must be a string.')
+    requester_id = current_user(request)["id"]
     with db_of(request).transaction(write=True) as store:
-        worker = find_worker(store, id)
-        meta = _meta_of(store, id)
+        worker = find_worker(store, id, requester_id)
+        meta = _meta_of(store, id, requester_id)
         meta["note"] = note
-        store.set_worker_meta(id, meta)
+        store.set_worker_meta(id, meta, requester_id)
     return {**worker, "note": note}
 
 
@@ -150,7 +157,7 @@ async def create_pool(request: Request) -> dict:
             raise invalid(f'A pool named "{name}" already exists.')
         pool = {"id": unique_slug_id("pool", slug(name) or "pool", {p["id"] for p in pools}), "name": name,
                 "description": description, "workerIds": []}
-        store.insert_pool(pool)
+        store.insert_pool(pool, current_user(request)["id"])
         return pool
 
 
@@ -189,24 +196,26 @@ async def block_workers(request: Request) -> Response:
         raise invalid("No workers selected.")
     if not isinstance(reason, str) or not reason.strip():
         raise invalid("A reason is required to block a worker. MTurk records it.")
+    requester_id = current_user(request)["id"]
     with db_of(request).transaction(write=True) as store:
         for id in ids:
-            meta = _meta_of(store, id)
+            meta = _meta_of(store, id, requester_id)
             meta["blocked"] = True
             meta["blockReason"] = reason.strip()
-            store.set_worker_meta(id, meta)
+            store.set_worker_meta(id, meta, requester_id)
     return no_content()
 
 
 async def unblock_workers(request: Request) -> Response:
     body = await read_body(request)
     ids = string_array(body_field(body, "ids"), "ids")
+    requester_id = current_user(request)["id"]
     with db_of(request).transaction(write=True) as store:
         for id in ids:
-            meta = _meta_of(store, id)
+            meta = _meta_of(store, id, requester_id)
             meta["blocked"] = False
             meta.pop("blockReason", None)
-            store.set_worker_meta(id, meta)
+            store.set_worker_meta(id, meta, requester_id)
     return no_content()
 
 

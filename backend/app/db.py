@@ -54,7 +54,7 @@ CONNECT_TIMEOUT = 30   # 초. 처음 켤 때 DB 를 기다리는 시간
 # seed 가 채우는 테이블. reseed 는 이것만 비운다 (agent_jobs 와 계정은 seed 데이터가 아니다)
 SEED_TABLES = ("templates", "batches", "hits", "assignments", "pools", "workers", "account", "meta")
 COUNTED_TABLES = ("templates", "batches", "hits", "assignments", "pools")
-WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_", "use_", "touch_", "record_")
+WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_", "use_", "touch_", "record_", "claim_")
 
 
 def dumps(value: object) -> str:
@@ -118,9 +118,9 @@ class Store:
     def template_ids(self) -> set[str]:
         return {row["id"] for row in self._rows("SELECT id FROM templates")}
 
-    def insert_template(self, template: dict) -> None:
-        self.connection.execute("INSERT INTO templates (id, name, updated_at, doc) VALUES (%s, %s, %s, %s)",
-                                (template["id"], template["name"], template["updatedAt"], as_json(template)))
+    def insert_template(self, template: dict, owner_id: str | None = None) -> None:
+        self.connection.execute("INSERT INTO templates (id, name, updated_at, owner_id, doc) VALUES (%s, %s, %s, %s, %s)",
+                                (template["id"], template["name"], template["updatedAt"], owner_id, as_json(template)))
 
     def update_template(self, template: dict) -> None:
         self.connection.execute("UPDATE templates SET name = %s, updated_at = %s, doc = %s WHERE id = %s",
@@ -144,9 +144,13 @@ class Store:
     def batch_names(self) -> dict[str, str]:
         return {row["id"]: row["name"] for row in self._rows("SELECT id, name FROM batches ORDER BY seq")}
 
-    def insert_batch(self, batch: dict) -> None:
-        self.connection.execute("INSERT INTO batches (id, name, created_at, doc) VALUES (%s, %s, %s, %s)",
-                                (batch["id"], batch["name"], batch["createdAt"], as_json(batch)))
+    def insert_batch(self, batch: dict, owner_id: str | None = None) -> None:
+        self.connection.execute("INSERT INTO batches (id, name, created_at, owner_id, doc) VALUES (%s, %s, %s, %s, %s)",
+                                (batch["id"], batch["name"], batch["createdAt"], owner_id, as_json(batch)))
+
+    def owner_of_batch(self, id: str) -> str | None:
+        row = self.connection.execute("SELECT owner_id FROM batches WHERE id = %s", (id,)).fetchone()
+        return row["owner_id"] if row else None
 
     # ---- hits -------------------------------------------------------------------------------
 
@@ -237,24 +241,38 @@ class Store:
     def get_pool(self, id: str) -> dict | None:
         return self._doc("SELECT doc FROM pools WHERE id = %s", (id,))
 
-    def insert_pool(self, pool: dict) -> None:
-        self.connection.execute("INSERT INTO pools (id, name, doc) VALUES (%s, %s, %s)", (pool["id"], pool["name"], as_json(pool)))
+    def insert_pool(self, pool: dict, owner_id: str | None = None) -> None:
+        self.connection.execute("INSERT INTO pools (id, name, owner_id, doc) VALUES (%s, %s, %s, %s)",
+                                (pool["id"], pool["name"], owner_id, as_json(pool)))
 
     def update_pool(self, pool: dict) -> None:
         self.connection.execute("UPDATE pools SET name = %s, doc = %s WHERE id = %s", (pool["name"], as_json(pool), pool["id"]))
 
-    # ---- workers (콘솔이 worker 에 붙인 정보: blocked, note, blockReason) -----------------------
+    # ---- workers (Requester 가 worker 에 붙인 정보: blocked, note, blockReason) -------------------
+    # requester_id 를 주면 그 Requester 의 정보(requester_workers), None 이면 주인 없는 예전 정보(workers: seed 와 계정 이전 데이터)
 
-    def worker_meta(self, worker_id: str) -> dict | None:
-        return self._doc("SELECT doc FROM workers WHERE id = %s", (worker_id,))
+    def worker_meta(self, worker_id: str, requester_id: str | None = None) -> dict | None:
+        if requester_id is None:
+            return self._doc("SELECT doc FROM workers WHERE id = %s", (worker_id,))
+        return self._doc("SELECT doc FROM requester_workers WHERE requester_id = %s AND worker_id = %s", (requester_id, worker_id))
 
-    def all_worker_meta(self) -> dict[str, dict]:
+    def all_worker_meta(self, requester_id: str | None = None) -> dict[str, dict]:
         """WorkerId → meta (저장 순서)."""
-        return {row["id"]: row["doc"] for row in self._rows("SELECT id, doc FROM workers ORDER BY seq")}
+        if requester_id is None:
+            return {row["id"]: row["doc"] for row in self._rows("SELECT id, doc FROM workers ORDER BY seq")}
+        rows = self._rows("SELECT worker_id, doc FROM requester_workers WHERE requester_id = %s ORDER BY updated_at, worker_id",
+                          (requester_id,))
+        return {row["worker_id"]: row["doc"] for row in rows}
 
-    def set_worker_meta(self, worker_id: str, meta: dict) -> None:
-        self.connection.execute("INSERT INTO workers (id, doc) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc",
-                                (worker_id, as_json(meta)))
+    def set_worker_meta(self, worker_id: str, meta: dict, requester_id: str | None = None) -> None:
+        if requester_id is None:
+            self.connection.execute("INSERT INTO workers (id, doc) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc",
+                                    (worker_id, as_json(meta)))
+            return
+        self.connection.execute(
+            "INSERT INTO requester_workers (requester_id, worker_id, blocked, doc) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (requester_id, worker_id) DO UPDATE SET blocked = EXCLUDED.blocked, doc = EXCLUDED.doc, updated_at = now()",
+            (requester_id, worker_id, bool(meta.get("blocked")), as_json(meta)))
 
     # ---- account ----------------------------------------------------------------------------
 
@@ -269,6 +287,7 @@ class Store:
         result = {table: self.connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"] for table in COUNTED_TABLES}
         worker_ids = {row["worker_id"] for row in self._rows("SELECT DISTINCT worker_id FROM assignments")}
         worker_ids.update(row["id"] for row in self._rows("SELECT id FROM workers"))
+        worker_ids.update(row["worker_id"] for row in self._rows("SELECT worker_id FROM requester_workers"))
         for pool in self._docs("SELECT doc FROM pools"):
             worker_ids.update(pool.get("workerIds", []))
         result["workers"] = len(worker_ids)
@@ -286,12 +305,17 @@ class Store:
     def job_ids(self) -> set[str]:
         return {row["id"] for row in self._rows("SELECT id FROM agent_jobs")}
 
-    def save_job(self, job: dict) -> None:
+    def save_job(self, job: dict, owner_id: str | None = None) -> None:
+        """job 을 저장한다. owner_id 는 처음 저장할 때만 적는다 (상태를 고칠 때는 그대로 둔다)."""
         group = job.get("group") or {}
         self.connection.execute(
-            "INSERT INTO agent_jobs (id, created_at, status, group_id, doc) VALUES (%s, %s, %s, %s, %s) "
+            "INSERT INTO agent_jobs (id, created_at, status, group_id, owner_id, doc) VALUES (%s, %s, %s, %s, %s, %s) "
             "ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, group_id = EXCLUDED.group_id, doc = EXCLUDED.doc",
-            (job["id"], job["created_at"], job["status"], group.get("id"), as_json(job)))
+            (job["id"], job["created_at"], job["status"], group.get("id"), owner_id, as_json(job)))
+
+    def owner_of_job(self, id: str) -> str | None:
+        row = self.connection.execute("SELECT owner_id FROM agent_jobs WHERE id = %s", (id,)).fetchone()
+        return row["owner_id"] if row else None
 
     # ---- 계정 (users, worker_profiles, sessions, invitations). 모양은 app/accounts.py 가 정한다 ---------
 
@@ -394,6 +418,17 @@ class Store:
     def delete_invitation(self, id: str) -> bool:
         """쓰지 않은 코드만 지운다."""
         return self.connection.execute("DELETE FROM invitations WHERE id = %s AND used_at IS NULL", (id,)).rowcount > 0
+
+    def claim_unowned(self, user_id: str) -> dict[str, int]:
+        """주인 없는 데이터(seed, 계정 이전)를 user 의 것으로 한다. 예전 workers 의 메모와 차단은 requester_workers 로 옮긴다."""
+        claimed = {table: self.connection.execute(f"UPDATE {table} SET owner_id = %s WHERE owner_id IS NULL", (user_id,)).rowcount
+                   for table in ("templates", "batches", "pools", "agent_jobs")}
+        legacy = self.all_worker_meta(None)
+        for worker_id, meta in legacy.items():
+            self.set_worker_meta(worker_id, meta, user_id)
+        self.connection.execute("DELETE FROM workers")
+        claimed["workers"] = len(legacy)
+        return claimed
 
 
 class Database:

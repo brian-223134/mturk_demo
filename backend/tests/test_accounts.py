@@ -1,7 +1,7 @@
 """계정과 로그인 (app/accounts.py, app/auth.py, routers/accounts.py, app/users.py).
 
 비밀번호와 초대 코드의 규칙, 가입(역할별 조건, WORKER_SIGNUP, 이메일 도메인), 로그인과 로그아웃, 세션 만료, 역할별 접근(로그인 안 함 401,
-worker 403), admin 의 사용자·초대 코드 관리, 계정 관리 명령을 본다.
+worker 403), admin 의 사용자·초대 코드 관리, 만든 사람 기록, Requester 별 차단, 첫 admin 이 주인 없는 데이터를 넘겨받는 것을 본다.
 """
 
 from __future__ import annotations
@@ -13,8 +13,9 @@ from fastapi.testclient import TestClient
 
 from app import accounts
 from app.auth import SESSION_COOKIE
-from app.users import main as users_main
+from app.users import create_admin, main as users_main
 from conftest import TEST_PASSWORD, sign_in, use_token
+from helpers import example_uploads, sample_batch_request, wait_for_job
 
 PASSWORD = "a long enough password"
 
@@ -257,12 +258,72 @@ def test_admin_manages_users_and_invitations(client: TestClient) -> None:
     assert client.delete(f"/api/admin/invitations/{spare['id']}").status_code == 404
 
 
+# ---- 만든 사람과 Requester 별 차단 --------------------------------------------------------------------
+
+
+def test_owner_is_recorded(client: TestClient) -> None:
+    requester = sign_in(client, "requester")
+    request = sample_batch_request(client)
+    batch = client.post("/api/batches", json=request).json()
+    assert batch["id"], batch
+    pool = client.post("/api/pools", json={"name": "Owned"}).json()
+    job = client.post("/api/agent/jobs", files=example_uploads()).json()["job"]
+    wait_for_job(client, job["id"])
+    with client.app.state.db.transaction() as store:
+        owners = {table: store.connection.execute(f"SELECT owner_id FROM {table} WHERE id = %s", (id,)).fetchone()["owner_id"]
+                  for table, id in (("templates", request["templateId"]), ("batches", batch["id"]),
+                                    ("pools", pool["id"]), ("agent_jobs", job["id"]))}
+        seeded = store.connection.execute("SELECT owner_id FROM batches WHERE id = 'batch-1000001'").fetchone()["owner_id"]
+    assert owners == dict.fromkeys(owners, requester["id"])
+    assert seeded is None
+    assert "owner_id" not in client.get(f"/api/agent/jobs/{job['id']}").json()   # API 의 모양은 그대로
+
+
+def test_blocks_and_notes_are_per_requester(client: TestClient) -> None:
+    worker_id = client.get("/api/workers").json()["items"][0]["WorkerId"]
+    sign_in(client, "requester", email="a@example.com")
+    assert client.post("/api/workers/block", json={"ids": [worker_id], "reason": "spam"}).status_code == 204
+    client.put(f"/api/workers/{worker_id}/note", json={"note": "from A"})
+    mine = client.get(f"/api/workers/{worker_id}").json()
+    assert (mine["blocked"], mine["blockReason"], mine["note"]) == (True, "spam", "from A")
+
+    sign_in(client, "requester", email="b@example.com")
+    theirs = client.get(f"/api/workers/{worker_id}").json()
+    assert (theirs["blocked"], theirs["note"], "blockReason" in theirs) == (False, "", False)
+    listed = client.get("/api/workers", params={"page": 1, "pageSize": 100}).json()["items"]
+    assert not any(w["blocked"] for w in listed)
+
+    with client.app.state.db.transaction() as store:
+        rows = store.connection.execute("SELECT worker_id, blocked FROM requester_workers").fetchall()
+    assert rows == [{"worker_id": worker_id, "blocked": True}]
+    assert client.get("/api/health").json()["counts"]["workers"] == 60
+
+
+# ---- 첫 admin 과 명령줄 ------------------------------------------------------------------------------
+
+
+def test_first_admin_takes_over_unowned_data(make_database, capsys) -> None:
+    db = make_database()
+    db.initialize()
+    with db.transaction(write=True) as store:
+        store.set_worker_meta("W-old", {"blocked": True, "blockReason": "before accounts", "note": ""})
+        store.save_job({"id": "job-old", "created_at": "2026-10-01T00:00:00.000Z", "status": "succeeded", "group": None})
+
+    admin, claimed = create_admin(db, "lab@example.com", "Lab Admin", PASSWORD)
+    assert claimed == {"templates": 2, "batches": 3, "pools": 2, "agent_jobs": 1, "workers": 1}
+    assert db.all_worker_meta(None) == {} and db.all_worker_meta(admin["id"])["W-old"]["blocked"] is True
+    assert db.owner_of_batch("batch-1000002") == admin["id"] and db.owner_of_job("job-old") == admin["id"]
+
+    second, claimed_again = create_admin(db, "second@example.com", "Second", PASSWORD)
+    assert claimed_again is None and db.owner_of_batch("batch-1000002") == admin["id"]
+
+
 def test_users_command(database_url: str, monkeypatch, capsys) -> None:
     monkeypatch.setattr("sys.stdin", __import__("io").StringIO(PASSWORD + "\n"))
     assert users_main(["--database-url", database_url, "create-admin", "--email", "Lab@Example.com", "--name", "Lab",
                        "--password-stdin"]) == 0
     out = capsys.readouterr().out
-    assert "created admin lab@example.com" in out
+    assert "created admin lab@example.com" in out and "took over the existing data: 2 templates, 3 batches" in out
 
     assert users_main(["--database-url", database_url, "invite", "--role", "requester", "--email", "r@example.com"]) == 0
     code = capsys.readouterr().out.split()[0]

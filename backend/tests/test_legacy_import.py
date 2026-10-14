@@ -88,10 +88,10 @@ def test_import_into_fresh_database(tmp_path: Path, make_database, make_client) 
         health = client.get("/api/health").json()
         assert health["source"] == "snapshot" and health["counts"] == counts
         assert "tpl-added-in-console" in [t["id"] for t in client.get("/api/templates").json()]
-        worker = client.get("/api/workers/W-legacy").json()
-        assert worker["blocked"] is True and worker["note"] == "kept"
     db = make_database()
     db.open()
+    # 예전 메모와 차단은 주인 없는 정보로 남는다 (첫 admin 이 넘겨받는다, test_accounts.py)
+    assert db.all_worker_meta(None) == {"W-legacy": {"note": "kept", "blocked": True, "blockReason": "spam"}}
     assert db.get_assignments([changed["AssignmentId"]])[changed["AssignmentId"]] == changed
     assert db.account() == {"env": "mock", "AvailableBalance": "321.50"}
     assert db.list_batches()[0]["id"] == "batch-1000001"

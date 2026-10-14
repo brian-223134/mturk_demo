@@ -6,7 +6,8 @@
     docker compose exec backend python -m app.users set-password --email someone@example.com
 
 비밀번호는 물어서 받는다 (두 번 입력). 스크립트에서 쓸 때는 --password-stdin 으로 표준 입력의 첫 줄을 쓴다.
-create-admin 은 DB 를 준비(스키마 이전, 비어 있으면 data/ seed)한 뒤 계정을 만든다.
+create-admin 은 DB 를 준비(스키마 이전, 비어 있으면 data/ seed)한 뒤 계정을 만든다. 계정이 하나도 없을 때 만든 첫 admin 은
+주인 없는 데이터(seed 와 계정 이전에 만든 Project, batch, pool, agent job, worker 메모와 차단)의 주인이 된다.
 """
 
 from __future__ import annotations
@@ -38,11 +39,14 @@ def open_database(args: argparse.Namespace) -> Database:
     return db
 
 
-def create_admin(db: Database, email: str, name: str, password: str, min_length: int = 8) -> dict:
-    """admin 을 만든다."""
+def create_admin(db: Database, email: str, name: str, password: str, min_length: int = 8) -> tuple[dict, dict[str, int] | None]:
+    """admin 을 만든다. 첫 계정이면 주인 없는 데이터를 넘겨받는다. (계정, 넘겨받은 수 또는 None)."""
     with db.transaction(write=True) as store:
-        return accounts.create_user(store, email=email, password=password, display_name=name, role="admin",
+        first = store.user_count() == 0
+        user = accounts.create_user(store, email=email, password=password, display_name=name, role="admin",
                                     password_min_length=min_length)
+        claimed = store.claim_unowned(user["id"]) if first else None
+    return user, claimed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,8 +76,10 @@ def main(argv: list[str] | None = None) -> int:
     db = open_database(args)
     try:
         if args.command == "create-admin":
-            user = create_admin(db, args.email, args.name, read_password(args), min_length)
+            user, claimed = create_admin(db, args.email, args.name, read_password(args), min_length)
             print(f"created admin {user['email']} ({user['id']})")
+            if claimed is not None:
+                print("took over the existing data: " + ", ".join(f"{n} {name}" for name, n in claimed.items()))
         elif args.command == "invite":
             with db.transaction(write=True) as store:
                 invitation, code = accounts.create_invitation(store, role=args.role, email=args.email, note=args.note, days=args.days)

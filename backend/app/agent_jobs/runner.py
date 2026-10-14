@@ -188,11 +188,11 @@ class JobRunner:
                 return
             shutil.rmtree(self.job_dir(job_id), ignore_errors=True)
 
-    def _save(self, job: Job) -> None:
+    def _save(self, job: Job, owner_id: str | None = None) -> None:
         """job 상태를 DB 에 저장한다. 서버가 멈추는 중이라 DB 가 닫혔으면 경고만 남긴다
         (그 job 은 DB 에 running 으로 남아 다음에 켤 때 interrupted 로 바뀐다)."""
         try:
-            self.db.save_job(job.to_dict())
+            self.db.save_job(job.to_dict(), owner_id)
         except Exception as error:  # noqa: BLE001 - worker 스레드는 저장 실패로 죽지 않는다
             log.warning("[%s] could not save the job state: %s", job.id, error)
 
@@ -203,14 +203,15 @@ class JobRunner:
 
     # ---- 조회와 접수 ---------------------------------------------------------------------------
 
-    def submit(self, job: Job) -> dict:
+    def submit(self, job: Job, owner_id: str | None = None) -> dict:
+        """job 을 큐에 넣는다. owner_id 는 접수한 계정으로, 처음 저장할 때 DB 에 적는다."""
         with self._lock:
             self._jobs[job.id] = job
             group = job.group
             where = f", candidate {group['index'] + 1} of {group['size']} in {group['id']}" if group else ""
             line = job.add_log(f"queued ({job.planner.mode} planner{where})")
             self._refresh_files(job)
-            self._save(job)
+            self._save(job, owner_id)
             snapshot = job.to_dict()
         log.info("[%s] %s", job.id, line)
         self._queue.put(job.id)

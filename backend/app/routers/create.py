@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from fastapi import Request, Response
 
+from app.auth import current_user
 from app.domain.attention import attention_column_of
 from app.domain.cost import estimate_cost, reward_to_cents, uses_masters
 from app.domain.js import is_finite_number, is_js_integer, slug
@@ -90,7 +91,7 @@ async def save_template(request: Request) -> dict:
             store.update_template(with_project(existing))
             return existing
         created = with_project({"id": unique_slug_id("tpl", slug(name) or "template", store.template_ids()), **fields})
-        store.insert_template(created)
+        store.insert_template(created, current_user(request)["id"])
         return created
 
 
@@ -270,7 +271,7 @@ async def create_batch(request: Request) -> dict:
                 "input": {c: (cells.get(c) if cells.get(c) is not None else "") for c in input_columns},
                 "initialMaxAssignments": max_assignments,
             })
-        store.insert_batch(batch)
+        store.insert_batch(batch, current_user(request)["id"])
         store.insert_hits(hits)
         adjust_balance(store, -estimate["totalCents"])
         return batch
