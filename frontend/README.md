@@ -60,7 +60,7 @@ frontend/
    │  └─ client.js         call(routeName, args), api.<route>(…), auth, admin, ApiError { code, message, status }, createJob, createJobGroup, fileUrl
    ├─ lib/                  DOM 을 쓰지 않는 순수 로직. Node 테스트에서 그대로 import 합니다
    │  ├─ csv.js             RFC 4180 파서(따옴표, 겹따옴표, 줄바꿈, CRLF, BOM)와 UTF-8 검사. papaparse 를 쓰지 않습니다
-   │  ├─ template.js        placeholder 추출, 치환, window.TASK_DATA 주입, 미리보기 스크립트(제출 가로채기, 문항 목록 보고)
+   │  ├─ template.js        placeholder 추출, 치환, window.TASK_DATA 주입, 미리보기 스크립트(제출 가로채기, 문항 목록 보고, crowd-tabs 탭 머리줄 줄바꿈)
    │  ├─ data-check.js      placeholder 와 컬럼 대조, 빈 셀, 행 크기, Data 단계의 ERROR / OK / WARN / INFO 문구
    │  ├─ cost.js            보상, 수수료(20%, MaxAssignments 10 이상은 40%), 견적
    │  ├─ reference.js       대조 기준 컬럼의 셀 읽기 (JSON, Python repr, 평문)

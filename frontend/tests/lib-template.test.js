@@ -70,6 +70,7 @@ describe('renderTemplate', () => {
     assert.ok(preview.includes(PREVIEW_MESSAGE_SOURCE));
     assert.ok(preview.includes("window.addEventListener('submit'"));
     assert.ok(preview.includes('MutationObserver'));
+    assert.ok(preview.includes(".menu { flex-wrap: wrap; }"), 'crowd-tabs 의 탭 머리줄을 줄바꿈한다');
     assert.equal(PREVIEW_MESSAGE_SOURCE, 'mturk-console-preview');
   });
 });

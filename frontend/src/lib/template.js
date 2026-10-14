@@ -74,6 +74,11 @@ export function declaredAnswerSchema(declared) {
  *  - 없으면 화면의 라디오, 체크박스, select 에서 name 과 선택지를 읽어 보낸다. 템플릿이 JS 로 문항을 그리므로 문서가 바뀌면 다시 읽는다.
  *  - 기존 템플릿은 DOM 을 쉬지 않고 바꾼다(초당 수백 번). "조용해지면 읽기"만으로는 영영 읽지 못하므로 최대 대기 시간을 둔다.
  *  - 기존 템플릿은 문항을 한 번에 하나씩만 그린다. 그래서 읽은 문항을 누적한다 (미리보기에서 눌러 본 만큼 모인다).
+ *
+ * crowd-tabs 줄바꿈
+ *  - assets.crowd.aws 의 crowd-tabs 는 탭 머리줄(그림자 DOM 의 .menu)을 줄바꿈하지 않아, 탭이 많으면(Item 10 부터) 오른쪽이 잘린다.
+ *    게시한 batch 는 템플릿 사본을 그대로 쓰므로 템플릿을 고치는 대신 여기서 그림자 DOM 에 줄바꿈 스타일을 넣는다.
+ *    Requester 미리보기와 worker 의 작업 화면이 모두 이 스크립트를 쓴다.
  */
 const PREVIEW_BRIDGE = `(function () {
   var SOURCE = ${JSON.stringify(PREVIEW_MESSAGE_SOURCE)};
@@ -154,6 +159,23 @@ const PREVIEW_BRIDGE = `(function () {
     new MutationObserver(scheduleSchema).observe(document.documentElement, { childList: true, subtree: true });
     scheduleSchema();
   });
+
+  var TAB_WRAP_STYLE = '.menu { flex-wrap: wrap; }';
+  function wrapCrowdTabs() {
+    document.querySelectorAll('crowd-tabs').forEach(function (el) {
+      var root = el.shadowRoot;
+      if (!root || root.querySelector('style[data-console-tab-wrap]')) return;
+      var style = document.createElement('style');
+      style.setAttribute('data-console-tab-wrap', '');
+      style.textContent = TAB_WRAP_STYLE;
+      root.appendChild(style);
+    });
+  }
+  if (window.customElements && customElements.whenDefined) {
+    customElements.whenDefined('crowd-tabs').then(function () { setTimeout(wrapCrowdTabs, 0); });
+  }
+  window.addEventListener('load', wrapCrowdTabs);
+  document.addEventListener('DOMContentLoaded', function () { new MutationObserver(wrapCrowdTabs).observe(document.documentElement, { childList: true, subtree: true }); });
 })();`;
 
 /**
