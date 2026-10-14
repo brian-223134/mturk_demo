@@ -22,9 +22,10 @@ docker compose up -d --build frontend backend
 ```
 
 - `frontend`: 화면입니다. 빌드 단계 없이 `frontend/src`를 nginx가 그대로 서빙하고, `/api` 요청을 `backend`로 전달합니다.
-- `backend`: FastAPI 백엔드입니다 (http://localhost:8000/api/health). 처음 실행될 때 [data/](data/)의 시작 데이터로 SQLite DB를 채우고, agent 파이프라인을 job API로 노출합니다.
+- `backend`: FastAPI 백엔드입니다 (http://localhost:8000/api/health). 처음 실행될 때 [data/](data/)의 시작 데이터로 DB를 채우고, agent 파이프라인을 job API로 노출합니다.
+- `db`: PostgreSQL입니다. `backend`를 띄우면 함께 뜹니다.
 
-게시, 승인과 반려, pool 편집 같은 변경 사항은 Docker volume의 SQLite에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다).
+게시, 승인과 반려, pool 편집 같은 변경 사항과 자동 생성 job의 상태는 PostgreSQL(Docker volume `backend-pg`)에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다). 이전 버전에서 SQLite에 쌓은 데이터를 옮기는 방법은 [backend/README.md](backend/README.md#db)에 있습니다.
 
 원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
@@ -233,8 +234,8 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 브라우저 ──▶ frontend (nginx) ── frontend/src 를 그대로 서빙, /elements/(<ann-*> 요소, starter), /example/(예시 파일)
                │ /api
                ▼
-            backend (FastAPI) ──▶ SQLite (Docker volume backend-db), 처음 한 번 data/ 로 채움
-               └─▶ agent/ (import) ──▶ output/jobs/<job id>/  (자동 생성 job 의 입력과 결과)
+            backend (FastAPI) ──▶ db (PostgreSQL, Docker volume backend-pg), 처음 한 번 data/ 로 채움
+               └─▶ agent/ (import) ──▶ output/jobs/<job id>/  (자동 생성 job 의 입력과 결과. 상태는 db 에)
 ```
 
 REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, backend(`backend/app/routes.py`)와 frontend(`frontend/src/api-client/routes.js`)가 같은 표를 따릅니다. 테스트가 세 표가 어긋나지 않는지 확인합니다.
@@ -331,7 +332,7 @@ example/            Create에 올려 볼 예시 템플릿과 CSV
 docs/               Create의 사용 방법(production, 프로토타입), <ann-*> 요소, 화면에 나오는 값을 읽는 방법, prompt 실험
 environment/        agent의 모델 설정(models/)과, OpenRouter 키를 두는 .env (.env 는 저장소에 들어가지 않습니다)
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
-docker-compose.yml  frontend, backend, agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
+docker-compose.yml  frontend, backend, db(PostgreSQL), agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
 .github/workflows/  main 으로의 push 와 pull request 마다 테스트를 돌리는 GitHub Actions (test.yml)
 
 저장소에 들어가지 않는 폴더 (.gitignore)

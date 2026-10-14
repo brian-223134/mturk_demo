@@ -137,7 +137,7 @@ LLM 호출은 실패할 수 있습니다. 같은 입력의 다른 시도는 응�
 
 ### Templates 목록 관리
 
-후보 하나하나가 job이며, 입력과 결과는 `output/jobs/<job id>/`(gitignore)에 저장됩니다. 묶음은 각 job의 `job.json`에 적힌 `group`으로 다시 묶이므로 따로 저장하는 파일이 없습니다. backend는 시작할 때 이 폴더를 읽어 목록을 만듭니다. 화면에는 지우는 버튼이 없습니다.
+후보 하나하나가 job이며, 입력과 결과 파일은 `output/jobs/<job id>/`(gitignore)에, job의 상태는 DB에 저장됩니다. 묶음은 각 job에 적힌 `group`으로 다시 묶이므로 따로 저장하는 곳이 없습니다. 화면에는 지우는 버튼이 없습니다.
 목록에서 빼려면 job 폴더를 `output/jobs/` 밖(예: `output/jobs-archive/`)으로 옮기고 `docker compose restart backend`를 실행합니다. 묶음 전체를 빼려면 그 묶음의 job 폴더 세 개를 함께 옮깁니다. 다시 보이게 하려면 폴더를 되돌리고 같은 명령을 실행합니다.
 backend는 job을 기본으로 세 개까지 동시에 돌립니다. 이 수는 `environment/.env`의 `AGENT_JOB_WORKERS`로 바꿀 수 있으며, 3보다 작게 하면 후보가 차례를 기다립니다.
 
