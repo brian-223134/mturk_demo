@@ -1,7 +1,7 @@
 """FastAPI 앱. uvicorn app.main:app 으로 띄운다 (backend/Dockerfile).
 
     브라우저 ──▶ frontend (nginx, /api 프록시) ──▶ 이 앱 ──┬─▶ PostgreSQL (DATABASE_URL), 비어 있으면 DATA_DIR 로 채움
-                                                       └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/
+                                                       └─▶ agent/ (import) → OUTPUT_DIR/jobs/<job id>/ (상태는 DB 의 agent_jobs)
 
 create_app() 이 설정을 읽고 라우터와 오류 봉투, 요청 로그를 붙인다. DB 초기화와 job worker 는 lifespan 에서 시작한다.
 """
@@ -70,7 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     configure_logging()
     db = Database(settings.database_url, settings.data_dir)
-    runner = JobRunner(settings)
+    runner = JobRunner(settings, db)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

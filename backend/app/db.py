@@ -51,10 +51,10 @@ WRITE_LOCK = 7270301   # pg_advisory_xact_lock 키: 쓰기 트랜잭션을 하�
 INIT_LOCK = 7270302    # pg_advisory_lock 키: 여러 프로세스가 함께 켜져도 스키마 이전과 seed 는 한 번만
 CONNECT_TIMEOUT = 30   # 초. 처음 켤 때 DB 를 기다리는 시간
 
-# seed 가 채우는 테이블. reseed 는 이것만 비운다
+# seed 가 채우는 테이블. reseed 는 이것만 비운다 (agent_jobs 는 seed 데이터가 아니다)
 SEED_TABLES = ("templates", "batches", "hits", "assignments", "pools", "workers", "account", "meta")
 COUNTED_TABLES = ("templates", "batches", "hits", "assignments", "pools")
-WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_")
+WRITE_PREFIXES = ("insert_", "update_", "delete_", "set_", "save_")
 
 
 def dumps(value: object) -> str:
@@ -274,6 +274,25 @@ class Store:
         result["workers"] = len(worker_ids)
         return result
 
+    # ---- agent jobs (job.json 과 같은 모양의 문서) -----------------------------------------------
+
+    def list_jobs(self) -> list[dict]:
+        """접수 순서 (created_at, id)."""
+        return self._docs("SELECT doc FROM agent_jobs ORDER BY created_at, id")
+
+    def get_job(self, id: str) -> dict | None:
+        return self._doc("SELECT doc FROM agent_jobs WHERE id = %s", (id,))
+
+    def job_ids(self) -> set[str]:
+        return {row["id"] for row in self._rows("SELECT id FROM agent_jobs")}
+
+    def save_job(self, job: dict) -> None:
+        group = job.get("group") or {}
+        self.connection.execute(
+            "INSERT INTO agent_jobs (id, created_at, status, group_id, doc) VALUES (%s, %s, %s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, group_id = EXCLUDED.group_id, doc = EXCLUDED.doc",
+            (job["id"], job["created_at"], job["status"], group.get("id"), as_json(job)))
+
 
 class Database:
     def __init__(self, url: str, data_dir: Path, *, max_connections: int = 10):
@@ -329,7 +348,7 @@ class Database:
 
     def __getattr__(self, name: str) -> Callable:
         """Store 의 메서드를 한 번짜리 트랜잭션으로 감싸 그대로 쓸 수 있게 한다 (db.get_batch(id) 처럼).
-        이름이 insert_, update_, delete_, set_ 으로 시작하면 쓰기 트랜잭션이다."""
+        이름이 insert_, update_, delete_, set_, save_ 로 시작하면 쓰기 트랜잭션이다."""
         method = getattr(Store, name, None)
         if name.startswith("_") or method is None:
             raise AttributeError(name)
@@ -378,7 +397,7 @@ class Database:
                 raise
 
     def reseed(self) -> None:
-        """seed 테이블을 비우고 data/ 를 다시 올린다."""
+        """seed 테이블을 비우고 data/ 를 다시 올린다 (agent job 은 남는다)."""
         with self.connect() as connection:
             self._seed(connection)
 

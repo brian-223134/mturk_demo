@@ -98,11 +98,12 @@ def test_import_into_fresh_database(tmp_path: Path, make_database, make_client) 
 
 
 def test_import_needs_replace_over_existing_data(tmp_path: Path, make_database) -> None:
-    """backend 가 이미 seed 한 DB 에는 --replace 없이 덮어쓰지 않는다."""
+    """backend 가 이미 seed 한 DB 에는 --replace 없이 덮어쓰지 않는다. agent job 은 --replace 로도 지우지 않는다."""
     path = tmp_path / "backend.sqlite"
     build_legacy_sqlite(path)
     db = make_database()
     db.initialize()
+    db.save_job({"id": "job-kept", "created_at": "2026-10-01T00:00:00.000Z", "status": "succeeded", "group": None})
 
     with pytest.raises(LegacyImportError, match="--replace"):
         import_sqlite(db, path)
@@ -110,6 +111,7 @@ def test_import_needs_replace_over_existing_data(tmp_path: Path, make_database) 
 
     import_sqlite(db, path, replace=True)
     assert db.counts()["templates"] == 3
+    assert db.job_ids() == {"job-kept"}
 
 
 def test_wrong_version_and_missing_file(tmp_path: Path, make_database, database_url: str, capsys) -> None:

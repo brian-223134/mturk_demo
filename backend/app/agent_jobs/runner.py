@@ -6,8 +6,11 @@ job 폴더는 <OUTPUT_DIR>/jobs/<job id>/ 다. 업로드는 그 안의 input/ �
 hits.csv, template.html, validation.json …)는 폴더에 바로 쓴다. agent 의 각 단계에는 이 절대 경로를 out_dir 로 넘기므로
 agent 의 현재 폴더 기준 기본값(output/<원본 이름>/)은 쓰이지 않는다.
 
-상태가 바뀔 때마다 job.json 을 다시 써서 서버를 다시 켜도 목록에 남는다. 다시 켤 때 running 이던 job 은 이어서 돌 수
+상태가 바뀔 때마다 DB 의 agent_jobs 에 저장해서 서버를 다시 켜도 목록에 남는다. 다시 켤 때 running 이던 job 은 이어서 돌 수
 없으므로 failed 로, queued 이던 job 은 다시 큐에 넣는다.
+
+예전에는 상태를 job 폴더의 job.json 에 썼다. 켤 때 DB 에 없는 job 의 job.json 을 찾으면 한 번 가져온다 (파일은 그대로 두고,
+그 뒤로는 DB 가 기준이다).
 
 단계 (agent/cli.py 의 cmd_run 과 같은 순서)
     profile     agent.profile.run_profile(raw, out_dir)
@@ -22,7 +25,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import queue
 import shutil
 import threading
@@ -41,6 +43,7 @@ from agent.spec import SpecError, TaskSpec, load_spec, validate_against_records
 
 from app.agent_jobs.models import (INPUT_DIR, JOB_FILE, PROMPT_TEXT_FILE, PROMPT_TEXT_MARKER, STEP_NAMES, Job, Step,
                                    new_job_id, now_iso, order_files, usage_dict)
+from app.db import Database
 from app.settings import Settings
 
 log = logging.getLogger("backend")
@@ -82,8 +85,9 @@ def validation_summary(report: dict) -> str:
 
 
 class JobRunner:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, db: Database):
         self.settings = settings
+        self.db = db
         self.jobs_dir = settings.jobs_dir
         self._jobs: dict[str, Job] = {}
         self._lock = threading.RLock()
@@ -94,7 +98,7 @@ class JobRunner:
 
     def start(self) -> None:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
-        self._load_from_disk()
+        self._load()
         for n in range(max(1, self.settings.job_workers)):
             thread = threading.Thread(target=self._worker, name=f"agent-jobs-{n + 1}", daemon=True)
             thread.start()
@@ -104,18 +108,16 @@ class JobRunner:
         for _ in self._threads:
             self._queue.put(None)
 
-    def _load_from_disk(self) -> None:
+    def _load(self) -> None:
+        """DB 의 job 을 올리고, 예전 job.json 만 있는 job 은 가져온다."""
         loaded: list[Job] = []
-        for job_file in sorted(self.jobs_dir.glob(f"*/{JOB_FILE}")):
+        for data in self.db.list_jobs():
             try:
-                job = Job.from_dict(json.loads(job_file.read_text(encoding="utf-8")))
-            except (OSError, ValueError, KeyError, TypeError) as error:
-                log.warning("skipping %s: %s", job_file, error)
-                continue
-            if job.id != job_file.parent.name:
-                log.warning("skipping %s: id %r does not match the folder", job_file, job.id)
-                continue
-            loaded.append(job)
+                loaded.append(Job.from_dict(data))
+            except (ValueError, KeyError, TypeError) as error:
+                log.warning("skipping job %s in the database: %s", data.get("id") if isinstance(data, dict) else data, error)
+        imported = self._import_job_files({job.id for job in loaded})
+        loaded.extend(imported)
         for job in sorted(loaded, key=lambda j: (j.created_at, j.id)):
             with self._lock:
                 self._jobs[job.id] = job
@@ -126,7 +128,26 @@ class JobRunner:
                 self._save(job)
                 self._queue.put(job.id)
         if loaded:
-            log.info("agent jobs: %d found in %s", len(loaded), self.jobs_dir)
+            log.info("agent jobs: %d in the database%s", len(loaded),
+                     f" ({len(imported)} imported from job.json in {self.jobs_dir})" if imported else "")
+
+    def _import_job_files(self, known: set[str]) -> list[Job]:
+        """job 폴더의 job.json 중 DB 에 없는 것을 DB 에 저장한다 (예전 저장 방식에서 옮겨 오기)."""
+        imported: list[Job] = []
+        for job_file in sorted(self.jobs_dir.glob(f"*/{JOB_FILE}")):
+            if job_file.parent.name in known:
+                continue
+            try:
+                job = Job.from_dict(json.loads(job_file.read_text(encoding="utf-8")))
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                log.warning("skipping %s: %s", job_file, error)
+                continue
+            if job.id != job_file.parent.name:
+                log.warning("skipping %s: id %r does not match the folder", job_file, job.id)
+                continue
+            self.db.save_job(job.to_dict())
+            imported.append(job)
+        return imported
 
     def _fail_interrupted(self, job: Job) -> None:
         with self._lock:
@@ -168,12 +189,12 @@ class JobRunner:
             shutil.rmtree(self.job_dir(job_id), ignore_errors=True)
 
     def _save(self, job: Job) -> None:
-        directory = self.job_dir(job.id)
-        directory.mkdir(parents=True, exist_ok=True)
-        target = directory / JOB_FILE
-        temporary = directory / f".{JOB_FILE}.tmp"
-        temporary.write_text(json.dumps(job.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        os.replace(temporary, target)
+        """job 상태를 DB 에 저장한다. 서버가 멈추는 중이라 DB 가 닫혔으면 경고만 남긴다
+        (그 job 은 DB 에 running 으로 남아 다음에 켤 때 interrupted 로 바뀐다)."""
+        try:
+            self.db.save_job(job.to_dict())
+        except Exception as error:  # noqa: BLE001 - worker 스레드는 저장 실패로 죽지 않는다
+            log.warning("[%s] could not save the job state: %s", job.id, error)
 
     def _refresh_files(self, job: Job) -> None:
         directory = self.job_dir(job.id)

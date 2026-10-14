@@ -21,7 +21,7 @@
 #   docker compose up --build              frontend + backend + db → http://localhost:3000   (vanilla JS 화면, FastAPI, PostgreSQL)
 #   브라우저 ──▶ frontend (nginx: frontend/src 정적 파일, /api 프록시) ──▶ backend (FastAPI: 콘솔 REST + agent job API)
 #                                                                          ├─▶ db (PostgreSQL, volume "backend-pg"), 처음 한 번 ./data 로 채움
-#                                                                          └─▶ agent/ (import) → ./output/jobs/<job id>/
+#                                                                          └─▶ agent/ (import) → ./output/jobs/<job id>/ (상태는 db 의 agent_jobs)
 #   API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api    frontend 를 prototype 의 mock API 에 붙여 본다
 #   docker compose run --rm backend-test                backend 테스트 (pytest, 테스트 이미지 안에만 설치. db-test 가 함께 뜬다)
 #   docker compose run --rm frontend-test               frontend 테스트 (node:test, npm 의존성 없음)

@@ -5,7 +5,9 @@
 SQLite 의 각 테이블을 저장 순서(seq)대로 읽어 PostgreSQL 의 같은 테이블에 넣는다 (db.write_state, 트랜잭션 하나).
 seededAt 도 그대로 옮기므로 다음에 켜면 health 의 source 는 snapshot 이다.
 대상 DB 에 이미 seed 기록이 있으면 --replace 없이는 멈춘다. backend 를 한 번 켜면 data/ 로 seed 되므로 보통 --replace 가 필요하다
-(--replace 는 대상의 콘솔 데이터를 지우고 SQLite 의 것으로 바꾼다).
+(--replace 는 대상의 콘솔 데이터를 지우고 SQLite 의 것으로 바꾼다. agent job 은 건드리지 않는다).
+
+agent job 은 여기서 옮기지 않는다. backend 가 켤 때 job 폴더(OUTPUT_DIR/jobs/<id>/job.json)에서 DB 에 없는 것을 가져온다.
 
 SQLite 파일은 읽기 전용 mount 에 있어도 되게 임시 폴더로 복사해서 연다 (WAL 파일에 남은 변경까지 읽으려면 쓰기 권한이 필요하다).
 """

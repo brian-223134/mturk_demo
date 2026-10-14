@@ -82,10 +82,11 @@ def test_job_with_spec_succeeds(client: TestClient, settings: Settings) -> None:
     assert job["started_at"] and job["finished_at"]
     assert any(line.endswith("plan: skipped (task spec file supplied)") for line in job["log"])
 
-    # 디스크의 job 폴더: 업로드는 input/ 에, job.json 은 같은 상태
+    # 디스크의 job 폴더: 업로드는 input/ 에, 상태는 DB 에만 (job.json 은 쓰지 않는다)
     directory = settings.jobs_dir / job["id"]
     assert sorted(p.name for p in (directory / "input").iterdir()) == ["prompt.md", "raw.json", "task_spec.json"]
-    saved = json.loads((directory / "job.json").read_text(encoding="utf-8"))
+    assert not (directory / "job.json").exists()
+    saved = client.app.state.db.get_job(job["id"])
     assert saved["status"] == "succeeded" and saved["files"] == job["files"]
     assert not list(settings.output_dir.rglob("plan_request*.json"))
 
@@ -231,7 +232,7 @@ def test_mismatched_spec_fails_at_preprocess(client: TestClient) -> None:
 
 
 def test_jobs_persist_across_restart(make_client) -> None:
-    """job.json 덕분에 서버를 다시 켜도 job 이 같은 상태와 파일로 보인다."""
+    """job 상태가 DB 에 있으므로 서버를 다시 켜도 job 이 같은 상태와 파일로 보인다."""
     with make_client() as client:
         job = wait_for_job(client, submit_example(client, name="kept")["id"])
         assert job["status"] == "succeeded"
@@ -245,3 +246,26 @@ def test_jobs_persist_across_restart(make_client) -> None:
         assert again.json()["name"] == "kept"
         assert [j["id"] for j in client.get(JOBS).json()["jobs"]] == [job["id"]]
         assert client.get(f"{JOBS}/{job['id']}/files/template.html").status_code == 200
+
+
+def test_legacy_job_files_are_imported_once(make_client, make_database, make_settings) -> None:
+    """예전처럼 job 폴더에 job.json 만 있는 job 은 켤 때 DB 로 가져온다. 이미 DB 에 있는 job 의 job.json 은 읽지 않는다."""
+    with make_client() as client:
+        job = wait_for_job(client, submit_example(client, name="old")["id"])
+    folder = make_settings().jobs_dir / job["id"]
+    (folder / "job.json").write_text(json.dumps(job), encoding="utf-8")
+    probe = make_database()
+    probe.open()
+    with probe.connect() as connection:
+        connection.execute("DELETE FROM agent_jobs")
+
+    with make_client() as client:
+        listed = client.get(JOBS).json()["jobs"]
+        assert [(j["id"], j["name"], j["status"]) for j in listed] == [(job["id"], "old", "succeeded")]
+        assert "job.json" not in listed[0]["files"]
+    assert probe.get_job(job["id"])["name"] == "old"
+
+    stale = dict(job, name="stale file")
+    (folder / "job.json").write_text(json.dumps(stale), encoding="utf-8")
+    with make_client() as client:
+        assert client.get(f"{JOBS}/{job['id']}").json()["name"] == "old"   # DB 가 기준

@@ -108,14 +108,15 @@ def test_invalid_review_leaves_job_unchanged(client, review):
     assert client.get(f"{JOBS}/{first['id']}").json()["review"] == {}
 
 
-def test_legacy_job_and_input_path_escape(make_client, make_settings):
+def test_legacy_job_and_input_path_escape(make_client, make_database):
     with make_client() as client:
         first = example(client)
-    path = make_settings().jobs_dir / first["id"] / "job.json"
-    saved = json.loads(path.read_text())
+    probe = make_database()
+    probe.open()
+    saved = probe.get_job(first["id"])
     saved.pop("provenance"); saved.pop("review")
     saved["input"]["raw"] = "../task_spec.json"
-    path.write_text(json.dumps(saved))
+    probe.save_job(saved)
     with make_client() as client:
         loaded = client.get(f"{JOBS}/{first['id']}").json()
         assert loaded["review"] == {} and loaded["provenance"] == {}

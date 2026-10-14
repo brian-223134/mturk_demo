@@ -5,6 +5,7 @@
 스키마를 바꿀 때는 새 번호의 파일을 더한다.
 
     migrations/0001_console.sql      콘솔의 문서 저장소 (예전 SQLite 스키마를 옮긴 것)
+    migrations/0002_agent_jobs.sql   agent job 의 상태 (예전에는 job 폴더의 job.json)
 """
 
 from __future__ import annotations
