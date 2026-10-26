@@ -10,8 +10,9 @@ Amazon Mechanical Turk(MTurk)로 진행하던 annotation 작업을 **만들고, 
 | 탭 | 하는 일 |
 |---|---|
 | **Create** | MTurk처럼 작업의 틀인 Project(worker 화면 + 보상·인원·기간 같은 속성)를 만들고, Project에 CSV를 올려 batch를 게시합니다. 원본 데이터와 prompt로 템플릿을 자동으로 만들 수도 있습니다. |
-| **Manage** | batch의 진행률과 비용을 확인하고, 제출된 응답을 승인하거나 반려합니다. 부족한 응답은 다시 모집하고, 결과(majority, Fleiss' κ)를 확인해 내보냅니다. |
+| **Manage** | batch의 진행률과 비용을 확인하고, 제출된 응답을 승인하거나 반려합니다. 부족한 응답은 다시 모집하고, 결과(majority, Fleiss' κ, Krippendorff's α)를 확인해 내보냅니다. |
 | **Worker Pool** | worker별 품질 지표를 살펴보고, 믿을 만한 worker와 제외할 worker를 pool로 관리합니다. |
+| **Worker 화면** | worker 계정으로 로그인하면 열립니다. 게시된 batch의 HIT를 받아 풀고 제출하며, 제출한 HIT의 검수 결과와 금액을 확인합니다. |
 
 ## 빠른 시작
 
@@ -51,7 +52,7 @@ docker compose restart backend                      # .env 를 바꾼 뒤에는 
 | `docker compose run --rm frontend-test` | frontend의 테스트를 실행합니다 (Node 내장 test runner, npm 의존성 없음). |
 | `docker compose run --rm backend-test` | backend의 테스트를 실행합니다 (pytest, 테스트 이미지 안에만 설치). |
 | `docker compose --profile agent run --rm agent test` | agent 파이프라인의 테스트를 실행합니다. |
-| `docker compose restart backend` | backend를 다시 시작합니다. 자동 생성 job 목록을 다시 읽을 때 씁니다. |
+| `docker compose restart backend` | backend를 다시 시작합니다. `environment/.env`를 바꿨을 때나 자동 생성 job 목록을 다시 읽을 때 씁니다. |
 
 ### 알아 두면 좋은 점
 
@@ -59,6 +60,26 @@ docker compose restart backend                      # .env 를 바꾼 뒤에는 
 - 기본 설정으로는 이 PC에서만 접속할 수 있습니다(`127.0.0.1`). 다른 PC에서 접속하려면 `BIND_ADDR=0.0.0.0`을 붙여 실행합니다. 포트는 `FRONTEND_PORT`와 `BACKEND_PORT`로 바꿉니다.
 - 자동 생성 job의 입력과 결과는 `output/jobs/`(저장소에 들어가지 않음)에 저장됩니다. 실행하면 저절로 생기므로 미리 만들 필요는 없습니다.
 - 실행 방법과 API는 [backend/README.md](backend/README.md)에, 화면 구성과 코드 구조는 [frontend/README.md](frontend/README.md)에 정리되어 있습니다.
+
+### 다른 PC에서 clone해서 시작할 때
+
+앱을 띄우는 데 필요한 데이터는 모두 저장소에 들어 있습니다. 시작 데이터 [data/](data/), 예시 파일 [example/](example/), agent 예시 `agent/examples/`, 모델 설정 `environment/models/`가 함께 받아지고, 새 PC의 DB는 비어 있으므로 backend가 처음 실행될 때 `data/`로 채웁니다.
+
+- **계정**: DB가 새로 만들어지므로 위의 `create-admin` 명령으로 admin을 다시 만듭니다.
+- **`environment/.env`**: 저장소에 들어가지 않습니다. LLM으로 자동 생성할 때만 필요하며, 없어도 콘솔은 그대로 뜹니다.
+- **원래 PC에서 쌓은 데이터**: 그동안 만든 Project, batch, 계정, job의 상태는 원래 PC의 Docker volume `backend-pg`에만 있어서 clone으로는 옮겨지지 않습니다. 같은 상태로 이어 가려면 DB를 덤프해서 옮기고, 자동 생성 job의 파일이 든 `output/jobs/`도 함께 복사합니다.
+
+```bash
+# 원래 PC에서
+docker compose exec -T db pg_dump -U mturk -Fc mturk > mturk.dump
+
+# 새 PC에서 (backend 를 띄우기 전에)
+docker compose up -d db
+docker compose exec -T db pg_restore -U mturk -d mturk --clean --if-exists --no-owner < mturk.dump
+docker compose up -d --build frontend backend
+```
+
+`assets/`, `var/`, `scripts/.fixture_salt`처럼 저장소에 들어가지 않는 나머지 파일은 개발과 테스트에 필요하지 않습니다. salt는 `data/`를 원본에서 다시 만들 때만 쓰며, 다른 salt로 만들면 WorkerId가 달라집니다([data/README.md](data/README.md#내-데이터로-다시-만들기)).
 
 ### 프로토타입 콘솔
 
@@ -264,7 +285,7 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
                └─▶ agent/ (import) ──▶ output/jobs/<job id>/  (자동 생성 job 의 입력과 결과. 상태는 db 에)
 ```
 
-REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, backend(`backend/app/routes.py`)와 frontend(`frontend/src/api-client/routes.js`)가 같은 표를 따릅니다. 테스트가 세 표가 어긋나지 않는지 확인합니다.
+콘솔 REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, backend(`backend/app/routes.py`)와 frontend(`frontend/src/api-client/routes.js`)가 같은 표를 따릅니다. 계정(`/api/auth`, `/api/admin`)과 worker의 작업(`/api/worker`) 경로는 프로토타입에 없고 backend와 frontend의 표에만 있습니다. 테스트가 이 표들이 서로 어긋나지 않는지 확인합니다. 자동 생성 job 경로(`/api/agent`)는 backend의 `app/routers/agent_jobs.py`와 frontend의 `AGENT_ROUTES`에 있습니다.
 화면에서 미리 보는 worker 화면은 sandbox iframe 안에서 그려지고, Submit은 실제로 보내지 않고 가로채 답을 보여 줍니다.
 
 ### 프로토타입의 동작 방식
@@ -280,7 +301,7 @@ REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.
 | 요청 처리와 계산 | 두 방식 모두 `prototype/src/api/mock/handlers.ts`와 `prototype/src/domain/`의 **같은 코드**를 사용 | |
 
 REST 경로는 [prototype/src/api/http/routes.ts](prototype/src/api/http/routes.ts)의 표 하나에 정의되어 있고, 브라우저 쪽 코드와 서버가 이 표를 함께 사용합니다.
-Production 백엔드(FastAPI)는 같은 경로를 구현하며, 화면은 부르는 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
+Production 백엔드(FastAPI)는 같은 경로를 구현하고 계정, worker의 작업, 자동 생성 job 경로를 더 둡니다. 화면은 부르는 주소만 바꾸면 됩니다. `/mock/*` 경로는 mock 전용이므로 실제 백엔드에는 만들지 않습니다.
 
 ## 원본 데이터에서 HIT 만들기 (`agent/`)
 
@@ -331,12 +352,15 @@ production 콘솔에서 전체 흐름을 한 번 따라가 보는 순서입니�
 
 ```
 frontend/           실제 서비스용 화면 (vanilla JavaScript). src/ 를 nginx 가 그대로 서빙합니다
-├─ src/             index.html, main.js, router.js, api-client/(경로 표와 HTTP 클라이언트), pages/, components/, styles.css,
-│                   elements/(템플릿이 불러오는 <ann-*> 요소와 starter 템플릿)
+├─ src/             index.html, main.js, router.js, api-client/(경로 표와 HTTP 클라이언트), pages/, components/,
+│                   lib/(DOM 을 쓰지 않는 계산과 검사), styles*.css, elements/(템플릿이 불러오는 <ann-*> 요소와 starter 템플릿)
+├─ tests/           node:test 단위 테스트
 ├─ nginx.conf.template  정적 파일과 /api 프록시
 └─ Dockerfile
 backend/            FastAPI 백엔드. 콘솔 REST 와 /api/agent job API
-├─ app/             main.py, routes.py(경로 표), routers/, domain/(진행률·비용 계산), db.py, seed.py, agent_jobs/
+├─ app/             main.py, routes.py(경로 표), routers/, domain/(진행률·비용·일치도 계산), db.py, seed.py, agent_jobs/,
+│                   migrations/(DB 스키마), accounts.py·auth.py(계정과 로그인), users.py(admin 만들기 같은 계정 명령)
+├─ tests/           pytest 테스트
 ├─ requirements.txt 이미지 안에만 설치하는 의존성
 └─ Dockerfile
 prototype/          프로토타입 콘솔(React + antd)과 mock API 서버. npm 명령은 이 폴더에서 실행합니다
@@ -361,7 +385,7 @@ docs/               Create의 사용 방법(production, 프로토타입), <ann-*
 environment/        agent의 모델 설정(models/)과, OpenRouter 키를 두는 .env (.env 는 저장소에 들어가지 않습니다)
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)
 docker-compose.yml  frontend, backend, db(PostgreSQL), agent, 테스트, 프로토타입(web, api, dev, test, web-mock) 서비스
-.github/workflows/  main 으로의 push 와 pull request 마다 테스트를 돌리는 GitHub Actions (test.yml)
+.github/            main 으로의 push 와 pull request 마다 테스트를 돌리는 GitHub Actions (workflows/test.yml), PR 양식 (pull_request_template.md)
 
 저장소에 들어가지 않는 폴더 (.gitignore)
 output/             자동 생성 job 의 입력과 결과 (output/jobs/<job id>/). 실행하면 저절로 생깁니다

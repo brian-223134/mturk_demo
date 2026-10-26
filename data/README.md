@@ -1,6 +1,6 @@
 # data/: 콘솔의 시작 데이터
 
-콘솔이 처음 실행될 때, 그리고 **Mock tools → Reset to fixtures**를 누를 때 읽는 데이터입니다. 데이터는 JSON으로, 템플릿은 HTML 파일로 관리합니다.
+콘솔이 처음 실행될 때(DB가 비어 있을 때), 그리고 프로토타입 콘솔에서 **Mock tools → Reset to fixtures**를 누를 때 읽는 데이터입니다. 데이터는 JSON으로, 템플릿은 HTML 파일로 관리합니다.
 API 서버를 사용하는 방식에서는 이 폴더의 내용이 DB(production 콘솔은 PostgreSQL, 프로토타입은 SQLite)에 채워지고, 이후의 변경 사항(검수, 게시, pool 편집)은 DB에만 저장됩니다. 이 폴더의 파일은 바뀌지 않습니다.
 
 ```
@@ -25,9 +25,10 @@ batch.json의 `reference`는 Review에서 답을 대조하는 기준입니다. `
 ## 수정하고 반영하기
 
 1. 이 폴더의 JSON이나 HTML을 고칩니다.
-2. 콘솔에서 **Mock tools → Reset to fixtures**를 누릅니다.
+2. production 콘솔(frontend, backend)은 DB가 비어 있을 때만 이 폴더를 읽으므로, `docker compose down -v`로 DB를 지우고 다시 띄웁니다. 그동안 만든 Project, batch, 계정도 함께 지워지므로 admin을 다시 만들어야 합니다.
+3. 프로토타입 콘솔에서는 **Mock tools → Reset to fixtures**를 누르면 바로 반영됩니다.
 
-Docker의 `api` 서비스는 이 폴더를 직접 읽으므로 이미지를 다시 빌드할 필요가 없습니다.
+프로토타입의 `api` 서비스는 이 폴더를 직접 읽으므로 이미지를 다시 빌드할 필요가 없습니다.
 브라우저만으로 동작하는 방식에서는 데이터가 빌드 결과에 포함되므로, 개발용 서버에서는 바로 반영되지만 빌드본은 다시 빌드해야 합니다.
 
 파일끼리 맞지 않는 부분이 있으면, 실행할 때 어느 파일의 무엇이 잘못되었는지 알려 줍니다. 예를 들면 다음과 같습니다.
@@ -40,7 +41,7 @@ data/batches/batch-1000001/assignments.json: assignment 3ABC... points to unknow
 
 | 하고 싶은 것 | 고칠 곳 |
 |---|---|
-| 템플릿 추가 | `templates/`에 `.html` 파일을 넣고 `templates/index.json`에 한 줄을 추가합니다. 콘솔의 Create › Template에서 올려도 됩니다. |
+| 템플릿 추가 | `templates/`에 `.html` 파일을 넣고 `templates/index.json`에 한 줄을 추가합니다. 콘솔의 Create → New Project → `Upload or paste HTML`(프로토타입은 Create › Template)에서 올려도 됩니다. |
 | 잔액 변경 | `account.json`의 `AvailableBalance` |
 | pool을 미리 채워 두기 | `pools.json`의 `workerIds` |
 | 검수할 응답 늘리기 | `assignments.json`에서 몇 건의 `AssignmentStatus`를 `"Submitted"`로 바꾸고 `ApprovalTime`을 지웁니다. |
@@ -48,7 +49,7 @@ data/batches/batch-1000001/assignments.json: assignment 3ABC... points to unknow
 
 ## 콘솔에서 만든 상태를 시작 데이터로 삼기
 
-콘솔에서 미리 상태를 만들어 둔 뒤(예: batch 게시, 가짜 응답 생성, pool 구성) 그것을 새로운 시작 상태로 삼을 수 있습니다.
+프로토타입 콘솔에서 미리 상태를 만들어 둔 뒤(예: batch 게시, 가짜 응답 생성, pool 구성) 그것을 새로운 시작 상태로 삼을 수 있습니다. production 콘솔에는 이 내보내기가 없으므로, 그 상태를 다른 PC로 옮길 때는 DB를 덤프합니다([루트 README](../README.md#다른-pc에서-clone해서-시작할-때)).
 
 ```bash
 # 1. 콘솔에서 Mock tools → Export data (JSON)을 누르면 mturk-console-data-<시각>.json 파일이 내려받아집니다.

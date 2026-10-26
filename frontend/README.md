@@ -12,7 +12,7 @@ docker compose up --build frontend backend      # http://localhost:3000
 
 `src/`는 컨테이너에 bind mount되므로 파일을 고친 뒤 새로고침만 하면 반영됩니다. 이미지를 다시 빌드할 필요는 없습니다. html, js, css 모두 `Cache-Control: no-cache`로 내려가므로 파일 이름에 해시를 붙이지 않아도 옛 파일이 남지 않습니다.
 
-backend 없이 화면만 보려면 프로토타입의 mock API 서버(`api`, 포트 8787)에 붙일 수 있습니다. 경로 표가 같으므로 콘솔 화면은 그대로 동작하고, agent job API가 없어 Generate 패널에 안내가 표시됩니다. 프로토타입의 API는 Project의 속성(`properties`)과 표본 행(`sampleRow`)을 저장하지 않으므로, 저장한 Project를 다시 열면 기본값이 보입니다.
+backend 없이 화면만 보려면 프로토타입의 mock API 서버(`api`, 포트 8787)에 붙일 수 있습니다. 경로 표가 같으므로 콘솔 화면은 그대로 동작하고, agent job API가 없어 Generate 패널에 안내가 표시됩니다. 계정 API도 없으므로 로그인 없이 콘솔이 열리고 worker 화면은 쓸 수 없습니다. 프로토타입의 API는 Project의 속성(`properties`)과 표본 행(`sampleRow`)을 저장하지 않으므로, 저장한 Project를 다시 열면 기본값이 보입니다.
 
 ```
 API_UPSTREAM=http://api:8787 docker compose up --no-deps frontend api
@@ -31,17 +31,9 @@ frontend/
 ├─ Dockerfile              nginx:stable-alpine. nginx.conf.template 과 src/ 를 복사합니다 (빌드 컨텍스트는 저장소 루트)
 ├─ nginx.conf.template     listen 80, /api/ 프록시(${API_UPSTREAM}), SPA fallback, no-cache
 ├─ README.md
-├─ tests/                 node --test 로 도는 단위 테스트 (아래 "테스트")
+├─ tests/                 node --test 로 도는 단위 테스트. 파일마다 다루는 것은 아래 "테스트"에 있습니다
 │  ├─ helpers/routes-ts.js  routes.ts 의 경로 표를 정규식으로 읽는 도우미
-│  ├─ routes.test.js      경로 표 대조와 encodeRequest
-│  ├─ client.test.js      fetch 를 가짜로 바꾼 API 클라이언트 검사
-│  ├─ format.test.js      표시 도우미
-│  ├─ dom.test.js         escapeHtml, join, el
-│  ├─ router.test.js      경로 패턴 매칭
-│  ├─ elements.test.js    <ann-*> 요소의 core (답 이름, 문항 목록, 제출할 답, 막는 문구)
-│  ├─ layout-lint.test.js  Design Layout 의 검사
-│  ├─ job-groups.test.js  Generate 의 후보 묶음
-│  └─ starters.test.js    starter 템플릿과 example/5-project
+│  └─ *.test.js           src/ 의 모듈별 테스트 (lib-*.test.js 는 lib/, manage-*.test.js 는 pages/manage/ 의 순수 함수)
 └─ src/
    ├─ index.html           루트 요소 하나와 <script type="module" src="/main.js">
    ├─ main.js              로그인 상태(GET /api/auth/me)를 보고 역할에 맞는 레이아웃과 경로를 등록합니다 (아래 "로그인과 역할")
@@ -56,7 +48,7 @@ frontend/
    │  └─ starters/         New Project 의 starter 템플릿 9종 (<ann-*> 로 쓴 HTML)
    ├─ styles-review.css     Manage 의 Review·HITs·Results 와 Worker Pool 의 스타일
    ├─ api-client/          (api/ 가 아닌 이유: /api/ 는 nginx 가 backend 로 넘기는 경로라 정적 파일과 겹칩니다)
-   │  ├─ routes.js         REST 경로 표(API_ROUTES), agent job 경로(AGENT_ROUTES), 계정 경로(ACCOUNT_ROUTES), 요청 인코딩(encodeRequest)
+   │  ├─ routes.js         REST 경로 표(API_ROUTES), agent job 경로(AGENT_ROUTES), 계정 경로(ACCOUNT_ROUTES), worker 경로(WORKER_ROUTES), 요청 인코딩(encodeRequest)
    │  └─ client.js         call(routeName, args), api.<route>(…), auth, admin, ApiError { code, message, status }, createJob, createJobGroup, fileUrl
    ├─ lib/                  DOM 을 쓰지 않는 순수 로직. Node 테스트에서 그대로 import 합니다
    │  ├─ csv.js             RFC 4180 파서(따옴표, 겹따옴표, 줄바꿈, CRLF, BOM)와 UTF-8 검사. papaparse 를 쓰지 않습니다
@@ -71,6 +63,7 @@ frontend/
    │  ├─ starters.js        starter 템플릿 목록 (설명, 표본 행, 미리 채울 속성)
    │  ├─ layout-lint.js     Design Layout 의 검사 (<ann-*> 를 잘못 쓴 곳)
    │  ├─ job-groups.js      Generate 의 후보 묶음: job 목록을 묶음과 단독 job 으로 나누기, 묶음 상태와 안내, 후보마다 고를 기본 모델
+   │  ├─ experiments.js     Generate 초안(prompt, 이름, 후보 모델, 이전 raw 참조), Tutorial 예시 prompt 넘기기, 결과 비교와 내보내기
    │  ├─ session.js         역할별 첫 화면과 열 수 있는 경로, 로그인 뒤 돌아갈 곳(safeNext), 가입 조건과 검사 문구 (backend 와 같은 문구)
    │  ├─ worker-tasks.js    worker 에게 보낼 입력 컬럼(backend 와 같은 규칙, Publish Batch 의 확인 단계가 보여 줌), 남은 시간, 기간과 상태 글
    │  └─ element-reference.js  Insert element 메뉴와 Element reference 패널의 요소 설명
@@ -178,7 +171,7 @@ Create의 Generate 패널은 prompt 본문, 이름, 후보마다 고른 모델�
 
 후보 묶음의 `Compare and choose`는 성공한 후보만 같은 비교 창으로 열고, 후보마다 `Choose this template`을 둡니다. 묶음의 후보는 일부러 모델만 바꾼 것이라 모델 차이는 경고하지 않습니다. 다른 실행의 결과를 함께 보려면 성공한 job 2~3개의 `Compare`를 체크하고 `Compare selected`를 누릅니다. 이 비교는 처리량, 누락, 샘플링·attention 조건과 비용을 비교합니다. 공통 일반 항목이 있으면 record/item ID로 같은 그룹의 미리보기를 맞추며, raw·모델·처리 조건이 다르면 알립니다. `Export comparison JSON`은 prompt, spec, 요약, 저장한 평가를 함께 내려받습니다. 내보내기 전에 편집한 평가를 저장해야 합니다.
 
-backend가 경로 표의 27개 경로를 모두 구현하므로, 프로토타입에서 되던 콘솔 기능은 이 화면에서도 모두 됩니다. Create의 Project 만들기와 게시, Manage의 검수·재모집·만료·export·결과, Worker Pool의 pool 편집·차단·worker 상세입니다. `API_UPSTREAM`을 프로토타입의 mock API로 바꾸면 Generate 패널만 잠기고 나머지는 같습니다.
+backend가 경로 표의 26개 경로를 모두 구현하므로, 프로토타입에서 되던 콘솔 기능은 이 화면에서도 모두 됩니다. Create의 Project 만들기와 게시, Manage의 검수·재모집·만료·export·결과, Worker Pool의 pool 편집·차단·worker 상세입니다. `API_UPSTREAM`을 프로토타입의 mock API로 바꾸면 Generate 패널이 잠기고 로그인과 worker 화면이 빠지며, 나머지는 같습니다.
 
 worker 계정으로 로그인하면 게시된 batch의 HIT를 받아 풀고 제출할 수 있어, 새로 게시한 batch의 응답도 Review와 Results에서 확인할 수 있습니다. 시작 데이터의 batch 세 개는 모두 만료되어 worker 화면에는 보이지 않습니다. 프로토타입의 Mock tools(가짜 응답 생성, Reset to fixtures)는 mock 전용이라 backend에 없습니다. 시작 데이터의 템플릿과 agent가 만드는 템플릿이 `assets.crowd.aws`의 스크립트를 불러오는 점도 그대로입니다. starter와 `<ann-*>` 요소로 쓴 템플릿은 이 스크립트에 의존하지 않습니다.
 
@@ -214,6 +207,7 @@ docker compose run --rm frontend-test
 - `lib-project-draft.test.js`: 저장된 Project와 starter에서 편집 값을 만드는 규칙, 표본 행을 layout이 읽는 컬럼으로 줄이는 것, 저장본과의 비교, 저장 요청, Project별 임시 저장을 확인합니다.
 - `elements.test.js`: `<ann-*>` 요소의 DOM 없는 부분(`core`)입니다. checklist 항목 읽기(JSON 배열, 줄 단위), 답 이름, `TASK_ANSWER_SCHEMA`의 모양, 제출할 `[{name, value}]`와 필수 문항·최소 글자 수로 막는 문구, 진행률을 확인합니다. 요소 자체의 동작은 브라우저에서 확인합니다.
 - `job-groups.test.js`: 후보마다 처음 고를 모델(서버 기본 설정 먼저, 서로 다르게, 모자라면 다시 돌기), 저장해 둔 선택 되살리기, 같은 모델을 두 번 고른 경고, job 목록을 묶음과 단독 job 으로 나누는 순서, 묶음 상태(running, ready, failed)와 안내 문구, 고른 후보, 후보 이름을 확인합니다.
+- `experiments.test.js`: Generate 초안이 prompt와 이전 raw 참조는 남기고 API 허용과 로컬 파일은 남기지 않는 것, 후보 모델 세 개(예전 초안의 모델 하나는 첫 후보로), Tutorial 예시 prompt가 한 번만 읽히는 것, 비교에서 같은 item ID끼리 맞추고 입력·모델·처리 조건의 차이를 알리는 것, 내보내기에 저장한 평가와 prompt는 들어가고 원본은 들어가지 않는 것을 확인합니다.
 - `layout-lint.test.js`: Design Layout의 검사입니다. 태그와 속성 읽기, script 누락, 이름 없음·겹침, 선택지 없음, `<ann-form>` 밖의 문항, 모르는 요소, crowd 템플릿 안내를 확인합니다.
 - `starters.test.js`: starter 목록과 파일이 맞는지, 모든 starter가 검사에 오류·경고 없이 통과하는지, 표본 행이 placeholder를 모두 채우는지, 미리 채우는 속성이 폼의 키인지, 그리고 `example/5-project/passage-relevance.csv`가 `Passage relevance` starter와 맞는지(attention 행의 기대 답, gold 컬럼) 확인합니다.
 

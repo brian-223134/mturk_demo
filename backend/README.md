@@ -358,7 +358,7 @@ backend/
    ├─ main.py            create_app() 팩토리, 요청 로그 middleware, lifespan (DB 초기화, job worker 시작)
    ├─ settings.py        환경변수 → Settings
    ├─ errors.py          ApiError 와 오류 봉투, 422 → 400 변환
-   ├─ routes.py          REST 경로 표 (routes.ts 의 API_ROUTES 와 같음)
+   ├─ routes.py          REST 경로 표 (routes.ts 의 API_ROUTES 와 같음)와 backend 에만 있는 계정·worker 경로 표(ACCOUNT_ROUTES, WORKER_ROUTES)
    ├─ db.py              PostgreSQL 문서 저장소 (테이블마다 id + JSON doc). 비어 있으면 seed. Store 는 연결 하나 위의 읽기와 쓰기,
    │                     Database.transaction() 이 트랜잭션 하나로 묶어 준다 (연결은 pool 에서)
    ├─ schema.py          스키마 이전: migrations/ 의 SQL 파일을 번호순으로, 아직 적용하지 않은 것만
