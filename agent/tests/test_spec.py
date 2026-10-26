@@ -318,6 +318,16 @@ class ParseTest(unittest.TestCase):
         data["hit"] = {"attention": {"strategy": "mismatch", "expected": {}, "mismatch": {"swap_fields": ["question"]}}}
         self.assertIn("$.hit.attention.expected: at least one question id with its expected value is required", errors_of(data))
 
+    def test_video_style_rules(self):
+        # 영상은 context 필드로 쓴다
+        data = with_questions(question(scope="item"))
+        del data["item"]["fields"]["facts"]
+        data["item"]["fields"]["clip"] = {"path": "$.video_url", "label": "Clip", "role": "context", "style": "video"}
+        self.assertEqual(spec.parse_spec(data).item.fields["clip"].style, "video")
+        # target 은 worker 가 하나씩 판정하는 문자열 목록이므로 영상이 될 수 없다
+        data["item"]["fields"]["clip"]["role"] = "target"
+        self.assertIn('$.item.fields.clip.style: "video" cannot be the target field', errors_of(data))
+
     def test_contains_needs_true_false(self):
         hint = {"label_path": "$.sel", "contains": "{target_key}", "map": {"yes": "yes"}}
         self.assertIn("$.item.questions[0].hint.map: with contains, the raw labels are \"true\" and \"false\"",
