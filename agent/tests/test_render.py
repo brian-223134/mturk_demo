@@ -69,8 +69,11 @@ class RenderTest(unittest.TestCase):
         self.assertLess(self.html.index("</crowd-form>"), self.html.index("<style>"))
         self.assertIn("return 'general_' + i", self.html)
         self.assertIn("window.TASK_ANSWER_SCHEMA = ", self.html)
-        # crowd-html-elements가 입력의 change를 문서까지 올리지 않으므로 capture 단계에서 듣는다
-        self.assertEqual(self.html.count("}, true);"), 2)
+        # crowd-html-elements가 입력의 change를 문서까지 올리지 않으므로 capture 단계에서 듣는다.
+        # 영상 버튼(click)과 재생 시각 표시(timeupdate, 버블링하지 않는다)도 같은 방식이다.
+        for event in ("change", "input", "click", "timeupdate"):
+            self.assertIn("document.addEventListener('%s', function (e) {" % event, self.html)
+        self.assertEqual(self.html.count("}, true);"), 4)
         # 페이지 어디에도 attention 탭을 가리는 표시나 참조 라벨 컬럼이 없다
         for absent in ("attention_", "llm_label", "llm_reason", "attention_expected", "${attention}"):
             self.assertNotIn(absent, self.html)
@@ -172,6 +175,18 @@ class WidgetTest(unittest.TestCase):
             self.assertNotIn(absent, self.html)
         self.assertLessEqual(len(self.html.encode("utf-8")), 40 * 1024)
         self.assertEqual(self.html.count("</script"), 2)
+
+    def test_video_field_renders_a_player(self):
+        """style "video" 인 필드는 영상 플레이어로 그린다 (배속과 0.1초 앞뒤 이동 버튼을 함께)."""
+        with_video = variant(self.spec, lambda d: d["item"]["fields"]["question"].update({"style": "video"}))
+        html = render.render_template(with_video)
+        styles = {f["name"]: f["style"] for f in layout_of(html)["fields"]}
+        self.assertEqual(styles["question"], "video")
+        self.assertIn("f.style === 'video'", html)        # contextCard 의 분기
+        self.assertIn('class="ctx-video-el"', html)       # 플레이어
+        self.assertIn("data-seek=", html)                 # 0.1초 앞뒤 이동
+        self.assertIn("playbackRate", html)               # 배속
+        self.assertIn(".ctx-video-el {", html)            # 스타일
 
     def test_every_input_has_a_name(self):
         # crowd-html-elements 는 이름 없는 입력을 미리보기에 Potential errors 상자로 띄운다. "해당 없음" 칸도 이름이 있어야 한다

@@ -56,7 +56,7 @@ RESERVED_COLUMNS = ("hit_id", "record_ids", "item_ids", "attention")
 RESERVED_VARIABLES = ("record_index", "record_no", "record_id", "target", "target_index", "target_no", "target_key")
 SOURCE_FORMATS = ("json_array", "json_object_values", "jsonl", "csv")
 FIELD_ROLES = ("context", "target")
-FIELD_STYLES = ("text", "passage", "list")
+FIELD_STYLES = ("text", "passage", "list", "video")
 QUESTION_TYPES = ("choice", "multi_select", "likert", "text")
 QUESTION_SCOPES = ("target", "item")
 GROUP_BY = ("record", "sequential")
@@ -928,6 +928,9 @@ def check_spec(spec: TaskSpec) -> list[str]:
             add(f"{where}.role: must be one of {', '.join(repr(r) for r in FIELD_ROLES)}")
         if f.style not in FIELD_STYLES:
             add(f"{where}.style: must be one of {', '.join(repr(s) for s in FIELD_STYLES)}")
+        elif f.style == "video" and f.role == "target":
+            add(f"{where}.style: \"video\" cannot be the target field "
+                "(the target is a list of strings the worker judges one by one)")
         if not f.label.strip():
             add(f"{where}.label: must not be empty")
         _check_path(f.path, f"{where}.path", item_vars, errors)
