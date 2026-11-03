@@ -61,6 +61,7 @@ function writeDesign(id) {
 
 /** 도형만으로 그린 가안 그림. PPT 에 도형을 놓은 것처럼 칸의 자리와 이름만 보인다. */
 export function wireframe(design) {
+  if (design.open) return el('div', { className: 'wire', 'aria-hidden': 'true' }, el('div', { className: 'wire-instructions' }, 'Instructions'), el('div', { className: 'wire-row', style: { flexGrow: '1' } }, el('div', { className: 'wire-box wire-open' }, el('span', {}, 'You describe the layout'))));
   const box = (slot) => el('div', { className: `wire-box wire-${slot.startsWith('data') ? 'data' : 'hit'}`, dataset: { slot } }, el('span', {}, SLOT_LABELS[slot]));
   const rows = design.rows.map((row) =>
     el(
@@ -216,7 +217,7 @@ export function renderDesignTask(root, params, signal) {
         nextLabel: 'Next',
         nextId: 'design-to-data',
         nextDisabled: !taskType,
-        hint: !taskType ? 'Choose a task type to continue.' : 'Next, put your HIT data into this design.',
+        hint: !taskType ? 'Choose a task type to continue.' : design.open ? 'Next, upload your HIT data and describe the page.' : 'Next, put your HIT data into this design.',
       }),
     );
   }
@@ -231,6 +232,12 @@ export function renderDesignTask(root, params, signal) {
     }
     if (!taskType) {
       previewSlot.replaceChildren();
+      renderFooter();
+      return;
+    }
+    if (design.open) {
+      // 보여 줄 배치가 아직 없다. 임시 배치를 보이면 그것이 결과처럼 읽힌다
+      previewSlot.replaceChildren(muted('There is no layout to preview yet. In the next step, upload your HIT data and describe the page you want.'));
       renderFooter();
       return;
     }
@@ -336,7 +343,8 @@ export function renderDesignData(root, params, signal) {
   });
   const nameField = field({ id: 'design-project-name', label: 'Project name', control: nameInput, hint: 'Saved as a project when you use this design. You can change its properties and layout later.', required: true });
 
-  const defaultName = () => `${(state.check?.design ?? design).title} (${(state.check?.taskType ?? taskType).title})`;
+  const layoutTitle = (d) => (d.open ? 'Custom layout' : d.title);
+  const defaultName = () => `${layoutTitle(state.check?.design ?? design)} (${(state.check?.taskType ?? taskType).title})`;
   const problemsSlot = el('div', { id: 'binding-problems' });
   const previewSlot = el('div', { id: 'bound-preview' });
   const editor = el('textarea', { id: 'binding-editor', className: 'binding-editor', rows: 16, spellcheck: 'false', 'aria-label': 'Binding' });
@@ -389,7 +397,7 @@ export function renderDesignData(root, params, signal) {
       el(
         'div',
         { className: 'panel-head' },
-        el('h4', { className: 'section-title' }, `Preview: ${currentDesign.title}${currentDesign.customLayout ? ', custom layout,' : ''} with your data`),
+        el('h4', { className: 'section-title' }, `Preview: ${layoutTitle(currentDesign)}${currentDesign.customLayout && !currentDesign.open ? ', custom layout,' : ''} with your data`),
         el('span', { className: 'panel-actions' }, hitSelect, el('span', { className: 'muted small', id: 'bound-hit-count' }, `of ${state.reader.rowCount.toLocaleString('en-US')} HITs`)),
       ),
       ...(checks.length > 0 ? [muted(checks.join(' '))] : []),
@@ -466,6 +474,21 @@ export function renderDesignData(root, params, signal) {
     applyText();
   }
 
+  /** 배치가 가안과 다르거나 아직 임시일 때 위쪽에 보이는 안내. */
+  function layoutNote(current) {
+    const open = roughDesignById(current.design)?.open;
+    if (open) return current.layout === undefined ? [el('p', { className: 'muted small bound-layout-note', id: 'bound-layout-note' }, 'This is only a starting point. Describe the page below and the model arranges the slots.')] : [];
+    if (current.layout === undefined) return [];
+    return [
+      el(
+        'p',
+        { className: 'muted small bound-layout-note', id: 'bound-layout-note' },
+        'This binding has its own layout, so the slots are not where the rough design puts them. ',
+        el('button', { type: 'button', className: 'btn btn-small btn-link', id: 'bound-drop-layout', onClick: useDesignLayout }, 'Use the rough design layout'),
+      ),
+    ];
+  }
+
   /** 고친 배치를 버린다. 대화의 Restore 로 다시 돌아갈 수 있다. */
   function useDesignLayout() {
     if (state.writing || !state.binding) return;
@@ -484,21 +507,13 @@ export function renderDesignData(root, params, signal) {
       segmented({ id: 'bound-design', options: ROUGH_DESIGNS.map((d) => ({ value: d.id, label: `${d.letter}. ${d.title}` })), value: current.design, onChange: (value) => switchTo(value, current.task_type) }),
       el('span', { className: 'muted' }, 'Task type'),
       segmented({ id: 'bound-type', options: TASK_TYPES.map((t) => ({ value: t.id, label: t.title })), value: current.task_type, onChange: (value) => switchTo(current.design, value) }),
-      ...(current.layout === undefined
-        ? []
-        : [
-            el(
-              'p',
-              { className: 'muted small bound-layout-note', id: 'bound-layout-note' },
-              'This binding has its own layout, so the slots are not where the rough design puts them. ',
-              el('button', { type: 'button', className: 'btn btn-small btn-link', id: 'bound-drop-layout', onClick: useDesignLayout }, 'Use the rough design layout'),
-            ),
-          ]),
+      ...layoutNote(current),
     );
   }
 
   // ── LLM 에 binding 쓰게 하고 고치게 하기 ──
   const WRITE_PLACEHOLDER = 'For example: for each chunk, check every atomic fact the chunk supports.';
+  const OPEN_PLACEHOLDER = 'For example: for each chunk, judge every fact with radio buttons. Put the chunk on the left, the facts on the right, and a comment box below.';
   const REVISE_PLACEHOLDER = 'For example: rename the options to Yes and No, or put the question on the left.';
   const promptLabel = el('label', { for: 'binding-prompt' });
   const promptInput = el('textarea', { id: 'binding-prompt', rows: 3, 'aria-labelledby': 'binding-prompt-label' });
@@ -529,8 +544,9 @@ export function renderDesignData(root, params, signal) {
   function refreshAgent() {
     writeButton.disabled = state.writing || state.parseFailed || !agentInfo?.api_allowed || !allowApi.checked || promptInput.value.trim() === '';
     writeButton.textContent = state.authored ? (state.writing ? 'Revising…' : 'Revise the binding') : state.writing ? 'Writing…' : 'Write the binding';
-    promptLabel.textContent = state.authored ? 'What should change?' : 'What should workers judge?';
-    promptInput.placeholder = state.authored ? REVISE_PLACEHOLDER : WRITE_PLACEHOLDER;
+    const open = roughDesignById(state.binding?.design)?.open;
+    promptLabel.textContent = state.authored ? 'What should change?' : open ? 'What should workers judge, and how should the page look?' : 'What should workers judge?';
+    promptInput.placeholder = state.authored ? REVISE_PLACEHOLDER : open ? OPEN_PLACEHOLDER : WRITE_PLACEHOLDER;
     editor.readOnly = state.writing;
     formSlot.disabled = state.writing;
   }
@@ -820,7 +836,7 @@ export function renderDesignData(root, params, signal) {
     el(
       'section',
       { className: 'panel', id: 'hit-data' },
-      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Put your HIT data into the design'), el('span', { className: 'panel-actions' }, el('button', { type: 'button', className: 'btn btn-small btn-link', id: 'save-without-data', onClick: () => void saveWithoutData() }, 'Save the sample layout without data'))),
+      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Put your HIT data into the design'), ...(design.open ? [] : [el('span', { className: 'panel-actions' }, el('button', { type: 'button', className: 'btn btn-small btn-link', id: 'save-without-data', onClick: () => void saveWithoutData() }, 'Save the sample layout without data'))])),
       uploadSlot,
       errorSlot,
       workSlot,

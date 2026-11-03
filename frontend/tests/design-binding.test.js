@@ -443,6 +443,64 @@ describe('binding 의 layout', () => {
   });
 });
 
+describe('Others: 고정된 배치가 없는 가안', () => {
+  const start = { design: 'from-prompt', task_type: 'text', repeat: binding.repeat, slots: { data: binding.slots.data } };
+
+  it('임시 배치로도 바로 쓸 수 있고, 문항은 예시임을 알린다', () => {
+    const draft = draftBinding('from-prompt', 'text', reader);
+    const check = checkBinding(draft, reader);
+    assert.deepEqual(check.errors, []);
+    assert.match(check.warnings.join(' '), /Slot "choice" has no binding/);
+  });
+
+  it('LLM 답의 layout 으로 어떤 칸이든 고를 수 있다', () => {
+    const answer = { ...start, layout: { rows: [{ columns: '3fr 2fr', slots: ['data', 'item-choice'] }, { slots: ['free-text'] }] }, slots: { ...binding.slots, 'free-text': { name: 'note', header: 'Anything to add?' } }, reference: binding.reference, attention: binding.attention };
+    const { check, html } = build(answer, reader);
+    assert.equal(check.warnings.some((warning) => warning.includes('no binding')), false);
+    assert.ok(html.indexOf('<ann-item-choice') < html.indexOf('<ann-textarea'));
+    assert.deepEqual(boundData(answer, check.design, check.taskType, check.tabs, reader, 'x').rows[0].slot_reference, boundData(binding, checkBinding(binding, reader).design, check.taskType, check.tabs, reader, 'x').rows[0].slot_reference);
+  });
+
+  it('layout 없이 임시 배치에 없는 칸을 쓰면 오류로 다시 묻는다', () => {
+    assert.match(checkBinding({ ...start, slots: binding.slots }, reader).errors.join(' '), /no slot "item-choice"/);
+  });
+
+  it('LLM 에 열린 가안임을 알린다', () => {
+    assert.equal(designForRequest(roughDesignById('from-prompt')).open, true);
+    assert.equal('open' in designForRequest(roughDesignById('item-list')), false);
+  });
+
+  it('다른 가안에서 넘어오면 지금 배치에서 출발해 값을 잃지 않는다', () => {
+    const moved = adaptBinding(binding, 'from-prompt');
+    assert.deepEqual(moved.layout, { rows: [{ columns: '3fr 2fr', slots: ['data', 'item-choice'] }] });
+    assert.deepEqual(moved.slots, binding.slots);
+    assert.deepEqual(moved.reference, binding.reference);
+    assert.equal(moved.unused, undefined);
+    assert.deepEqual(checkBinding(moved, reader).errors, []);
+  });
+
+  it('고친 배치에서 넘어와도 그 배치를 잇고, 원래 가안으로 돌아가면 되살린다', () => {
+    const custom = { ...binding, layout: { rows: [{ slots: ['item-choice', 'data'] }] } };
+    const moved = adaptBinding(custom, 'from-prompt');
+    assert.deepEqual(moved.layout, custom.layout);
+    assert.deepEqual(adaptBinding(moved, 'item-list').layout, custom.layout);
+  });
+
+  it('Others 에서 다른 가안으로 갔다 오면 Others 의 배치를 되살린다', () => {
+    const answer = { ...binding, design: 'from-prompt', layout: { rows: [{ slots: ['item-choice'] }, { slots: ['data'] }] } };
+    const away = adaptBinding(answer, 'item-list');
+    assert.equal(away.layout, undefined);
+    assert.deepEqual(checkBinding(away, reader).errors, []);
+    assert.deepEqual(adaptBinding(away, 'from-prompt').layout, answer.layout);
+  });
+
+  it('임시 배치에서 다른 가안으로 가면 보관할 배치가 없다', () => {
+    const away = adaptBinding(draftBinding('from-prompt', 'text', reader), 'stacked');
+    assert.equal(away.unused?.layout, undefined);
+    assert.deepEqual(checkBinding(away, reader).errors, []);
+  });
+});
+
 describe('탭마다 다른 값을 고정 번호로 읽기', () => {
   const hits = readerOf([
     { query: JSON.stringify(['same', 'same', 'other']), chunk: JSON.stringify(['a', 'b', 'c']), title: JSON.stringify(['t', 't', 't']), facts: JSON.stringify([['x'], ['y'], ['z']]), extra: JSON.stringify(['m', 'n']) },

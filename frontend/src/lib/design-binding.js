@@ -729,7 +729,7 @@ export function summarizeData(reader) {
 
 /** 가안 정의 중 LLM 이 쓸 부분. */
 export function designForRequest(design) {
-  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ ...(row.columns ? { columns: row.columns } : {}), slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}) };
+  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ ...(row.columns ? { columns: row.columns } : {}), slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}), ...(design.open ? { open: true } : {}) };
 }
 
 /**
@@ -767,7 +767,9 @@ export async function requestBinding({ send, check, request, maxAttempts = 3 }) 
 export function adaptBinding(binding, designId) {
   const staying = binding.design === designId;
   const savedLayout = binding.unused?.layout;
-  const layout = staying ? binding.layout : savedLayout?.design === designId ? savedLayout.layout : undefined;
+  let layout = staying ? binding.layout : savedLayout?.design === designId ? savedLayout.layout : undefined;
+  // Others 로 넘어오면 지금 배치에서 출발한다. 임시 배치로 가면 문항 칸의 값이 사라져 보이기 때문이다
+  if (layout === undefined && !staying && roughDesignById(designId).open) layout = { rows: designOf(binding).rows.map(({ columns, slots }) => ({ ...(columns ? { columns } : {}), slots })) };
   const target = layout !== undefined && layoutErrors(layout).length === 0 ? withLayout(roughDesignById(designId), layout) : roughDesignById(designId);
   const source = { ...binding.unused, ...binding.slots };
   const targetSlots = slotsOf(target);

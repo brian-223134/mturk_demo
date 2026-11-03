@@ -1082,6 +1082,11 @@ a.btn:hover {
   padding: 0 3px;
   background: #f7f7f4;
 }
+.wire-open {
+  background: #fff;
+  border-style: dashed;
+  color: var(--muted);
+}
 .wire-hit {
   background: #e8f0fc;
   border-color: #7fa3da;

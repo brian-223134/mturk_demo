@@ -4,6 +4,7 @@
 //   rows[].slots   왼쪽부터 놓을 칸 (SLOT_LABELS 의 키). 칸이 둘 이상이면 columns 비율로 나눈다. 목록을 쓰면 한 열에 칸을 위아래로 쌓는다
 //   rows[].weight  도형 그림에서 이 줄의 높이 비율
 //   tabs           있으면 rows 전체를 탭 수만큼 되풀이한다
+//   open           고정된 배치가 없는 가안(Others). rows 는 요청 전의 임시 배치이고, 실제 배치는 binding 의 layout 으로 정한다
 // 표본 글과 그림은 모두 직접 만든 합성 자료다. Video 의 표본은 영상 파일 없이 Vision 의 그림을 쓴다 (ann-video 가 정지 화면으로 그린다).
 // 실제 HIT 데이터를 칸에 넣는 것은 lib/design-binding.js 가 맡는다.
 // tests/rough-designs.test.js 가 가안과 task 종류의 모든 조합이 바로 쓸 수 있는 상태인지 본다.
@@ -68,6 +69,17 @@ export const ROUGH_DESIGNS = [
     title: 'Item by item',
     summary: 'One piece of data on the left and a list of items on the right. Workers answer every item with radio buttons.',
     rows: [{ columns: '3fr 2fr', weight: 1, slots: ['data', 'item-choice'] }],
+  },
+  {
+    id: 'from-prompt',
+    letter: 'F',
+    title: 'Others',
+    summary: 'None of these? Upload your data, describe the page you want, and the model arranges the slots.',
+    open: true,
+    rows: [
+      { weight: 3, slots: ['data'] },
+      { weight: 2, slots: ['choice'] },
+    ],
   },
 ];
 
