@@ -65,7 +65,7 @@ export const TUTORIAL = {
               [u('Project name'), '을 확인하고 ', u('Use this design'), '을 누르면 Project가 저장되고, 데이터가 올라간 Publish Batch가 열립니다. 대조 기준과 attention 설정도 binding대로 채워져 있습니다.'],
             ],
           },
-          { note: ['worker에게 보이는 글(안내문, 문항, 라벨, 선택지)은 영어로 씁니다. 원본 데이터 파일을 올리는 기능은 아직 없으며, 이미 HIT로 묶인 파일만 받습니다.'] },
+          { note: ['worker에게 보이는 글(안내문, 문항, 라벨, 선택지)은 영어로 씁니다. 원본 데이터 파일을 올리는 기능은 아직 없으며, 이미 HIT로 묶인 파일만 받습니다. 실제 영상은 `var/video-demo/`에 두고 값에 `/media/<파일 이름>.mp4`를 씁니다.'] },
         ],
       },
       {
@@ -220,7 +220,7 @@ export const TUTORIAL = {
               ['Check the ', u('Project name'), ' and press ', u('Use this design'), '. The Project is saved and Publish Batch opens with the data loaded. The reference and attention settings are filled in from the binding.'],
             ],
           },
-          { note: ['Text that workers see (instructions, questions, labels, options) is written in English. Uploading raw data files here is not available yet; only files already grouped into HITs are accepted.'] },
+          { note: ['Text that workers see (instructions, questions, labels, options) is written in English. Uploading raw data files here is not available yet; only files already grouped into HITs are accepted. For real videos, put the files in `var/video-demo/` and use `/media/<file name>.mp4` as the value.'] },
         ],
       },
       {
