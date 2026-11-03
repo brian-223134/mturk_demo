@@ -25,6 +25,30 @@ describe('ann-elements core', () => {
     for (const src of ['/media/clip.mp4', 'https://x.test/a.svg.mp4', '', null, undefined]) assert.equal(core.isImageSource(src), false, String(src));
   });
 
+  it('videoSeekTime: 처음과 끝을 넘지 않고 0.1 을 더해도 오차가 쌓이지 않는다', () => {
+    assert.equal(core.videoSeekTime(0.05, -core.VIDEO_STEP, 10), 0);
+    assert.equal(core.videoSeekTime(9.95, core.VIDEO_STEP, 10), 10);
+    let at = 0;
+    for (let step = 0; step < 3; step += 1) at = core.videoSeekTime(at, core.VIDEO_STEP, 10);
+    assert.equal(at, 0.3);
+    assert.equal(core.videoSeekTime(1, core.VIDEO_STEP, NaN), 1.1, '길이를 아직 모르면 끝을 보지 않는다');
+    assert.equal(core.videoSeekTime(undefined, core.VIDEO_STEP, 10), 0.1);
+  });
+
+  it('videoTimeText: 분과 초를 0.01초까지, 1시간이 넘으면 시를 붙인다', () => {
+    assert.equal(core.videoTimeText(0), '0:00.00');
+    assert.equal(core.videoTimeText(0.3), '0:00.30');
+    assert.equal(core.videoTimeText(65.3), '1:05.30');
+    assert.equal(core.videoTimeText(59.999), '0:59.99', '반올림으로 60초가 되지 않는다');
+    assert.equal(core.videoTimeText(3605.5), '1:00:05.50');
+    for (const value of [NaN, Infinity, -1, undefined]) assert.equal(core.videoTimeText(value), '0:00.00');
+  });
+
+  it('배속은 1배를 포함한다 (처음 표시되는 값)', () => {
+    assert.ok(core.VIDEO_RATES.includes(1));
+    assert.deepEqual(core.VIDEO_RATES, [0.5, 1, 1.5, 2]);
+  });
+
   it('parseItems: JSON 배열의 문자열, 숫자, 객체와 줄 단위 글을 읽는다', () => {
     assert.deepEqual(core.parseItems('["a", 2]'), [{ key: null, text: 'a' }, { key: null, text: '2' }]);
     assert.deepEqual(core.parseItems('[{"text": "x", "key": "f7"}, {"label": "y", "id": 3}]'), [{ key: 'f7', text: 'x' }, { key: '3', text: 'y' }]);
