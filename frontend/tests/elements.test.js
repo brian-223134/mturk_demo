@@ -20,6 +20,11 @@ describe('ann-elements core', () => {
     assert.equal(typeof core.collect, 'function');
   });
 
+  it('isImageSource: 이미지 주소만 고른다 (ann-video 의 정지 화면)', () => {
+    for (const src of ['/elements/samples/street.svg', 'https://x.test/a.JPG', 'a.webp?size=2', ' b.png#top ']) assert.equal(core.isImageSource(src), true, src);
+    for (const src of ['/media/clip.mp4', 'https://x.test/a.svg.mp4', '', null, undefined]) assert.equal(core.isImageSource(src), false, String(src));
+  });
+
   it('parseItems: JSON 배열의 문자열, 숫자, 객체와 줄 단위 글을 읽는다', () => {
     assert.deepEqual(core.parseItems('["a", 2]'), [{ key: null, text: 'a' }, { key: null, text: '2' }]);
     assert.deepEqual(core.parseItems('[{"text": "x", "key": "f7"}, {"label": "y", "id": 3}]'), [{ key: 'f7', text: 'x' }, { key: '3', text: 'y' }]);

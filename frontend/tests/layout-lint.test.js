@@ -31,6 +31,16 @@ describe('lintLayout', () => {
     assert.equal(hasLayoutErrors(result), false);
   });
 
+  it('이미지, 영상, 칸 나누기 요소를 알고, src 가 없으면 오류다', () => {
+    const script = '<script src="/elements/ann-elements.js"></script>';
+    const good = lintLayout(`${script}<ann-form><ann-columns columns="1fr 1fr"><ann-column><ann-image src="\${a}"></ann-image></ann-column><ann-column><ann-video src="\${b}"></ann-video></ann-column></ann-columns><ann-textarea name="n"></ann-textarea></ann-form>`);
+    assert.deepEqual(good.problems, []);
+    assert.deepEqual(good.placeholders, ['a', 'b']);
+    const bad = lintLayout(`${script}<ann-form><ann-video></ann-video><ann-textarea name="n"></ann-textarea></ann-form>`);
+    assert.equal(hasLayoutErrors(bad), true);
+    assert.ok(bad.problems[0].message.includes('<ann-video> has no src'));
+  });
+
   it('script 가 없으면 오류다', () => {
     const result = lintLayout('<ann-form><ann-choice name="q" options="a, b"></ann-choice></ann-form>');
     assert.match(messages(result, 'error')[0], /ann-elements\.js/);

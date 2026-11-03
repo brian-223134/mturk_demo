@@ -6,7 +6,8 @@ import { extractPlaceholders } from './template.js';
 
 export const ELEMENTS_SCRIPT = '/elements/ann-elements.js';
 export const QUESTION_TAGS = ['ann-choice', 'ann-likert', 'ann-checklist', 'ann-textarea'];
-export const KNOWN_TAGS = ['ann-form', 'ann-instructions', 'ann-text', ...QUESTION_TAGS, 'ann-option', 'ann-item', 'ann-tabs', 'ann-tab'];
+export const MEDIA_TAGS = ['ann-image', 'ann-video'];
+export const KNOWN_TAGS = ['ann-form', 'ann-instructions', 'ann-text', ...MEDIA_TAGS, ...QUESTION_TAGS, 'ann-option', 'ann-item', 'ann-tabs', 'ann-tab', 'ann-columns', 'ann-column'];
 
 const TAG = /<(\/?)([A-Za-z][\w-]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
 const ATTRIBUTE = /([^\s"'=<>`/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
@@ -84,6 +85,12 @@ export function lintLayout(html) {
   }
   const unknown = [...new Set(opens.filter((tag) => tag.name.startsWith('ann-') && !KNOWN_TAGS.includes(tag.name)).map((tag) => tag.name))];
   for (const name of unknown) problems.push({ level: 'warning', message: `Unknown element <${name}>. It is shown as plain content. Check the spelling.` });
+
+  for (const tag of opens) {
+    if (MEDIA_TAGS.includes(tag.name) && !(tag.attributes.src ?? '').trim()) {
+      problems.push({ level: 'error', message: `<${tag.name}> has no src. Set it to a URL or a column, like src="\${${tag.name === 'ann-image' ? 'image_url' : 'video_url'}}".` });
+    }
+  }
 
   const questions = [];
   const seen = new Map();
