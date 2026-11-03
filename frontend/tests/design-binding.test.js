@@ -569,6 +569,12 @@ describe('LLM 설명서의 배치 요소', () => {
     assert.deepEqual(layoutErrors({ rows: [{ columns: '1fr 99fr 2fr', slots: ['data', 'choice', 'free-text'] }] }), []);
   });
 
+  it('열린 가안에서 칸과 배치를 직접 정하라고 적는다', () => {
+    assert.match(section, /### When the design is open/);
+    assert.ok(reference.includes('(#when-the-design-is-open)'));
+    assert.match(section, /Write `layout` whenever your boxes or their places differ/);
+  });
+
   it('요약의 새 값과 탭 안의 context 를 설명한다', () => {
     assert.ok(reference.includes('`distinct_per_list`'));
     assert.match(section, /repeated at the top of each tab, not outside the tabs/);
