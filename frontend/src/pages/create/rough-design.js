@@ -10,7 +10,7 @@ import { agent, api } from '../../api-client/client.js';
 import { el } from '../../components/dom.js';
 import { muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
-import { adaptBinding, attentionItems, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, requestBinding, summarizeData } from '../../lib/design-binding.js';
+import { adaptBinding, attentionItems, bindingSettings, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, judgedCounts, requestBinding, summarizeData } from '../../lib/design-binding.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
 import { readJsonDataFile } from '../../lib/json-data.js';
 import { sampleFor, toSaveRequest } from '../../lib/project-draft.js';
@@ -365,6 +365,11 @@ export function renderDesignData(root, params, signal) {
     const frame = previewFrame({ html, row, height: PREVIEW_HEIGHT });
     state.stopPreview = frame.destroy;
     const attention = attentionItems(state.binding, tabs, state.reader, state.hit);
+    const counts = judgedCounts(state.binding, currentDesign, currentType, tabs, state.reader, state.hit);
+    const checks = [
+      attention.length > 0 ? `Attention item(s) in this HIT: ${attention.join(', ')}${counts.attention > 0 ? ` (answers checked in Review: ${counts.attention})` : ''}. Workers cannot tell them apart.` : null,
+      counts.reference > 0 ? `Reference labels for this HIT: ${counts.reference}. Review compares answers with them.` : null,
+    ].filter(Boolean);
     const hitSelect = el('select', { id: 'bound-hit', 'aria-label': 'HIT' }, Array.from({ length: Math.min(state.reader.rowCount, 200) }, (_, index) => el('option', { value: String(index) }, `HIT ${index + 1}`)));
     hitSelect.value = String(state.hit);
     hitSelect.addEventListener('change', () => {
@@ -378,7 +383,7 @@ export function renderDesignData(root, params, signal) {
         el('h4', { className: 'section-title' }, `Preview: ${currentDesign.title} with your data`),
         el('span', { className: 'panel-actions' }, hitSelect, el('span', { className: 'muted small', id: 'bound-hit-count' }, `of ${state.reader.rowCount.toLocaleString('en-US')} HITs`)),
       ),
-      attention.length > 0 ? muted(`Attention item(s) in this HIT: ${attention.join(', ')}. Workers cannot tell them apart.`) : null,
+      checks.length > 0 ? muted(checks.join(' ')) : null,
       frame.node,
     );
   }
@@ -620,9 +625,10 @@ export function renderDesignData(root, params, signal) {
     const html = buildBoundTemplate(state.binding, currentDesign, currentType, tabs);
     const data = boundData(state.binding, currentDesign, currentType, tabs, state.reader, state.file.fileName);
     const sample = sampleFor(html, data.rows[0] ?? {});
-    const settings = settingsFromProperties(taskContent(currentType).properties);
+    const properties = settingsFromProperties(taskContent(currentType).properties);
+    const settings = { ...properties, ...bindingSettings(state.binding) };
     try {
-      const project = await saveProject({ name, html, settings, sampleRow: JSON.stringify(sample).length <= SAMPLE_ROW_LIMIT ? sample : {} });
+      const project = await saveProject({ name, html, settings: properties, sampleRow: JSON.stringify(sample).length <= SAMPLE_ROW_LIMIT ? sample : {} });
       if (signal.aborted) return;
       // 메모리 사본으로 Publish Batch 에 넘긴다 (IndexedDB 에 다 쓰기를 기다리지 않는다)
       void draftStorage().save({ ...emptyDraft(), templateId: project.id, data, settings });

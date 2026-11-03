@@ -4,23 +4,34 @@
 //     "design": "item-list", "task_type": "text",
 //     "repeat": { "over": "retrieved_chunk", "label": "Chunk" },      HIT 안의 항목마다 탭 하나. 없으면 HIT 당 화면 하나다
 //     "slots": {
-//       "data": { "label": "Chunk", "from": "retrieved_chunk[i]" },   데이터 칸. 여러 값을 보이려면 배열로 쓴다
-//       "checklist": { "header": "…", "items": "atomic_facts[i]" },    항목은 경로 또는 글 목록
+//       "data": { "label": "Chunk", "from": "retrieved_chunk[i]" },   데이터 칸. 여러 값을 보이려면 배열로 쓴다. kind 는 image, video, text
+//       "item-choice": { "header": "…", "items": "atomic_facts[i]", "options": [["yes", "Yes"], "no"] },   항목은 경로 또는 글 목록
 //       "choice": { "header": "…", "options": [["yes", "Yes"], "no"] },
 //       "compare": { "header": "…" }, "free-text": { "header": "…", "placeholder": "…" }
 //     },
-//     "attention": { "flag": "attention_check[i]" },                  미리보기에서 attention 항목을 알리는 데만 쓴다
+//     "context": [{ "label": "Question", "from": "question" }],        어느 칸에도 안 맞지만 worker 가 읽어야 하는 값. 칸들 위에 보인다
+//     "reference": { "selected": "labels", "key": "Chunk {i}", "item": "Fact {n}", "yes": "supported", "no": "not_supported" },
+//     "attention": { "flag": "attention_check[i]", "expected": "not_supported" },  expected 가 있으면 게시 때 판정한다
 //     "instructions": "…"                                             없으면 task 종류의 예시 안내문
 //   }
 // 경로는 컬럼 이름 뒤에 [i](repeat 의 현재 항목), [숫자], .키 를 붙인다. 셀은 JSON 이나 Python 리터럴이어도 구조로 읽는다.
 // 게시용 데이터는 칸마다 컬럼(slot_data_1 …)을 새로 만들고, binding 이 쓰지 않은 컬럼은 그대로 둔다.
+// reference 는 데이터의 라벨을 답 이름별로 풀어 slot_reference 컬럼에, attention.expected 는 slot_attention 컬럼에 넣어 게시 설정으로 잇는다.
+//   { "value": "<경로>" }                         칸마다 라벨이 있을 때. item-choice 면 항목 순서의 목록
+//   { "map": "<경로>", "key": "general_{i}_{n}" }  키에 번호가 든 객체. {i} 는 탭 번호(0부터), {n} 은 항목 번호(1부터)
+//   { "selected": "<경로>", "key": "Chunk {i}", "item": "Fact {n}", "yes": "…", "no": "…" }  고른 항목만 적힌 목록
 // binding 에 없는 문항 칸은 예시 문항을 쓰고 경고한다. 가안을 바꾸면 adaptBinding 이 값을 새 칸으로 옮긴다.
 // LLM 에게는 summarizeData 의 요약만 보내고, requestBinding 이 답을 checkBinding 으로 검사해 오류를 붙여 다시 묻는다.
 
-import { assembleTemplate, checklistLines, choiceLines, compareOptions, dataLines, freeTextLines, instructionsFor, roughDesignById, taskContent, taskTypeById } from './rough-designs.js';
+import { DATA_KINDS, assembleTemplate, choiceLines, compareOptions, dataLines, defaultKind, freeTextLines, instructionsFor, itemChoiceLines, roughDesignById, taskContent, taskTypeById } from './rough-designs.js';
 
 const DATA_SLOTS = ['data', 'data-a', 'data-b'];
-const ANSWER_SLOTS = ['choice', 'compare', 'checklist', 'free-text'];
+const ANSWER_SLOTS = ['choice', 'compare', 'item-choice', 'free-text'];
+const JUDGED_SLOTS = ['item-choice', 'choice', 'compare']; // 대조 기준과 attention 이 가리키는 문항 칸. 앞의 것이 먼저다
+const REFERENCE_COLUMN = 'slot_reference';
+const ATTENTION_COLUMN = 'slot_attention';
+const URL_LIKE = /^(https?:\/\/|data:|\.{0,2}\/)|\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|ogv)([?#]|$)/i;
+const CHECK_ROWS = 20; // 라벨과 주소의 모양을 볼 HIT 수
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PATH = /^([^\s[\].]+)((?:\[(?:i|\d+)\]|\.[^\s[\].]+)*)$/;
 const STEP = /\[(i|\d+)\]|\.([^\s[\].]+)/g;
@@ -213,22 +224,36 @@ function normalize(binding, design, taskType) {
       slots[slot] = { name: spec?.name ?? content.choice.name, header: spec?.header ?? content.choice.header, options: spec?.options ? optionPairs(spec.options) : content.choice.options };
     } else if (slot === 'compare') {
       slots[slot] = { name: spec?.name ?? content.compare.name, header: spec?.header ?? content.compare.header, options: spec?.options ? optionPairs(spec.options) : compareOptions(content.label) };
-    } else if (slot === 'checklist') {
-      slots[slot] = { name: spec?.name ?? content.checklist.name, header: spec?.header ?? content.checklist.header, items: spec?.items ?? content.checklist.items };
+    } else if (slot === 'item-choice') {
+      slots[slot] = { name: spec?.name ?? content.itemChoice.name, header: spec?.header ?? content.itemChoice.header, items: spec?.items ?? content.itemChoice.items, options: spec?.options ? optionPairs(spec.options) : content.itemChoice.options };
     } else {
       slots[slot] = { name: spec?.name ?? content.freeText.name, header: spec?.header ?? content.freeText.header, placeholder: spec?.placeholder ?? content.freeText.placeholder };
     }
   }
-  return { slots, sampled };
+  return { slots, sampled, context: fieldsOf(binding.context) };
 }
 
+/** 문항 칸의 답 이름들. 항목별 칸은 항목마다 하나다. */
+function answerNames(slot, spec, tabIndex, itemCount) {
+  const base = `${spec.name}${tabIndex === null ? '' : `_${tabIndex + 1}`}`;
+  return slot === 'item-choice' ? Array.from({ length: itemCount }, (_, index) => `${base}_${index + 1}`) : [base];
+}
+
+function judgedSlot(design) {
+  return JUDGED_SLOTS.find((slot) => slotsOf(design).includes(slot)) ?? null;
+}
+
+const fillKey = (template, tabIndex, itemNumber) => String(template).replace(/\{i\}/g, String(tabIndex ?? 0)).replace(/\{n\}/g, String(itemNumber));
+const asItems = (value) => (Array.isArray(value) ? value : value === null || value === undefined || value === '' ? [] : [value]);
+
 /** binding 이 경로로 읽는 모든 곳 [{ where, path }]. */
-function pathsOf(binding, slots) {
+function pathsOf(binding, slots, context = []) {
   const paths = [];
   if (binding.repeat) paths.push({ where: 'repeat.over', path: binding.repeat.over });
+  context.forEach((field, index) => paths.push({ where: `context[${index}].from`, path: field?.from }));
   for (const [slot, spec] of Object.entries(slots)) {
     if (DATA_SLOTS.includes(slot)) spec.forEach((field, index) => paths.push({ where: `slots.${slot}${spec.length > 1 ? `[${index}]` : ''}.from`, path: field?.from }));
-    else if (slot === 'checklist' && typeof spec.items === 'string') paths.push({ where: 'slots.checklist.items', path: spec.items });
+    else if (slot === 'item-choice' && typeof spec.items === 'string') paths.push({ where: 'slots.item-choice.items', path: spec.items });
   }
   return paths;
 }
@@ -269,7 +294,7 @@ export function checkBinding(binding, reader) {
     if (!designSlots.includes(slot)) errors.push(`The ${design.title} design has no slot "${slot}". Its slots are ${designSlots.join(', ')}.`);
   }
   if (design.tabs && !binding.repeat) errors.push(`The ${design.title} design shows one item per tab, so it needs "repeat" over a list column.`);
-  const { slots, sampled } = normalize(binding, design, taskType);
+  const { slots, sampled, context } = normalize(binding, design, taskType);
   for (const slot of designSlots.filter((name) => DATA_SLOTS.includes(name))) {
     if (slots[slot].length === 0) errors.push(`Slot "${slot}" has no data. Add {"from": "<column>"} to it.`);
   }
@@ -277,9 +302,9 @@ export function checkBinding(binding, reader) {
     const { name, options, items } = slots[slot];
     if (!NAME.test(String(name))) errors.push(`Slot "${slot}": "name" must use letters, digits and _, starting with a letter or _.`);
     if (options && options.length < 2) errors.push(`Slot "${slot}" needs at least two options.`);
-    if (slot === 'checklist' && typeof items !== 'string' && !Array.isArray(items)) errors.push('Slot "checklist": "items" must be a path or a list.');
+    if (slot === 'item-choice' && typeof items !== 'string' && !Array.isArray(items)) errors.push('Slot "item-choice": "items" must be a path or a list.');
   }
-  for (const { where, path } of pathsOf(binding, slots)) {
+  for (const { where, path } of pathsOf(binding, slots, context)) {
     const parsed = parsePath(path);
     if (!parsed) errors.push(`${where}: ${JSON.stringify(path)} is not a path. Write a column name, optionally followed by [i], [0] or .key.`);
     else if (!reader.columns.includes(parsed.column)) errors.push(`${where}: the data has no column "${parsed.column}".`);
@@ -302,8 +327,160 @@ export function checkBinding(binding, reader) {
     if (result.tabs === 0) errors.push(`repeat.over: "${binding.repeat.over}" is empty in every HIT.`);
     else if (Math.min(...counts) !== result.tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${result.tabs}). Shorter HITs show empty tabs.`);
   }
+  if (errors.length > 0) return result;
+  checkKinds({ slots, context, taskType, binding, reader, tabs: result.tabs, errors });
+  checkJudged({ binding, design, slots, reader, tabs: result.tabs, errors, warnings });
   for (const slot of sampled) warnings.push(`Slot "${slot}" has no binding, so the example question is shown. Replace it before you publish.`);
   return result;
+}
+
+/** 이미지와 영상 칸의 값이 주소처럼 보이는지 본다. 글이 src 에 들어가면 화면이 깨진다. */
+function checkKinds({ slots, context, taskType, binding, reader, tabs, errors }) {
+  const fields = [
+    ...context.map((field, index) => ({ field, where: `context[${index}]`, fallback: 'text' })),
+    ...DATA_SLOTS.flatMap((slot) => (slots[slot] ?? []).map((field, index) => ({ field, where: `slots.${slot}${slots[slot].length > 1 ? `[${index}]` : ''}`, fallback: defaultKind(taskType) }))),
+  ];
+  for (const { field, where, fallback } of fields) {
+    if (field.kind !== undefined && !DATA_KINDS.includes(field.kind)) {
+      errors.push(`${where}: "kind" must be ${DATA_KINDS.join(', ')}.`);
+      continue;
+    }
+    if ((field.kind ?? fallback) === 'text') continue;
+    const parsed = parsePath(field.from);
+    const rows = Math.min(reader.rowCount, CHECK_ROWS);
+    for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+      const value = resolve(parsed, reader.cell(rowIndex, parsed.column), 0);
+      if (typeof value === 'string' && value !== '' && !URL_LIKE.test(value.trim())) {
+        errors.push(`${where}: "${field.from}" does not look like a URL, but this slot shows an ${field.kind ?? fallback}. Add "kind": "text" to show it as text, or choose another column.`);
+        break;
+      }
+    }
+  }
+}
+
+function checkReferenceShape(reference, errors) {
+  const forms = ['value', 'map', 'selected'].filter((form) => reference[form] !== undefined);
+  if (forms.length !== 1) {
+    errors.push('"reference" must have exactly one of "value", "map" or "selected".');
+    return null;
+  }
+  const form = forms[0];
+  if (form !== 'value' && typeof reference.key !== 'string') errors.push(`reference: "${form}" needs "key".`);
+  if (form === 'selected' && (typeof reference.item !== 'string' || typeof reference.yes !== 'string' || typeof reference.no !== 'string')) errors.push('reference: "selected" needs "item", "yes" and "no".');
+  return form;
+}
+
+/** 대조 기준과 attention 기대 답이 문항의 선택지와 맞는지 앞쪽 HIT 로 본다. */
+function checkJudged({ binding, design, slots, reader, tabs, errors, warnings }) {
+  const slot = judgedSlot(design);
+  const options = slot ? slots[slot].options.map(([value]) => value) : [];
+  const expected = binding.attention?.expected;
+  if (expected !== undefined) {
+    if (binding.attention?.flag === undefined) errors.push('attention.expected needs attention.flag.');
+    else if (!slot) errors.push(`attention.expected needs a question to check, but the ${design.title} design has none.`);
+    else if (!options.includes(String(expected))) errors.push(`attention.expected: "${expected}" is not one of the options of "${slot}" (${options.join(', ')}).`);
+  }
+  const { reference } = binding;
+  if (reference === undefined) return;
+  if (!isObject(reference)) {
+    errors.push('"reference" must be an object.');
+    return;
+  }
+  if (!slot) {
+    errors.push(`"reference" needs a question to compare with, but the ${design.title} design has none.`);
+    return;
+  }
+  const form = checkReferenceShape(reference, errors);
+  if (form === null) return;
+  const parsed = parsePath(reference[form]);
+  if (!parsed || !reader.columns.includes(parsed.column)) errors.push(`reference.${form}: ${JSON.stringify(reference[form])} is not a path to a column of the data.`);
+  else if (!binding.repeat && parsed.steps.some((step) => step.index === 'i')) errors.push(`reference.${form}: [i] needs "repeat".`);
+  if (errors.length > 0) return;
+  const seen = new Set();
+  let labelled = 0;
+  let answers = 0;
+  const rows = Math.min(reader.rowCount, CHECK_ROWS);
+  for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+    const labels = referenceLabels(binding, design, slots, tabs, reader, rowIndex);
+    answers += labels.answerCount;
+    for (const value of Object.values(labels.values)) {
+      labelled += 1;
+      seen.add(value);
+    }
+  }
+  if (labelled === 0) {
+    errors.push(`reference: no labels were found in the first ${rows} HIT(s). Check the path and the key.`);
+    return;
+  }
+  const lower = options.map((option) => option.trim().toLowerCase());
+  const outside = [...seen].filter((value) => !lower.includes(value.trim().toLowerCase()));
+  if (outside.length > 0) errors.push(`reference: label(s) ${outside.slice(0, 5).map((v) => JSON.stringify(v)).join(', ')} are not options of "${slot}" (${options.join(', ')}). Use the labels of the data as option values.`);
+  else if (labelled < answers) warnings.push(`The reference labels cover ${labelled} of ${answers} answers in the first ${rows} HIT(s). Review compares only the labelled ones.`);
+}
+
+/** HIT 하나의 대조 기준 { 답 이름: 라벨 }. attention 항목은 뺀다. */
+function referenceLabels(binding, design, slots, tabs, reader, rowIndex) {
+  const out = { values: {}, answerCount: 0 };
+  const slot = judgedSlot(design);
+  const { reference } = binding;
+  if (!slot || !reference) return out;
+  const spec = slots[slot];
+  const flags = new Set(attentionItems(binding, tabs, reader, rowIndex));
+  const form = ['value', 'map', 'selected'].find((name) => reference[name] !== undefined);
+  const parsed = parsePath(reference[form]);
+  const cell = reader.cell(rowIndex, parsed.column);
+  for (const tabIndex of tabs > 0 ? Array.from({ length: tabs }, (_, index) => index) : [null]) {
+    if (flags.has((tabIndex ?? 0) + 1)) continue;
+    const root = resolve(parsed, cell, tabIndex ?? 0);
+    const itemCount = slot === 'item-choice' ? itemsOf(spec, reader, rowIndex, tabIndex).length : 1;
+    answerNames(slot, spec, tabIndex, itemCount).forEach((name, index) => {
+      out.answerCount += 1;
+      let label;
+      if (form === 'value') label = slot === 'item-choice' ? asItems(root)[index] : root;
+      else if (form === 'map') label = isObject(root) ? root[fillKey(reference.key, tabIndex, index + 1)] : undefined;
+      else {
+        const selected = isObject(root) ? asItems(root[fillKey(reference.key, tabIndex, index + 1)]) : [];
+        label = selected.map(String).includes(fillKey(reference.item, tabIndex, index + 1)) ? reference.yes : reference.no;
+      }
+      if (typeof label === 'string' || typeof label === 'number' || typeof label === 'boolean') out.values[name] = String(label);
+    });
+  }
+  return out;
+}
+
+/** HIT 하나의 attention 기대 답 { 답 이름: 기대 값 }. */
+function attentionAnswers(binding, design, slots, tabs, reader, rowIndex) {
+  const out = {};
+  const slot = judgedSlot(design);
+  const expected = binding.attention?.expected;
+  if (!slot || expected === undefined) return out;
+  const spec = slots[slot];
+  for (const number of attentionItems(binding, tabs, reader, rowIndex)) {
+    const tabIndex = tabs > 0 ? number - 1 : null;
+    const itemCount = slot === 'item-choice' ? itemsOf(spec, reader, rowIndex, tabIndex).length : 1;
+    for (const name of answerNames(slot, spec, tabIndex, itemCount)) out[name] = String(expected);
+  }
+  return out;
+}
+
+function itemsOf(spec, reader, rowIndex, tabIndex) {
+  if (typeof spec.items !== 'string') return asItems(spec.items);
+  const parsed = parsePath(spec.items);
+  return asItems(resolve(parsed, reader.cell(rowIndex, parsed.column), tabIndex ?? 0));
+}
+
+/** 게시 설정에 얹을 값: 대조 기준과 attention 의 컬럼. */
+export function bindingSettings(binding) {
+  const settings = {};
+  if (binding.reference !== undefined) settings.referenceColumn = REFERENCE_COLUMN;
+  if (binding.attention?.expected !== undefined) Object.assign(settings, { attentionEnabled: true, attentionMode: 'column', attentionColumn: ATTENTION_COLUMN, attentionMinRatio: 1 });
+  return settings;
+}
+
+/** 미리보기에 알릴 수: 이 HIT 의 대조 기준과 attention 기대 답. */
+export function judgedCounts(binding, design, taskType, tabs, reader, rowIndex) {
+  const { slots } = normalize(binding, design, taskType);
+  return { reference: Object.keys(referenceLabels(binding, design, slots, tabs, reader, rowIndex).values).length, attention: Object.keys(attentionAnswers(binding, design, slots, tabs, reader, rowIndex)).length };
 }
 
 // ---- 조립 ---------------------------------------------------------------------------------------
@@ -315,17 +492,18 @@ function slotColumn(slot, fieldIndex, fieldCount, tabIndex) {
 
 /** 검사를 통과한 binding 의 템플릿. tabs 는 checkBinding 의 값이다. */
 export function buildBoundTemplate(binding, design, taskType, tabs) {
-  const { slots } = normalize(binding, design, taskType);
+  const { slots, context } = normalize(binding, design, taskType);
   const content = taskContent(taskType);
+  const contextLines = (tabIndex) => context.flatMap((field, index) => dataLines(field.kind ?? 'text', slotColumn('context', index, context.length, tabIndex), field.label ?? 'Context'));
   const slotLines = (slot, tabIndex) => {
     const suffix = tabIndex === null ? '' : `_${tabIndex + 1}`;
     const spec = slots[slot];
     if (DATA_SLOTS.includes(slot)) {
-      return spec.flatMap((field, index) => dataLines(taskType, slotColumn(slot, index, spec.length, tabIndex), field.label ?? content.label));
+      return spec.flatMap((field, index) => dataLines(field.kind ?? defaultKind(taskType), slotColumn(slot, index, spec.length, tabIndex), field.label ?? content.label));
     }
     if (slot === 'choice') return choiceLines({ name: `${spec.name}${suffix}`, header: spec.header, options: spec.options });
     if (slot === 'compare') return choiceLines({ name: `${spec.name}${suffix}`, header: spec.header, options: spec.options, horizontal: true });
-    if (slot === 'checklist') return checklistLines({ name: `${spec.name}${suffix}`, header: spec.header, column: slotColumn(slot, 0, 1, tabIndex) });
+    if (slot === 'item-choice') return itemChoiceLines({ name: `${spec.name}${suffix}`, header: spec.header, column: slotColumn(slot, 0, 1, tabIndex), options: spec.options });
     return freeTextLines({ name: `${spec.name}${suffix}`, header: spec.header, placeholder: spec.placeholder });
   };
   return assembleTemplate({
@@ -334,13 +512,14 @@ export function buildBoundTemplate(binding, design, taskType, tabs) {
     tabs,
     tabLabel: binding.repeat?.label ?? fieldsOf(binding.slots?.data)[0]?.label ?? content.label,
     slotLines,
+    contextLines,
   });
 }
 
 /** HIT 하나의 게시용 행: 칸마다 만든 컬럼 + binding 이 쓰지 않은 원래 컬럼. */
 export function boundRow(binding, design, taskType, tabs, reader, rowIndex) {
-  const { slots } = normalize(binding, design, taskType);
-  const consumed = new Set(pathsOf(binding, slots).map(({ path }) => parsePath(path).column));
+  const { slots, context } = normalize(binding, design, taskType);
+  const consumed = new Set(pathsOf(binding, slots, context).map(({ path }) => parsePath(path).column));
   const row = {};
   for (const column of reader.columns) {
     if (!consumed.has(column)) row[column] = reader.raw(rowIndex, column);
@@ -351,17 +530,20 @@ export function boundRow(binding, design, taskType, tabs, reader, rowIndex) {
       const parsed = parsePath(path);
       return resolve(parsed, reader.cell(rowIndex, parsed.column), tabIndex);
     };
+    const fill = (slot, fields, fallback) => {
+      fields.forEach((field, index) => {
+        const text = displayText(read(field.from));
+        row[slotColumn(slot, index, fields.length, tabIndex)] = (field.kind ?? fallback) === 'text' ? escapeHtml(text) : text.replace(/"/g, '%22');
+      });
+    };
+    fill('context', context, 'text');
     for (const [slot, spec] of Object.entries(slots)) {
-      if (DATA_SLOTS.includes(slot)) {
-        spec.forEach((field, index) => {
-          const text = displayText(read(field.from));
-          row[slotColumn(slot, index, spec.length, tabIndex)] = taskType.id === 'text' ? escapeHtml(text) : text.replace(/"/g, '%22');
-        });
-      } else if (slot === 'checklist') {
-        row[slotColumn(slot, 0, 1, tabIndex)] = itemsCell(typeof spec.items === 'string' ? read(spec.items) : spec.items);
-      }
+      if (DATA_SLOTS.includes(slot)) fill(slot, spec, defaultKind(taskType));
+      else if (slot === 'item-choice') row[slotColumn(slot, 0, 1, tabIndex)] = itemsCell(typeof spec.items === 'string' ? read(spec.items) : spec.items);
     }
   }
+  if (binding.reference !== undefined) row[REFERENCE_COLUMN] = JSON.stringify(referenceLabels(binding, design, slots, tabs, reader, rowIndex).values);
+  if (binding.attention?.expected !== undefined) row[ATTENTION_COLUMN] = JSON.stringify(attentionAnswers(binding, design, slots, tabs, reader, rowIndex));
   return row;
 }
 
@@ -486,6 +668,23 @@ export function adaptBinding(binding, designId) {
   }
   const unused = Object.fromEntries(Object.entries(source).filter(([slot]) => ANSWER_SLOTS.includes(slot) && !targetSlots.includes(slot)));
   const next = { ...binding, design: designId, slots };
+  // 대조 기준과 기대 답은 문항 칸에 달렸다. 문항 칸이 달라지면 보관했다가 돌아오면 되살린다
+  const sourceJudged = judgedSlot(roughDesignById(binding.design)) ;
+  const targetJudged = judgedSlot(target);
+  let checks = binding.unused?.judged ?? null;
+  if (sourceJudged !== targetJudged && (binding.reference !== undefined || binding.attention?.expected !== undefined)) {
+    checks = { slot: sourceJudged, reference: binding.reference, expected: binding.attention?.expected };
+    delete next.reference;
+    if (next.attention) {
+      next.attention = { ...next.attention };
+      delete next.attention.expected;
+    }
+  } else if (checks && checks.slot === targetJudged) {
+    if (checks.reference !== undefined) next.reference = checks.reference;
+    if (checks.expected !== undefined && next.attention) next.attention = { ...next.attention, expected: checks.expected };
+    checks = null;
+  }
+  if (checks) unused.judged = checks;
   if (Object.keys(unused).length > 0) next.unused = unused;
   else delete next.unused;
   return next;

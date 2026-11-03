@@ -13,7 +13,7 @@ from agent.config import load_model_config
 from agent.planner.openrouter import PlannerError
 
 REQUEST = {
-    "design": {"id": "item-list", "rows": [{"slots": ["data", "checklist"]}]},
+    "design": {"id": "item-list", "rows": [{"slots": ["data", "item-choice"]}]},
     "task_type": "text",
     "prompt": "Check which facts each chunk supports.",
     "data": {"hit_count": 2, "columns": [{"name": "chunks", "shape": "list[3] of str", "samples": [["a"]]}]},

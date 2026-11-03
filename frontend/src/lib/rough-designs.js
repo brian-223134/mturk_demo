@@ -16,7 +16,7 @@ export const SLOT_LABELS = {
   'data-b': 'Data 2',
   choice: 'HIT: multiple choice',
   compare: 'HIT: choose one',
-  checklist: 'HIT: check each item',
+  'item-choice': 'HIT: judge each item',
   'free-text': 'Short answer',
 };
 
@@ -66,8 +66,8 @@ export const ROUGH_DESIGNS = [
     id: 'item-list',
     letter: 'E',
     title: 'Item by item',
-    summary: 'One piece of data on the left and a list of items on the right. Workers check every item that applies.',
-    rows: [{ columns: '3fr 2fr', weight: 1, slots: ['data', 'checklist'] }],
+    summary: 'One piece of data on the left and a list of items on the right. Workers answer every item with radio buttons.',
+    rows: [{ columns: '3fr 2fr', weight: 1, slots: ['data', 'item-choice'] }],
   },
 ];
 
@@ -93,7 +93,7 @@ const CONTENT = {
     instructions: 'Look at the image, then answer the questions about it.',
     choice: { name: 'setting', header: 'What does the image show?', options: SETTINGS_OPTIONS },
     compare: { name: 'preference', header: 'Which image shows the busier scene?', instructions: 'Look at both images, then choose one.' },
-    checklist: { name: 'visible', header: 'Which of these can you see in the image?', items: ['A car', 'A tree', 'A boat', 'A bicycle'] },
+    itemChoice: { name: 'visible', header: 'Can you see each of these in the image?', items: ['A car', 'A tree', 'A boat', 'A bicycle'], options: [['yes', 'Yes'], ['no', 'No']] },
     freeText: { name: 'notes', header: 'Short answer (optional)', placeholder: 'Explain your answer in a sentence' },
     properties: {
       Title: 'Answer questions about an image',
@@ -112,7 +112,7 @@ const CONTENT = {
     instructions: 'Watch the clip, then answer the questions about it.',
     choice: { name: 'setting', header: 'Where does the clip take place?', options: SETTINGS_OPTIONS },
     compare: { name: 'preference', header: 'Which clip shows the busier scene?', instructions: 'Watch both clips, then choose one.' },
-    checklist: { name: 'visible', header: 'Which of these appear in the clip?', items: ['A car', 'A tree', 'A boat', 'A bicycle'] },
+    itemChoice: { name: 'visible', header: 'Does each of these appear in the clip?', items: ['A car', 'A tree', 'A boat', 'A bicycle'], options: [['yes', 'Yes'], ['no', 'No']] },
     freeText: { name: 'notes', header: 'Short answer (optional)', placeholder: 'Explain your answer in a sentence' },
     properties: {
       Title: 'Answer questions about a short video',
@@ -143,7 +143,7 @@ const CONTENT = {
       ],
     },
     compare: { name: 'preference', header: 'Which passage gives more specific details?', instructions: 'Read both passages, then choose one.' },
-    checklist: { name: 'supported', header: 'Which statements does the passage support?', items: ['The library opened in 1921.', 'A fire damaged the school.', 'The library has three floors.'] },
+    itemChoice: { name: 'supported', header: 'Does the passage support each statement?', items: ['The library opened in 1921.', 'A fire damaged the school.', 'The library has three floors.'], options: [['supported', 'Supported'], ['not_supported', 'Not supported']] },
     freeText: { name: 'notes', header: 'Short answer (optional)', placeholder: 'Explain your answer in a sentence' },
     properties: {
       Title: 'Answer questions about a short passage',
@@ -184,9 +184,17 @@ export function templateText(text) {
   return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\$/g, '&#36;');
 }
 
-/** 데이터 칸의 줄. 값은 컬럼에서 온다. */
-export function dataLines(taskType, column, label) {
-  const { tag } = CONTENT[taskType.id];
+const KIND_TAGS = { image: 'ann-image', video: 'ann-video', text: 'ann-text' };
+export const DATA_KINDS = Object.keys(KIND_TAGS);
+
+/** task 종류의 데이터 칸이 기본으로 보이는 모양. */
+export function defaultKind(taskType) {
+  return { vision: 'image', video: 'video', text: 'text' }[taskType.id];
+}
+
+/** 데이터 칸의 줄. 값은 컬럼에서 온다. kind 는 image, video, text 다. */
+export function dataLines(kind, column, label) {
+  const tag = KIND_TAGS[kind];
   return tag === 'ann-text' ? [`<ann-text label="${templateText(label)}">\${${column}}</ann-text>`] : [`<${tag} label="${templateText(label)}" src="\${${column}}"></${tag}>`];
 }
 
@@ -199,9 +207,14 @@ export function choiceLines({ name, header, options, horizontal = false }) {
   ];
 }
 
-/** 항목별 체크 문항의 줄. 항목은 JSON 컬럼에서 읽는다. */
-export function checklistLines({ name, header, column }) {
-  return [`<ann-checklist name="${name}" header="${templateText(header)}" required>`, `  <script type="application/json">\${${column}}</script>`, '</ann-checklist>'];
+/** 항목마다 하나 고르기 문항의 줄. 항목은 JSON 컬럼에서 읽는다. */
+export function itemChoiceLines({ name, header, column, options }) {
+  return [
+    `<ann-item-choice name="${name}" header="${templateText(header)}" required>`,
+    ...options.map(([value, label]) => `  <ann-option value="${templateText(value)}">${templateText(label)}</ann-option>`),
+    `  <script type="application/json">\${${column}}</script>`,
+    '</ann-item-choice>',
+  ];
 }
 
 /** 약술형 문항의 줄. */
@@ -211,9 +224,9 @@ export function freeTextLines({ name, header, placeholder = '' }) {
 
 /**
  * 가안의 배치대로 템플릿 HTML 을 만든다. slotLines(칸 이름, 탭 번호 또는 null) 이 칸의 줄을 돌려준다.
- * tabs 가 1 이상이면 rows 전체를 탭 수만큼 되풀이한다.
+ * tabs 가 1 이상이면 rows 전체를 탭 수만큼 되풀이한다. contextLines(탭 번호 또는 null) 의 줄은 rows 앞에 넣는다.
  */
-export function assembleTemplate({ design, instructions, tabs = 0, tabLabel, slotLines }) {
+export function assembleTemplate({ design, instructions, tabs = 0, tabLabel, slotLines, contextLines = () => [] }) {
   const rowLines = (row, tabIndex) => {
     const cells = row.slots.map((slot) => slotLines(slot, tabIndex));
     if (cells.length === 1) return cells[0];
@@ -224,11 +237,11 @@ export function assembleTemplate({ design, instructions, tabs = 0, tabLabel, slo
       ? [
           '<ann-tabs>',
           ...Array.from({ length: tabs }, (_, index) =>
-            indented([`<ann-tab header="${templateText(tabLabel)} ${index + 1}">`, ...indented(design.rows.flatMap((row) => rowLines(row, index))), '</ann-tab>']),
+            indented([`<ann-tab header="${templateText(tabLabel)} ${index + 1}">`, ...indented([...contextLines(index), ...design.rows.flatMap((row) => rowLines(row, index))]), '</ann-tab>']),
           ).flat(),
           '</ann-tabs>',
         ]
-      : design.rows.flatMap((row) => rowLines(row, null));
+      : [...contextLines(null), ...design.rows.flatMap((row) => rowLines(row, null))];
   return [
     '<script src="/elements/ann-elements.js"></script>',
     '',
@@ -273,7 +286,7 @@ export function buildDesignTemplate(design, taskType) {
   const sampleRow = {};
   const dataSlot = (column, label, index) => {
     sampleRow[column] = content.samples[index];
-    return dataLines(taskType, column, label);
+    return dataLines(defaultKind(taskType), column, label);
   };
   const slotLines = (slot, tabIndex) => {
     const suffix = tabIndex === null ? '' : `_${tabIndex + 1}`;
@@ -288,9 +301,9 @@ export function buildDesignTemplate(design, taskType) {
         return choiceLines({ name: `${content.choice.name}${suffix}`, header: content.choice.header, options: content.choice.options });
       case 'compare':
         return choiceLines({ name: content.compare.name, header: content.compare.header, options: compareOptions(content.label), horizontal: true });
-      case 'checklist':
-        sampleRow.items = JSON.stringify(content.checklist.items);
-        return checklistLines({ name: content.checklist.name, header: content.checklist.header, column: 'items' });
+      case 'item-choice':
+        sampleRow.items = JSON.stringify(content.itemChoice.items);
+        return itemChoiceLines({ name: content.itemChoice.name, header: content.itemChoice.header, column: 'items', options: content.itemChoice.options });
       case 'free-text':
         return freeTextLines({ name: `${content.freeText.name}${suffix}`, header: content.freeText.header, placeholder: content.freeText.placeholder });
       default:

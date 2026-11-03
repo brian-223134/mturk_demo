@@ -282,7 +282,7 @@ def test_legacy_job_files_are_imported_once(make_client, make_database, make_set
 
 
 BINDING_BODY = {
-    "design": {"id": "item-list", "rows": [{"slots": ["data", "checklist"]}]},
+    "design": {"id": "item-list", "rows": [{"slots": ["data", "item-choice"]}]},
     "task_type": "text",
     "prompt": "Check which facts each chunk supports.",
     "data": {"hit_count": 1, "columns": [{"name": "chunks", "shape": "list[3] of str", "samples": []}]},
