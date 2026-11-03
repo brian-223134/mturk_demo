@@ -818,9 +818,17 @@ export function dropLayout(binding) {
   return adaptBinding(rest, binding.design);
 }
 
-/** 값의 글자 수로 보여 줄 만한 컬럼을 고른다. */
-function pickDataColumns(reader, preferred) {
+/** 값의 글자 수로 보여 줄 만한 컬럼을 고른다. 이미지와 영상 칸이면 주소처럼 보이는 컬럼을 먼저 본다. 글이 src 에 들어가면 올리자마자 오류가 나기 때문이다. */
+function pickDataColumns(reader, preferred, wantsUrl) {
   if (reader.columns.includes(preferred)) return [preferred];
+  if (wantsUrl) {
+    const first = (column) => {
+      const value = reader.cell(0, column);
+      return Array.isArray(value) ? value[0] : value;
+    };
+    const urls = reader.columns.filter((column) => typeof first(column) === 'string' && URL_LIKE.test(first(column).trim()));
+    if (urls.length > 0) return urls;
+  }
   const sampleRows = Math.min(reader.rowCount, 5);
   const score = (column) => {
     let total = 0;
@@ -841,7 +849,7 @@ export function draftBinding(designId, taskTypeId, reader) {
   const design = roughDesignById(designId);
   const taskType = taskTypeById(taskTypeId);
   const content = taskContent(taskType);
-  const columns = pickDataColumns(reader, content.column);
+  const columns = pickDataColumns(reader, content.column, defaultKind(taskType) !== 'text');
   const binding = { design: designId, task_type: taskTypeId, slots: {} };
   const repeat = Array.isArray(reader.cell(0, columns[0]));
   if (repeat) binding.repeat = { over: columns[0], label: content.label };

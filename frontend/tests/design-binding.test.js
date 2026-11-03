@@ -443,6 +443,30 @@ describe('binding 의 layout', () => {
   });
 });
 
+describe('첫 binding 의 데이터 칸', () => {
+  const photos = readerOf([{ photo_id: 'p1', photo: 'https://example.org/1.jpg', caption_text: 'A long caption that is longer than the address of the photo, by quite a lot.' }]);
+
+  it('이미지 과제는 글이 더 긴 컬럼이 있어도 주소 컬럼을 넣어 오류 없이 시작한다', () => {
+    for (const design of ['from-prompt', 'item-list']) {
+      const draft = draftBinding(design, 'vision', photos);
+      assert.equal(draft.slots.data.from, 'photo', design);
+      assert.deepEqual(checkBinding(draft, photos).errors, [], design);
+    }
+  });
+
+  it('주소 컬럼이 목록이면 탭으로 나누고, 없으면 글자 수로 고른다', () => {
+    const lists = readerOf([{ text: 'A long text that is longer than any address here.', photos: JSON.stringify(['/a.png', '/b.png']) }]);
+    const draft = draftBinding('stacked', 'video', lists);
+    assert.equal(draft.slots.data.from, 'photos[i]');
+    assert.equal(draft.repeat.over, 'photos');
+    assert.equal(draftBinding('stacked', 'vision', readerOf([{ note: 'plain words', other: 'x' }])).slots.data.from, 'note');
+  });
+
+  it('글 과제는 그대로 글자 수로 고른다', () => {
+    assert.equal(draftBinding('stacked', 'text', photos).slots.data.from, 'caption_text');
+  });
+});
+
 describe('Others: 고정된 배치가 없는 가안', () => {
   const start = { design: 'from-prompt', task_type: 'text', repeat: binding.repeat, slots: { data: binding.slots.data } };
 
