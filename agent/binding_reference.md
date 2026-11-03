@@ -24,7 +24,7 @@ Reply with **one JSON object** and nothing else.
 | `attention` | no | `{"flag": "<path>", "expected": "<option value>"}` when a column marks attention checks with 1. `expected` is the answer attention items must get; give it when the request or the data tells you, otherwise leave it out. |
 | `instructions` | yes | One or two sentences that tell workers what to do. Do not mention attention checks. |
 
-Write `instructions`, `header`, `label`, option labels and `placeholder` in the language of the data workers read, even when the request is in another language, unless the request asks for a language.
+Write `instructions`, `header`, `label`, options and `placeholder` in **English**, even when the request or the data is in another language. The console rejects any other language in these fields.
 
 ## Slots
 

@@ -32,6 +32,7 @@ const REFERENCE_COLUMN = 'slot_reference';
 const ATTENTION_COLUMN = 'slot_attention';
 const URL_LIKE = /^(https?:\/\/|data:|\.{0,2}\/)|\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|ogv)([?#]|$)/i;
 const CHECK_ROWS = 20; // 라벨과 주소의 모양을 볼 HIT 수
+const NOT_ENGLISH = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u; // worker 에게 보일 글은 영어로 쓴다
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PATH = /^([^\s[\].]+)((?:\[(?:i|\d+)\]|\.[^\s[\].]+)*)$/;
 const STEP = /\[(i|\d+)\]|\.([^\s[\].]+)/g;
@@ -328,10 +329,27 @@ export function checkBinding(binding, reader) {
     else if (Math.min(...counts) !== result.tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${result.tabs}). Shorter HITs show empty tabs.`);
   }
   if (errors.length > 0) return result;
+  checkLanguage(binding, errors);
   checkKinds({ slots, context, taskType, binding, reader, tabs: result.tabs, errors });
   checkJudged({ binding, design, slots, reader, tabs: result.tabs, errors, warnings });
   for (const slot of sampled) warnings.push(`Slot "${slot}" has no binding, so the example question is shown. Replace it before you publish.`);
   return result;
+}
+
+/** binding 에 직접 쓴 글(안내문, 문항, 라벨, 선택지)은 영어여야 한다. 데이터의 값은 보지 않는다. */
+function checkLanguage(binding, errors) {
+  const texts = [['instructions', binding.instructions], ['repeat.label', binding.repeat?.label]];
+  fieldsOf(binding.context).forEach((field, index) => texts.push([`context[${index}].label`, field?.label]));
+  for (const [slot, spec] of Object.entries(binding.slots ?? {})) {
+    if (DATA_SLOTS.includes(slot)) fieldsOf(spec).forEach((field, index) => texts.push([`slots.${slot}[${index}].label`, field?.label]));
+    else {
+      texts.push([`slots.${slot}.header`, spec?.header], [`slots.${slot}.placeholder`, spec?.placeholder]);
+      optionPairs(spec?.options).forEach(([value, label], index) => texts.push([`slots.${slot}.options[${index}]`, `${value} ${label}`]));
+    }
+  }
+  for (const [where, text] of texts) {
+    if (typeof text === 'string' && NOT_ENGLISH.test(text)) errors.push(`${where}: text shown to workers must be in English (found ${JSON.stringify(text.slice(0, 40))}).`);
+  }
 }
 
 /** 이미지와 영상 칸의 값이 주소처럼 보이는지 본다. 글이 src 에 들어가면 화면이 깨진다. */

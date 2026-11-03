@@ -407,3 +407,25 @@ describe('데이터 칸의 종류와 context', () => {
     assert.match(checkBinding({ ...b, context: { from: 'nope' } }, pair).errors.join(), /context\[0\]\.from: the data has no column/);
   });
 });
+
+describe('worker 에게 보일 글은 영어', () => {
+  const flat = readerOf([{ text: '한글 데이터' }]);
+  const base = { design: 'stacked', task_type: 'text', slots: { data: { label: 'Text', from: 'text' } } };
+
+  it('직접 쓴 글의 한글, 한자, 가나는 오류이고 어디인지 알린다', () => {
+    const cases = [
+      [{ ...base, instructions: '읽으세요' }, /^instructions:/],
+      [{ ...base, slots: { data: { label: '리뷰', from: 'text' } } }, /^slots\.data\[0\]\.label:/],
+      [{ ...base, slots: { ...base.slots, choice: { header: '감정은?', options: ['a', 'b'] } } }, /^slots\.choice\.header:/],
+      [{ ...base, slots: { ...base.slots, choice: { header: 'H', options: [['a', '예'], ['b', 'No']] } } }, /^slots\.choice\.options\[0\]:/],
+      [{ ...base, slots: { ...base.slots, 'free-text': { header: 'H', placeholder: '理由' } } }, /^slots\.free-text\.placeholder:/],
+      [{ ...base, repeat: { over: 'text', label: 'テスト' } }, /repeat\.label:|repeat\.over/],
+      [{ ...base, context: { label: '질문', from: 'text' } }, /^context\[0\]\.label:/],
+    ];
+    for (const [binding_, pattern] of cases) assert.ok(checkBinding(binding_, flat).errors.some((e) => pattern.test(e)), String(pattern));
+  });
+
+  it('데이터의 값은 보지 않는다', () => {
+    assert.deepEqual(checkBinding({ ...base, instructions: 'Read the text.' }, flat).errors, []);
+  });
+});
