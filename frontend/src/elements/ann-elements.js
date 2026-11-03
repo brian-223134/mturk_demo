@@ -249,11 +249,10 @@
     '.ann-checklist-item:last-child{border-bottom:0}',
     '.ann-checklist-key{color:var(--ann-muted);font-variant-numeric:tabular-nums;min-width:1.6em}',
     '.ann-checklist-none{margin-top:4px;font-style:italic}',
-    '.ann-item-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:6px 16px;align-items:center;padding:8px 0;border-bottom:1px solid #eeeeea}',
+    '.ann-item-row{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:8px 0;border-bottom:1px solid #eeeeea}',
     '.ann-item-row:last-child{border-bottom:0}',
     '.ann-item-row .ann-options{flex-direction:row;flex-wrap:wrap;gap:2px 8px}',
-    '.ann-item-text{overflow-wrap:anywhere}',
-    '@media (max-width:640px){.ann-item-row{grid-template-columns:1fr}}',
+    '.ann-item-text{flex:1 1 16em;min-width:0;overflow-wrap:anywhere}', // 칸이 좁으면 글을 자르지 않고 선택지를 아래 줄로 내린다
     '.ann-textarea textarea{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--ann-border);border-radius:4px;resize:vertical;clear:both;display:block}',
     '.ann-counter{color:var(--ann-muted);font-size:12px;margin-top:2px}',
     '.ann-error{color:var(--ann-error);font-size:13px;margin-top:6px}',
