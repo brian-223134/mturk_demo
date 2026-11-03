@@ -148,6 +148,25 @@ HIT 데이터의 값을 보여 주는 카드입니다. 값에 든 줄바꿈은 �
 | `none-label` | "해당 없음" 칸의 글자입니다 (기본 `None of the above`). `no-none`을 적으면 이 칸을 숨깁니다. |
 | `numbered` | 항목 앞에 번호를 붙입니다. |
 
+### `ann-item-choice`
+
+목록의 항목마다 라디오로 하나를 고릅니다. 항목은 `<ann-item>`이나 JSON 배열 컬럼에서 읽고, 답은 항목마다 `<name>_<번호>` 이름으로 고른 값이 나갑니다. `ann-checklist`와 달리 항목마다 답하므로, 판단하지 않은 항목과 부정한 항목이 구분됩니다.
+
+```html
+<ann-item-choice name="support" header="Does the passage support each statement?" required>
+  <ann-option value="supported">Supported</ann-option>
+  <ann-option value="not_supported">Not supported</ann-option>
+  <script type="application/json">${facts}</script>
+</ann-item-choice>
+```
+
+| 속성 | 설명 |
+|---|---|
+| `name` | 답 이름의 앞부분입니다. 필수이고 겹치면 안 됩니다. |
+| `header` | 문항입니다. |
+| `required` | 모든 항목에 답해야 제출할 수 있습니다. |
+| `options` | 값과 글이 같을 때의 짧은 표기 `"a, b"`입니다. 다르면 `<ann-option>`을 씁니다. |
+
 ### `ann-textarea`
 
 자유 서술 문항입니다. 앞뒤 공백을 뺀 글을 내고, 필수가 아닌 문항을 비워 두면 답에서 빠집니다.

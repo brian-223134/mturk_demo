@@ -215,7 +215,7 @@ docker compose run --rm frontend-test
 - `experiments.test.js`: Generate 초안이 prompt와 이전 raw 참조는 남기고 API 허용과 로컬 파일은 남기지 않는 것, 후보 모델 세 개(예전 초안의 모델 하나는 첫 후보로), Tutorial 예시 prompt가 한 번만 읽히는 것, 비교에서 같은 item ID끼리 맞추고 입력·모델·처리 조건의 차이를 알리는 것, 내보내기에 저장한 평가와 prompt는 들어가고 원본은 들어가지 않는 것을 확인합니다.
 - `layout-lint.test.js`: Design Layout의 검사입니다. 태그와 속성 읽기, script 누락, 이름 없음·겹침, 선택지 없음, `<ann-form>` 밖의 문항, 모르는 요소, crowd 템플릿 안내를 확인합니다.
 - `lib-json-data.test.js`: Upload JSON이 읽는 JSON 배열입니다. 컬럼 순서, 값의 문자열 변환(배열과 객체는 JSON 글), 빠진 키, BOM, CSV를 올린 경우를 포함한 거절 문구, UTF-8 검사, `Download JSON template`을 다시 읽으면 같은 행이 되는지 확인합니다.
-- `design-binding.test.js`: HIT 데이터를 가안에 넣는 binding입니다. 셀 해석(JSON, Python 리터럴), 경로, 오류와 경고 문구, 값의 HTML·`</script>` 처리, 손으로 쓴 Chunk-Fact binding의 템플릿과 게시용 행, 5개 가안으로 옮기고 되돌리기, 첫 binding, LLM에 보내는 요약, 오류를 붙여 다시 묻는 흐름, 설명서의 예시가 `example/`의 binding과 같은지 확인합니다.
+- `design-binding.test.js`: HIT 데이터를 가안에 넣는 binding입니다. 셀 해석(JSON, Python 리터럴), 경로, 오류와 경고 문구, 값의 HTML·`</script>` 처리, 손으로 쓴 Chunk-Fact binding의 템플릿과 게시용 행, 5개 가안으로 옮기고 되돌리기, 첫 binding, 데이터 칸의 종류와 `context`, 대조 기준 세 모양과 attention 기대 답, LLM에 보내는 요약, 오류를 붙여 다시 묻는 흐름, 설명서의 예시가 `example/`의 binding과 같은지 확인합니다.
 - `rough-designs.test.js`: rough design 5개와 task 종류 3개의 모든 조합이 검사에 오류·경고 없이 통과하는지, 표본 행이 컬럼을 모두 채우는지, 표본 그림 파일이 있는지, 저장 요청과 JSON 양식을 거쳐 Upload JSON 검사를 통과하는지 확인합니다. 가안 정의가 JSON으로 그대로 옮겨지는 것과 같은 Project를 다시 쓰는 규칙도 확인합니다.
 - `starters.test.js`: starter 목록과 파일이 맞는지, 모든 starter가 검사에 오류·경고 없이 통과하는지, 표본 행이 placeholder를 모두 채우는지, 미리 채우는 속성이 폼의 키인지, 그리고 `example/5-project/passage-relevance.json`이 `Passage relevance` starter와 맞는지(attention 행의 기대 답, gold 컬럼) 확인합니다.
 

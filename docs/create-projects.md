@@ -68,7 +68,7 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 | B | `Stacked` | 위 데이터, 아래 왼쪽 객관식, 아래 오른쪽 약술형 | 객관식, 약술형(선택) |
 | C | `Comparison` | 위에 데이터 두 칸, 아래 고르는 문항 | 둘 중 하나 또는 비슷함 |
 | D | `Tabs` | 탭 3개, 탭마다 데이터와 객관식 | 탭마다 객관식 |
-| E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 체크 |
+| E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 라디오로 하나 고르기 |
 
 `Save the sample layout without data`로 저장한 Project의 데이터 컬럼은 task 종류와 가안에 따라 정해지며, 2단계 미리보기 위의 `Sample data columns`에 나옵니다.
 
@@ -92,16 +92,49 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 {
   "design": "item-list",
   "task_type": "text",
-  "repeat": { "over": "retrieved_chunk", "label": "Chunk" },
+  "repeat": {
+    "over": "retrieved_chunk",
+    "label": "Chunk"
+  },
   "slots": {
     "data": [
-      { "label": "Query", "from": "query[i]" },
-      { "label": "Chunk", "from": "retrieved_chunk[i]" }
+      {
+        "label": "Query",
+        "from": "query[i]"
+      },
+      {
+        "label": "Chunk",
+        "from": "retrieved_chunk[i]"
+      }
     ],
-    "checklist": { "name": "supported", "header": "Which atomic facts does this chunk support?", "items": "atomic_facts[i]" }
+    "item-choice": {
+      "name": "supported",
+      "header": "Does this chunk support each atomic fact?",
+      "items": "atomic_facts[i]",
+      "options": [
+        [
+          "grounded",
+          "Grounded"
+        ],
+        [
+          "not_grounded",
+          "Not grounded"
+        ]
+      ]
+    }
   },
-  "attention": { "flag": "attention_check[i]" },
-  "instructions": "For each chunk, read the query and the chunk, then check every atomic fact that the chunk supports."
+  "reference": {
+    "selected": "chunk_fact_relevance_check",
+    "key": "Chunk {i}",
+    "item": "Atomic fact{n}",
+    "yes": "grounded",
+    "no": "not_grounded"
+  },
+  "attention": {
+    "flag": "attention_check[i]",
+    "expected": "not_grounded"
+  },
+  "instructions": "For each chunk, read the query and the chunk, then decide whether the chunk supports each atomic fact."
 }
 ```
 
@@ -109,23 +142,36 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 |---|---|
 | `design`, `task_type` | 가안(`side-by-side`, `stacked`, `compare`, `tabs`, `item-list`)과 종류(`vision`, `video`, `text`)입니다. |
 | `repeat` | HIT 안의 항목마다 탭을 하나씩 만듭니다. `over`는 목록을 가리키는 경로, `label`은 탭 제목입니다. `Tabs` 가안에는 필수입니다. |
-| `slots.data` (`Comparison`은 `data-a`, `data-b`) | 데이터 칸입니다. `{ "label", "from" }`이며, 여러 값을 보이려면 배열로 씁니다. |
+| `slots.data` (`Comparison`은 `data-a`, `data-b`) | 데이터 칸입니다. `{ "label", "from" }`이며, 여러 값을 보이려면 배열로 씁니다. `kind`(`image`, `video`, `text`)를 주면 값을 그 모양으로 보입니다. 기본은 task 종류를 따르므로, Vision·Video에서 글을 함께 보이려면 그 값에 `"kind": "text"`를 줍니다. |
 | `slots.choice`, `slots.compare` | 객관식입니다. `header`, `name`, `options`(`["yes", "no"]` 또는 `[["yes", "Yes"], …]`)를 씁니다. |
-| `slots.checklist` | 항목별 체크입니다. `items`는 경로나 글 목록입니다. |
+| `slots.item-choice` | 항목마다 라디오로 하나를 고릅니다. `header`, `name`, `options`, `items`(경로나 글 목록)를 씁니다. 모든 항목에 답해야 제출할 수 있습니다. |
 | `slots.free-text` | 약술형입니다. `header`, `name`, `placeholder`를 씁니다. |
-| `attention.flag` | 항목이 attention인지 가리키는 경로입니다. 미리보기에서 번호를 알리는 데만 씁니다. |
+| `context` | 어느 칸에도 맞지 않지만 worker가 읽어야 하는 값입니다. 데이터 칸과 같은 모양이고, 칸들 위에 글로 보입니다. 예를 들어 비교할 두 답의 질문입니다. |
+| `reference` | 데이터의 기존 라벨로 Review의 대조 기준을 만듭니다. 아래 표를 봅니다. |
+| `attention` | `flag`는 항목이 attention인지 가리키는 경로이고, `expected`는 그 항목에 와야 할 답입니다. `expected`가 있으면 게시할 때 판정합니다. |
 | `instructions` | worker에게 보일 안내문입니다. 없으면 task 종류의 예시 안내문을 씁니다. |
 | `unused` | 가안을 바꿀 때 새 가안에 없는 문항을 보관하는 자리입니다. 직접 쓰지 않아도 됩니다. |
 
 경로는 컬럼 이름 뒤에 `[i]`(지금 탭의 항목), `[0]`(번호), `.key`(객체의 키)를 붙입니다. 셀이 `"['a', 'b']"` 같은 Python 리스트 문자열이어도 구조로 읽습니다.
 
+`reference`는 라벨의 모양에 따라 셋 중 하나로 씁니다. 키의 `{i}`는 0부터 세는 탭 번호, `{n}`은 1부터 세는 항목 번호입니다.
+
+| 모양 | 쓰는 경우 |
+|---|---|
+| `{"value": "<경로>"}` | 칸마다 라벨이 있을 때입니다. `item-choice`면 항목 순서의 목록입니다. |
+| `{"map": "<경로>", "key": "general_{i}_{n}"}` | 키에 번호가 든 객체일 때입니다. |
+| `{"selected": "<경로>", "key": "Chunk {i}", "item": "Atomic fact{n}", "yes": "…", "no": "…"}` | 긍정인 항목만 적힌 목록일 때입니다. 적히지 않은 항목은 `no`입니다. |
+
+라벨이 문항의 선택지에 없거나 앞쪽 HIT에서 라벨을 찾지 못하면 오류로 알립니다. attention 항목은 대조 기준에서 빠집니다.
+
 - 잘못된 binding은 이유를 알리고 미리보기와 `Use this design`을 막습니다. 예를 들어 없는 컬럼, 가안에 없는 칸, `repeat` 없이 쓴 `[i]`가 그렇습니다.
+- Vision·Video의 칸에 주소가 아닌 값이 들어가면 오류로 알립니다.
 - binding에 없는 문항 칸은 예시 문항으로 보이고 경고합니다. 게시 전에 실제 문항으로 바꿉니다.
 - HIT마다 항목 수가 다르면 가장 큰 수만큼 탭을 만들고 경고합니다. 짧은 HIT에는 빈 탭이 남습니다.
 
-게시용 데이터는 칸마다 새 컬럼(`slot_data_1`, `slot_checklist_1` …)을 만들고, binding이 쓰지 않은 원래 컬럼(`qid`, `attention_check` 등)은 그대로 둡니다. 글은 HTML로 해석되지 않게 바꿔 넣습니다.
+게시용 데이터는 칸마다 새 컬럼(`slot_data_1`, `slot_item_choice_1` …)을 만들고, binding이 쓰지 않은 원래 컬럼(`qid`, `attention_check` 등)은 그대로 둡니다. 글은 HTML로 해석되지 않게 바꿔 넣습니다.
 
-**아직 하지 않는 것**: `attention.flag`는 게시 설정으로 이어지지 않습니다. attention 판정이 필요하면 `Review settings`에서 따로 정합니다.
+`reference`와 `attention.expected`가 있으면 `slot_reference`, `slot_attention` 컬럼을 만들고 `Review settings`에 미리 채웁니다. 두 컬럼은 worker에게 보내지 않습니다. 가안을 바꿔 문항 칸이 달라지면 이 둘은 `unused`에 보관했다가, 돌아오면 되살립니다.
 
 [example/6-rough-design/](../example/6-rough-design/)에 합성 데이터와 손으로 쓴 binding이 있으니 그대로 올려 볼 수 있습니다.
 
@@ -143,9 +189,8 @@ LLM은 binding만 쓰고 HTML은 쓰지 않습니다. 화면은 코드가 만들
 
 ### 앞으로 할 일
 
-1. **binding 형식 보강**: 대조 기준, attention 판정, 체크 값을 게시 설정으로 잇습니다.
-2. **수정 반복**: 드롭다운으로 칸을 고치거나 prompt로 수정을 요청합니다 (`Others`, user feedback).
-3. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
+1. **수정 반복**: 드롭다운으로 칸을 고치거나 prompt로 수정을 요청합니다 (`Others`, user feedback).
+2. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
 
 ### 다른 방법으로 시작하기
 
