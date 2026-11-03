@@ -383,7 +383,7 @@ export function renderDesignData(root, params, signal) {
         el('h4', { className: 'section-title' }, `Preview: ${currentDesign.title} with your data`),
         el('span', { className: 'panel-actions' }, hitSelect, el('span', { className: 'muted small', id: 'bound-hit-count' }, `of ${state.reader.rowCount.toLocaleString('en-US')} HITs`)),
       ),
-      checks.length > 0 ? muted(checks.join(' ')) : null,
+      ...(checks.length > 0 ? [muted(checks.join(' '))] : []),
       frame.node,
     );
   }
