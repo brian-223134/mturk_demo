@@ -182,6 +182,24 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 [example/6-rough-design/](../example/6-rough-design/)에 합성 데이터와 손으로 쓴 binding이 있으니 그대로 올려 볼 수 있습니다.
 
+### 영상 데이터 쓰기
+
+worker 브라우저가 영상을 받을 수 있어야 하므로, 파일을 콘솔이 서빙하는 폴더에 둡니다.
+
+1. `.mp4` 파일을 `var/video-demo/`에 넣습니다. `var/`는 저장소에 들어가지 않습니다.
+2. 이 폴더와 서빙 설정은 frontend 컨테이너를 만들 때 적용되므로 `docker compose up -d --build frontend`를 한 번 실행합니다. 그 뒤로 파일을 추가할 때는 다시 할 필요가 없습니다.
+3. HIT 데이터의 값에 `/media/<파일 이름>.mp4`를 씁니다. 다른 서버의 영상 주소를 써도 됩니다.
+4. New Project에서 task 종류를 `Video`로 고르고 그 JSON을 올립니다. 영상과 함께 글을 보이려면 그 값에 `"kind": "text"`를 붙입니다.
+
+```json
+[{ "video_url": "/media/clip_001.mp4", "question": "Who was working at the trays?" }]
+```
+
+- **내려 주는 파일**: `/media/`에서는 `.mp4`만 내려 줍니다. 같은 폴더의 다른 파일(정답이 든 `.json` 등)과 하위 폴더는 404입니다. 정답 파일을 함께 두어도 worker가 받을 수 없지만, `.mp4` 파일 자체는 로그인 없이 주소만 알면 받을 수 있습니다.
+- **파일 준비**: 긴 영상은 메타데이터가 파일 앞쪽에 있어야 받으면서 바로 재생하고 옮길 수 있습니다(ffmpeg의 `-movflags +faststart`). 코덱은 브라우저가 재생할 수 있는 H.264를 권합니다.
+- **프레임 확인**: 플레이어의 조작은 [요소 설명](annotation-elements.md#ann-video)에 있습니다.
+- **`Generate from raw data`**: agent가 만드는 템플릿에도 같은 조작이 있습니다. spec의 필드에 `"style": "video"`를 쓰며, `context` 역할에만 쓸 수 있습니다. 원본 데이터에서 영상을 읽어 HIT를 만드는 일은 아직 없습니다.
+
 ### LLM에게 binding 쓰게 하기
 
 `HIT data` 화면의 `What should workers judge?`에 요청 문장을 적고 `Allow API calls`를 체크한 뒤 `Write the binding`을 누릅니다. 유료 호출이므로 서버의 `AGENT_ALLOW_API=1`과 이 체크가 모두 있어야 합니다.

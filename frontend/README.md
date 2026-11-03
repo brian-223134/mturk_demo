@@ -211,7 +211,8 @@ docker compose run --rm frontend-test
 - `lib-cost.test.js`, `lib-settings.test.js`: 견적과 수수료, 기본값의 MTurk 변환, Qualification, attention 규칙 두 모양, 자유 서술 접미어, 대조 기준 문구, 폼 검증 문구, agent settings.json 반영(옛 모양과 기대 답 컬럼 모양), 게시 요청 조립, Project 속성과 검수 설정의 구분(`settingsFromProperties`, `validateProperties`, `validateQuality`)을 확인합니다.
 - `lib-draft.test.js`: Publish Batch의 네 단계, 저장 형식과 복원(Project 구조 이전의 저장본은 버림), 가짜 store로 CSV가 바뀔 때만 쓰는지, 저장소가 깨지거나 응답하지 않아도 오류를 던지지 않고 같은 탭에서는 메모리의 draft를 돌려주는지 확인합니다.
 - `lib-project-draft.test.js`: 저장된 Project와 starter에서 편집 값을 만드는 규칙, 표본 행을 layout이 읽는 컬럼으로 줄이는 것, 저장본과의 비교, 저장 요청, Project별 임시 저장을 확인합니다.
-- `elements.test.js`: `<ann-*>` 요소의 DOM 없는 부분(`core`)입니다. checklist 항목 읽기(JSON 배열, 줄 단위), 답 이름, `TASK_ANSWER_SCHEMA`의 모양, 제출할 `[{name, value}]`와 필수 문항·최소 글자 수로 막는 문구, 진행률을 확인합니다. 요소 자체의 동작은 브라우저에서 확인합니다.
+- `elements.test.js`: `<ann-*>` 요소의 DOM 없는 부분(`core`)입니다. checklist 항목 읽기(JSON 배열, 줄 단위), 답 이름, `TASK_ANSWER_SCHEMA`의 모양, 제출할 `[{name, value}]`와 필수 문항·최소 글자 수로 막는 문구, 진행률, 영상의 이동 위치와 시각 표시를 확인합니다. 요소 자체의 동작은 브라우저에서 확인합니다.
+- `video-media.test.js`: `/media/`의 서빙 설정(`.mp4`만 내려 주고 나머지는 404)과 그 주소가 binding을 거쳐 `ann-video`로 그려지는 흐름입니다.
 - `job-groups.test.js`: 후보마다 처음 고를 모델(서버 기본 설정 먼저, 서로 다르게, 모자라면 다시 돌기), 저장해 둔 선택 되살리기, 같은 모델을 두 번 고른 경고, job 목록을 묶음과 단독 job 으로 나누는 순서, 묶음 상태(running, ready, failed)와 안내 문구, 고른 후보, 후보 이름을 확인합니다.
 - `experiments.test.js`: Generate 초안이 prompt와 이전 raw 참조는 남기고 API 허용과 로컬 파일은 남기지 않는 것, 후보 모델 세 개(예전 초안의 모델 하나는 첫 후보로), Tutorial 예시 prompt가 한 번만 읽히는 것, 비교에서 같은 item ID끼리 맞추고 입력·모델·처리 조건의 차이를 알리는 것, 내보내기에 저장한 평가와 prompt는 들어가고 원본은 들어가지 않는 것을 확인합니다.
 - `layout-lint.test.js`: Design Layout의 검사입니다. 태그와 속성 읽기, script 누락, 이름 없음·겹침, 선택지 없음, `<ann-form>` 밖의 문항, 모르는 요소, crowd 템플릿 안내를 확인합니다.

@@ -17,7 +17,7 @@
  *   ann-instructions  접을 수 있는 안내 패널
  *   ann-text          라벨이 붙은 본문 카드 (CSV 값을 보여 준다)
  *   ann-image         라벨이 붙은 이미지 카드 (src 에 CSV 값)
- *   ann-video         라벨이 붙은 영상 플레이어 (src 에 CSV 값). src 가 이미지 파일이면 플레이어 모양의 정지 화면을 보인다
+ *   ann-video         라벨이 붙은 영상 플레이어 (src 에 CSV 값). 0.1초 앞뒤 이동, 배속, 재생 시각 버튼이 있다. src 가 이미지 파일이면 플레이어 모양의 정지 화면을 보인다
  *   ann-columns/ann-column  문항과 데이터를 좌우로 나눈다. 좁은 화면에서는 위아래로 쌓인다
  *   ann-choice        하나 고르기 (라디오). 선택지는 <ann-option> 또는 options="a, b"
  *   ann-likert        min~max 점수 하나 고르기
@@ -181,13 +181,38 @@
     return { done: done, total: total };
   }
 
+  var VIDEO_STEP = 0.1; // 세부를 확인하는 작업이라 프레임에 가까운 단위로 옮길 수 있어야 한다
+  var VIDEO_RATES = [0.5, 1, 1.5, 2];
+
   /** 주소가 이미지 파일인지. ann-video 는 이미지 주소를 받으면 정지 화면으로 그린다 (미리보기의 표본 자료). */
   function isImageSource(src) {
     return /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#].*)?$/i.test(String(src || '').trim());
   }
 
+  /** 앞뒤로 옮긴 재생 위치. 처음과 끝을 넘지 않고, 0.1 을 더할 때 생기는 부동소수점 오차를 지운다. */
+  function videoSeekTime(current, delta, duration) {
+    var next = Math.max(0, (Number(current) || 0) + delta);
+    if (Number.isFinite(duration) && duration > 0) next = Math.min(next, duration);
+    return Math.round(next * 1000) / 1000;
+  }
+
+  /** 재생 시각 글. 1:05.30 처럼 0.01초까지 보이고, 1시간이 넘으면 1:00:05.30 이다. */
+  function videoTimeText(seconds) {
+    var total = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds * 100 + 1e-6) : 0;
+    var hundredths = total % 100;
+    var whole = Math.floor(total / 100);
+    var hours = Math.floor(whole / 3600);
+    var minutes = Math.floor(whole / 60) % 60;
+    var two = function (n) { return (n < 10 ? '0' : '') + n; };
+    return (hours > 0 ? hours + ':' + two(minutes) : String(minutes)) + ':' + two(whole % 60) + '.' + two(hundredths);
+  }
+
   var core = {
     isImageSource: isImageSource,
+    videoSeekTime: videoSeekTime,
+    videoTimeText: videoTimeText,
+    VIDEO_STEP: VIDEO_STEP,
+    VIDEO_RATES: VIDEO_RATES,
     splitList: splitList,
     parseItems: parseItems,
     itemKeys: itemKeys,
@@ -226,6 +251,12 @@
     '.ann-video-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:0 0 4px 4px;background:#2b2b2b;color:#fff;font-size:12px}',
     '.ann-video-track{flex:1;height:4px;border-radius:2px;background:#6f6f6f}',
     '.ann-video-note{color:var(--ann-muted);font-size:12px;margin-top:4px}',
+    '.ann-video-player{max-height:440px;background:#000;border-radius:4px}',
+    '.ann-video-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:13px}',
+    '.ann-video-button{font:inherit;padding:3px 9px;border-radius:4px;border:1px solid var(--ann-border);background:var(--ann-card);cursor:pointer}',
+    '.ann-video-button.ann-active{background:var(--ann-accent);border-color:var(--ann-accent);color:#fff;font-weight:600}',
+    '.ann-video-label{margin-left:8px;color:var(--ann-muted)}',
+    '.ann-video-time{margin-left:auto;color:var(--ann-muted);font-variant-numeric:tabular-nums}',
     'ann-columns{display:grid;gap:12px;align-items:start}',
     '@media (max-width:640px){ann-columns{grid-template-columns:1fr !important}}',
     '.ann-question{border:1px solid var(--ann-border);border-radius:6px;background:var(--ann-card);padding:12px 16px;margin:0 0 12px;min-width:0}',
@@ -484,13 +515,59 @@
         watchLoadError(still, card, 'This image could not be loaded.');
         return;
       }
-      var video = make(doc, 'video', 'ann-media ann-video-frame');
+      var video = make(doc, 'video', 'ann-media ann-video-frame ann-video-player');
       video.controls = true;
       video.preload = 'metadata';
+      video.playsInline = true;
       video.src = src;
       card.appendChild(video);
+      var controls = videoControls(doc, video);
+      card.appendChild(controls);
+      video.addEventListener('error', function () { controls.hidden = true; });
       watchLoadError(video, card, 'This video could not be loaded.');
     });
+
+    /** 브라우저 컨트롤 아래의 0.1초 이동, 배속, 재생 시각. 폼 안이므로 type="button" 이어야 제출되지 않고, 문항이 아니라 답에도 들어가지 않는다. */
+    function videoControls(doc, video) {
+      var bar = make(doc, 'div', 'ann-video-controls');
+      var button = function (text, title, onClick) {
+        var node = make(doc, 'button', 'ann-video-button', text);
+        node.type = 'button';
+        node.title = title;
+        node.addEventListener('click', onClick);
+        bar.appendChild(node);
+        return node;
+      };
+      // 멈춘 뒤 옮겨야 그 위치의 화면을 확인할 수 있다
+      var seek = function (delta) {
+        video.pause();
+        video.currentTime = videoSeekTime(video.currentTime, delta, video.duration);
+      };
+      button('◀ ' + VIDEO_STEP + 's', 'Back ' + VIDEO_STEP + ' second', function () { seek(-VIDEO_STEP); });
+      button(VIDEO_STEP + 's ▶', 'Forward ' + VIDEO_STEP + ' second', function () { seek(VIDEO_STEP); });
+      bar.appendChild(make(doc, 'span', 'ann-video-label', 'Speed'));
+      var rates = VIDEO_RATES.map(function (rate) {
+        var node = button(rate + '×', 'Play at ' + rate + ' times speed', function () {
+          video.playbackRate = rate;
+          rates.forEach(function (other) {
+            var active = other.__annRate === rate;
+            other.classList.toggle('ann-active', active);
+            other.setAttribute('aria-pressed', active ? 'true' : 'false');
+          });
+        });
+        node.__annRate = rate;
+        node.classList.toggle('ann-active', rate === 1);
+        node.setAttribute('aria-pressed', rate === 1 ? 'true' : 'false');
+        return node;
+      });
+      var time = make(doc, 'span', 'ann-video-time', videoTimeText(0));
+      bar.appendChild(time);
+      var showTime = function () {
+        time.textContent = videoTimeText(video.currentTime) + (Number.isFinite(video.duration) ? ' / ' + videoTimeText(video.duration) : '');
+      };
+      ['timeupdate', 'seeked', 'loadedmetadata'].forEach(function (name) { video.addEventListener(name, showTime); });
+      return bar;
+    }
 
     define('ann-column', null);
 
@@ -787,7 +864,11 @@
           if (tabs.length === 0) return;
           var at = Math.min(Math.max(0, index), tabs.length - 1);
           this.__annIndex = at;
-          tabs.forEach(function (tab, i) { tab.hidden = i !== at; });
+          tabs.forEach(function (tab, i) {
+            tab.hidden = i !== at;
+            // 숨긴 탭의 영상이 계속 재생되지 않게 한다
+            if (tab.hidden) Array.prototype.forEach.call(tab.querySelectorAll('video'), function (video) { video.pause(); });
+          });
           (this.__annButtons || []).forEach(function (button, i) { button.setAttribute('aria-selected', i === at ? 'true' : 'false'); });
           if (this.__annNav) {
             this.__annNav.prev.disabled = at === 0;

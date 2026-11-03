@@ -227,9 +227,34 @@ function isAnswered(i, slot) {
 }
 function unitRequired(i, unit) { for (var s = 0; s < unit.slots.length; s++) if (isRequired(i, unit.slots[s])) return true; return false; }
 
+// 영상 필드(style "video")의 값은 영상 주소 하나다. 재생/탐색은 브라우저의 controls 가 맡고,
+// 그 위에 배속과 0.1초 앞뒤 이동 버튼을 둔다. 영상에서 세부를 확인하는 작업에 필요하다.
+var VIDEO_SEQ = 0;
+var VIDEO_RATES = [0.5, 1, 1.5, 2];
+var VIDEO_STEP = 0.1;
+function videoPlayer(url) {
+  var id = 'ctxvid' + (++VIDEO_SEQ);
+  var h = '<div class="ctx-video">';
+  h += '<video id="' + id + '" class="ctx-video-el" controls preload="metadata" playsinline src="' + esc(url) + '"></video>';
+  // crowd-form 안이므로 type="button" 으로 두어야 누를 때 제출되지 않는다. name 이 없어 답으로도 수집되지 않는다.
+  h += '<div class="ctx-video-bar">';
+  h += '<button type="button" class="vbtn" data-vid="' + id + '" data-seek="-' + VIDEO_STEP + '">&#9664; ' + VIDEO_STEP + 's</button>';
+  h += '<button type="button" class="vbtn" data-vid="' + id + '" data-seek="' + VIDEO_STEP + '">' + VIDEO_STEP + 's &#9654;</button>';
+  h += '<span class="vgap"></span><span class="vlabel">Speed</span>';
+  for (var r = 0; r < VIDEO_RATES.length; r++) {
+    var rate = VIDEO_RATES[r];
+    h += '<button type="button" class="vbtn vrate' + (rate === 1 ? ' vactive' : '') + '" data-vid="' + id + '" data-rate="' + rate + '">' + rate + '&#215;</button>';
+  }
+  h += '<span class="vtime" data-vtime="' + id + '">0.00s</span>';
+  h += '</div></div>';
+  return h;
+}
+
 function contextCard(f, value) {
   var body;
-  if (Array.isArray(value)) {
+  if (f.style === 'video') {
+    body = videoPlayer(Array.isArray(value) ? value[0] : value);
+  } else if (Array.isArray(value)) {
     body = '<ol class="ctx-list">';
     for (var k = 0; k < value.length; k++) body += '<li>' + esc(value[k]) + '</li>';
     body += '</ol>';
@@ -431,6 +456,38 @@ function handleFormSubmit() {
   }, 0);
 }
 
+// 영상 버튼. 배속은 누른 것만 활성으로 표시하고, 앞뒤 이동은 멈춘 뒤 옮겨야 프레임을 확인할 수 있다.
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest ? e.target.closest('.vbtn') : null;
+  if (!btn) return;
+  var video = document.getElementById(btn.getAttribute('data-vid'));
+  if (!video) return;
+  var seek = btn.getAttribute('data-seek');
+  if (seek !== null) {
+    video.pause();
+    var next = video.currentTime + parseFloat(seek);
+    if (next < 0) next = 0;
+    if (video.duration && next > video.duration) next = video.duration;
+    video.currentTime = next;
+    return;
+  }
+  var rate = btn.getAttribute('data-rate');
+  if (rate !== null) {
+    video.playbackRate = parseFloat(rate);
+    var group = document.querySelectorAll('.vrate[data-vid="' + btn.getAttribute('data-vid') + '"]');
+    for (var g = 0; g < group.length; g++) group[g].classList.remove('vactive');
+    btn.classList.add('vactive');
+  }
+}, true);
+
+// timeupdate 는 버블링하지 않으므로 capture 단계로 듣는다
+document.addEventListener('timeupdate', function (e) {
+  var video = e.target;
+  if (!video || video.tagName !== 'VIDEO') return;
+  var out = document.querySelector('.vtime[data-vtime="' + video.id + '"]');
+  if (out) out.textContent = video.currentTime.toFixed(2) + 's';
+}, true);
+
 // capture 단계에서 듣는다: crowd-html-elements가 입력의 change를 문서까지 올려 보내지 않고 자기 이벤트로 바꿔 낸다
 document.addEventListener('change', function (e) {
   var t = e.target;
@@ -492,6 +549,15 @@ crowd-tabs#summary-tabs { border:none; border-radius:12px; box-shadow:0 4px 6px 
 .ctx-label { background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; padding:10px 18px; font-weight:600; font-size:15px; }
 .ctx-text { padding:14px 18px; font-size:14.5px; line-height:1.75; color:#1f2937; white-space:pre-wrap; word-wrap:break-word; background:#fafbfc; }
 .ctx-passage { max-height:420px; overflow-y:auto; }
+.ctx-video { padding:14px 18px; background:#fafbfc; }
+.ctx-video-el { display:block; width:100%; max-height:440px; background:#000; border-radius:8px; }
+.ctx-video-bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.vbtn { padding:5px 10px; border:1px solid #d1d5db; border-radius:7px; background:#fff; color:#374151; font-size:13px; line-height:1.2; cursor:pointer; }
+.vbtn:hover { background:#f3f4f6; }
+.vbtn.vactive { background:#4f46e5; border-color:#4f46e5; color:#fff; font-weight:600; }
+.vlabel { font-size:12px; color:#6b7280; }
+.vgap { width:10px; }
+.vtime { margin-left:auto; font-size:12px; color:#6b7280; }
 .ctx-list { margin:0; padding:14px 18px 14px 40px; font-size:14.5px; line-height:1.7; color:#1f2937; background:#fafbfc; }
 .ctx-list li { margin-bottom:6px; }
 .target-section { border:2px solid #8b5cf6; border-radius:14px; overflow:hidden; }
