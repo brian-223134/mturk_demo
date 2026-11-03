@@ -383,6 +383,7 @@ export function checkBinding(binding, reader) {
     result.tabs = Math.max(...counts);
     if (result.tabs === 0) errors.push(`repeat.over: "${binding.repeat.over}" is empty in every HIT.`);
     else if (Math.min(...counts) !== result.tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${result.tabs}). Shorter HITs show empty tabs.`);
+    checkFixedPaths({ binding, slots, context, reader, counts, errors });
   }
   if (errors.length > 0) return result;
   checkLanguage(binding, errors);
@@ -390,6 +391,27 @@ export function checkBinding(binding, reader) {
   checkJudged({ binding, design: designed, slots, reader, tabs: result.tabs, errors, warnings });
   for (const slot of sampled) warnings.push(`Slot "${slot}" has no binding, so the example question is shown. Replace it before you publish.`);
   return result;
+}
+
+const distinctCount = (list) => new Set(list.map((value) => JSON.stringify(value))).size;
+
+/**
+ * 탭과 길이가 같은 목록을 [0] 처럼 고정 번호로 읽는데 값이 탭마다 다른 곳. 그대로 두면 일부 탭에 다른 탭의 값이 보이고,
+ * 경로는 맞으므로 다른 검사로는 드러나지 않는다. LLM 은 앞쪽 표본만 보고 값이 모두 같다고 짐작하기 쉽다.
+ */
+function checkFixedPaths({ binding, slots, context, reader, counts, errors }) {
+  for (const { where, path } of pathsOf(binding, slots, context)) {
+    if (where === 'repeat.over') continue;
+    const parsed = parsePath(path);
+    const at = parsed.steps.findIndex((step) => 'index' in step);
+    if (at < 0 || parsed.steps[at].index === 'i') continue;
+    const list = { column: parsed.column, steps: parsed.steps.slice(0, at) };
+    const differing = counts.filter((count, rowIndex) => {
+      const value = resolve(list, reader.cell(rowIndex, list.column), 0);
+      return Array.isArray(value) && value.length === count && distinctCount(value) > 1;
+    }).length;
+    if (differing > 0) errors.push(`${where}: "${path}" shows the same element in every tab, but this list differs between tabs in ${differing} HIT(s). Use [i] so that each tab shows its own value.`);
+  }
 }
 
 /** binding 에 직접 쓴 글(안내문, 문항, 라벨, 선택지)은 영어여야 한다. 데이터의 값은 보지 않는다. */
@@ -698,7 +720,9 @@ export function summarizeData(reader) {
     columns: reader.columns.map((name) => {
       const shapes = new Set();
       for (let rowIndex = 0; rowIndex < rowsForShape; rowIndex += 1) shapes.add(shapeOf(reader.cell(rowIndex, name)));
-      return { name, shape: [...shapes].slice(0, 3).join(' or '), samples: sampleRows.map((rowIndex) => sampleOf(reader.cell(rowIndex, name))) };
+      // 표본은 앞쪽 몇 개뿐이므로, 목록의 값이 서로 다른지는 전체 HIT 에서 세어 알린다
+      const distinct = Array.from({ length: reader.rowCount }, (_, rowIndex) => reader.cell(rowIndex, name)).filter(Array.isArray).map(distinctCount);
+      return { name, shape: [...shapes].slice(0, 3).join(' or '), ...(distinct.length > 0 ? { distinct_per_list: { min: Math.min(...distinct), max: Math.max(...distinct) } } : {}), samples: sampleRows.map((rowIndex) => sampleOf(reader.cell(rowIndex, name))) };
     }),
   };
 }

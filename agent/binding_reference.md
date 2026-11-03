@@ -9,7 +9,7 @@ Reply with **one JSON object** and nothing else.
 - `design`: the rough design the requester chose. `rows` is its layout: `rows[].slots` lists its slots, left to right. Fill only these slots, unless you set `layout`. See [Laying out the page](#laying-out-the-page).
 - `task_type`: `vision`, `video` or `text`.
 - `request`: what the requester wants workers to judge. Follow it. The questions you write come from this text.
-- `data`: the shape of the requester's HIT data. Each entry of `columns` has the column `name`, its `shape`, and `samples` from real HITs. Long texts are cut in the samples; the real values are longer.
+- `data`: the shape of the requester's HIT data. Each entry of `columns` has the column `name`, its `shape`, and `samples` from real HITs. Long texts are cut in the samples; the real values are longer. A list column also has `distinct_per_list`: the fewest and the most different values one list holds, counted over every HIT.
 - `current`: only when the requester already has a binding. `request` then says what to change. See [Revising a binding](#revising-a-binding).
 - `earlier_requests`: only with `current`. What the requester asked before, oldest first.
 
@@ -45,6 +45,8 @@ Answer names use letters, digits and `_`, and start with a letter or `_`. Option
 ## Paths
 
 A path is a column name followed by any of `[i]` (the element of the current tab), `[0]` (a fixed element) and `.key` (a key of an object). Take column names only from `data.columns`. Use `[i]` only with `repeat`.
+
+Samples show only the first elements of a list in two HITs, so never conclude from them that a list repeats one value. Read `distinct_per_list`: a list with one tab per element takes `[i]`, and a fixed `[0]` is right only when its `max` is 1. The console rejects a fixed index when the elements differ.
 
 Read the `shape` to choose: when a column is `list[11] of str` and each tab shows one element, write `column[i]`. When a column is `list[11] of list[str]`, `column[i]` is a list of strings and fits `items`. When a list holds objects, go on to the key, as in `passages[i].text`.
 
@@ -128,7 +130,7 @@ The worker page is made of parts. These stay where they are:
 | part | where it is |
 | --- | --- |
 | Instructions | At the top of the page. |
-| `context` fields | Below the instructions, across the full width, above all rows. |
+| `context` fields | Above all rows, across the full width. With tabs they are repeated at the top of each tab, not outside the tabs, so use `[i]` for a value that differs between tabs. |
 | Tabs | When `repeat` is set, every row is repeated inside each tab. Nothing can sit outside the tabs. |
 | Submit button | At the bottom of the page. |
 
@@ -174,6 +176,7 @@ Between them you arrange **boxes**. Each box is a slot of the binding, and each 
 | on the left, on the right, swap them | Change the order inside `slots`. |
 | above, below, top, bottom, stack them | Change the order of `rows`, or stack the boxes in one column. |
 | next to each other, side by side | Put them in the same row. |
+| one field across the full width on top, when `data` holds several fields | Move that field from `data` to `context`, with its path unchanged. |
 | wider, bigger, narrower, half and half | Change `columns`. |
 | add a short answer, add a question box | Add the box to `layout` and write its entry in `slots`. |
 | remove the short answer | Remove the box from `layout` and from `slots`. |

@@ -443,6 +443,51 @@ describe('binding 의 layout', () => {
   });
 });
 
+describe('탭마다 다른 값을 고정 번호로 읽기', () => {
+  const hits = readerOf([
+    { query: JSON.stringify(['same', 'same', 'other']), chunk: JSON.stringify(['a', 'b', 'c']), title: JSON.stringify(['t', 't', 't']), facts: JSON.stringify([['x'], ['y'], ['z']]), extra: JSON.stringify(['m', 'n']) },
+    { query: JSON.stringify(['q', 'q', 'q']), chunk: JSON.stringify(['d', 'e', 'f']), title: JSON.stringify(['u', 'u', 'u']), facts: JSON.stringify([['x'], ['y'], ['z']]), extra: JSON.stringify(['m', 'n']) },
+  ]);
+  const base = { design: 'item-list', task_type: 'text', repeat: { over: 'chunk', label: 'Chunk' }, slots: { data: { label: 'Chunk', from: 'chunk[i]' }, 'item-choice': { name: 'ok', header: 'Is it right?', items: 'facts[i]', options: [['yes', 'Yes'], ['no', 'No']] } } };
+
+  it('값이 탭마다 다르면 틀린 값이 보이므로 오류로 알리고, 다른 HIT 수를 말한다', () => {
+    const { errors } = checkBinding({ ...base, context: [{ label: 'Query', from: 'query[0]' }] }, hits);
+    assert.match(errors.join(' '), /context\[0\]\.from: "query\[0\]" shows the same element in every tab, but this list differs between tabs in 1 HIT\(s\)\. Use \[i\]/);
+  });
+
+  it('[i] 로 읽으면 통과하고 탭마다 자기 값이 들어간다', () => {
+    const fixed = { ...base, context: [{ label: 'Query', from: 'query[i]' }] };
+    const check = checkBinding(fixed, hits);
+    assert.deepEqual(check.errors, []);
+    const row = boundRow(fixed, check.design, check.taskType, check.tabs, hits, 0);
+    assert.deepEqual([row.slot_context_1, row.slot_context_3], ['same', 'other']);
+  });
+
+  it('모든 탭의 값이 같거나, 탭과 길이가 다른 목록이면 고정 번호를 쓸 수 있다', () => {
+    assert.deepEqual(checkBinding({ ...base, context: [{ label: 'Title', from: 'title[0]' }] }, hits).errors, []);
+    assert.deepEqual(checkBinding({ ...base, context: [{ label: 'Extra', from: 'extra[0]' }] }, hits).errors, []);
+  });
+
+  it('[i] 뒤의 고정 번호와 탭이 없는 binding 은 보지 않는다', () => {
+    assert.deepEqual(checkBinding({ ...base, context: [{ label: 'Fact', from: 'facts[i][0]' }] }, hits).errors, []);
+    const flat = readerOf([{ query: JSON.stringify(['a', 'b']), text: 'x' }]);
+    assert.deepEqual(checkBinding({ design: 'stacked', task_type: 'text', slots: { data: { from: 'query[0]' } } }, flat).errors, []);
+  });
+
+  it('문항 칸의 항목도 같은 기준으로 본다', () => {
+    const { errors } = checkBinding({ ...base, slots: { ...base.slots, 'item-choice': { ...base.slots['item-choice'], items: 'facts[0]' } } }, hits);
+    assert.match(errors.join(' '), /slots\.item-choice\.items: "facts\[0\]"/);
+  });
+
+  it('요약에 목록의 서로 다른 값 수를 전체 HIT 기준으로 넣는다', () => {
+    const columns = Object.fromEntries(summarizeData(hits).columns.map((column) => [column.name, column]));
+    assert.deepEqual(columns.query.distinct_per_list, { min: 1, max: 2 });
+    assert.deepEqual(columns.title.distinct_per_list, { min: 1, max: 1 });
+    const plain = summarizeData(readerOf([{ text: 'x' }])).columns[0];
+    assert.equal('distinct_per_list' in plain, false);
+  });
+});
+
 describe('LLM 설명서의 배치 요소', () => {
   const reference = readFileSync(new URL('../../agent/binding_reference.md', import.meta.url), 'utf8');
   const section = reference.slice(reference.indexOf('## Laying out the page'), reference.indexOf('## Revising a binding'));
@@ -464,6 +509,11 @@ describe('LLM 설명서의 배치 요소', () => {
     assert.match(section, /at most 3 columns/);
     assert.deepEqual(layoutErrors({ rows: ['data', 'data-a', 'data-b', 'choice', 'compare', 'free-text'].map((slot) => ({ slots: [slot] })) }), []);
     assert.deepEqual(layoutErrors({ rows: [{ columns: '1fr 99fr 2fr', slots: ['data', 'choice', 'free-text'] }] }), []);
+  });
+
+  it('요약의 새 값과 탭 안의 context 를 설명한다', () => {
+    assert.ok(reference.includes('`distinct_per_list`'));
+    assert.match(section, /repeated at the top of each tab, not outside the tabs/);
   });
 
   it('배치 요청은 할 수 없는 요청이 아니다', () => {
