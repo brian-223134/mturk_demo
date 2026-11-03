@@ -42,6 +42,8 @@ from agent.profile import PROMPT_MAX_CHARS_DEFAULT
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MODELS_DIR = Path("environment/models")
 DEFAULT_MODEL_NAME = "default"
+BINDING_MODEL_VARIABLE = "AGENT_BINDING_MODEL"
+DEFAULT_BINDING_MODEL_NAME = "deepseek-v4.1-flash"
 MODEL_VARIABLE = "AGENT_MODEL"
 SUPPORTED_APIS = ("openrouter",)
 CONFIG_SUFFIXES = (".yaml", ".yml")
@@ -129,6 +131,15 @@ def load_env_file(path: Path | str | None) -> dict[str, str]:
                 value = value[:comment].rstrip()
         values[key] = value
     return values
+
+
+def binding_model_name(env_file: Path | str | None) -> str:
+    """binding 을 쓸 모델 설정의 이름. AGENT_BINDING_MODEL 환경변수 → env 파일 → "deepseek-v4.1-flash" 순서."""
+    from_env = os.environ.get(BINDING_MODEL_VARIABLE, "").strip()
+    if from_env:
+        return from_env
+    from_file = load_env_file(env_file).get(BINDING_MODEL_VARIABLE, "").strip()
+    return from_file or DEFAULT_BINDING_MODEL_NAME
 
 
 def selected_model_name(env_file: Path | str | None) -> str:
