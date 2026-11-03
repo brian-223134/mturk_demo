@@ -2,6 +2,7 @@
 //   /create                            Project 목록 ("New Batch with an Existing Project")      pages/create/projects.js
 //   /create/new                        rough design 고르기 ("New Project")                     pages/create/rough-design.js
 //   /create/new/design/:designId(/:taskType)  task 종류 고르기와 예시 미리보기                       pages/create/rough-design.js
+//   /create/new/design/:designId/:taskType/data  HIT 데이터를 올려 가안에 넣어 보기                pages/create/rough-design.js
 //   /create/new/gallery                다른 시작 방법: starter, HTML 올리기, 원본 데이터에서 만들기   pages/create/new-project.js
 //   /create/project/:projectId/:tab    Project 편집기: Enter Properties, Design Layout, Preview and Finish  pages/create/project-editor.js
 //   /create/publish/:projectId         Publish Batch: Upload JSON → Preview tasks → Review settings → Confirm and publish  pages/create/publish-batch.js
@@ -11,7 +12,7 @@
 import { renderNewProject } from './create/new-project.js';
 import { renderProjectEditor } from './create/project-editor.js';
 import { renderProjects } from './create/projects.js';
-import { renderDesignTask, renderRoughDesigns } from './create/rough-design.js';
+import { renderDesignData, renderDesignTask, renderRoughDesigns } from './create/rough-design.js';
 import { renderPublishBatch } from './create/publish-batch.js';
 import { renderTutorial } from './create/tutorial.js';
 
@@ -25,6 +26,10 @@ export function renderNew(root, _params, signal) {
 
 export function renderDesign(root, params, signal) {
   return renderDesignTask(root, params, signal);
+}
+
+export function renderDesignHits(root, params, signal) {
+  return renderDesignData(root, params, signal);
 }
 
 export function renderGallery(root, _params, signal) {

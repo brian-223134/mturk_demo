@@ -1098,3 +1098,45 @@ a.btn:hover {
     align-items: flex-start;
   }
 }
+
+/* ── New Project: HIT 데이터를 가안에 넣어 보기 ─────────────────────────────── */
+
+.bound-controls {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  margin: 14px 0;
+}
+.bound-controls .segmented {
+  flex-wrap: wrap;
+  justify-self: start;
+}
+.binding-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(0, 5fr);
+  gap: 16px;
+  align-items: start;
+}
+.binding-column {
+  min-width: 0;
+}
+.binding-editor {
+  width: 100%;
+  margin-top: 8px;
+  font: 12px/1.45 var(--mono);
+  resize: vertical;
+}
+#binding-problems .notice,
+#bound-preview .preview-frame-wrap {
+  margin-top: 8px;
+}
+label.btn .dropzone-input {
+  display: none;
+}
+
+@media (max-width: 1000px) {
+  .binding-split {
+    grid-template-columns: 1fr;
+  }
+}

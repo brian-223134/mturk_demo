@@ -16,6 +16,7 @@ const routes = [
   ['/create/new/gallery', handlers.create, { tab: 'create' }],
   ['/create/new/design/:designId', handlers.create, { tab: 'create' }],
   ['/create/new/design/:designId/:taskType', handlers.create, { tab: 'create' }],
+  ['/create/new/design/:designId/:taskType/data', handlers.create, { tab: 'create' }],
   ['/create/tutorial', handlers.create, { tab: 'create' }],
   ['/create/project/:projectId', handlers.create, { tab: 'create' }],
   ['/create/project/:projectId/:tab', handlers.create, { tab: 'create' }],
@@ -30,6 +31,7 @@ describe('New Project 의 rough design 경로', () => {
   it('가안과 task 종류를 params 로 받는다', () => {
     assert.deepEqual(matchRoute(routes, '/create/new/design/tabs').params, { designId: 'tabs' });
     assert.deepEqual(matchRoute(routes, '/create/new/design/tabs/video').params, { designId: 'tabs', taskType: 'video' });
+    assert.deepEqual(matchRoute(routes, '/create/new/design/tabs/video/data').params, { designId: 'tabs', taskType: 'video' });
     assert.deepEqual(matchRoute(routes, '/create/new/gallery').params, {});
   });
 });
