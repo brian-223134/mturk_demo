@@ -86,7 +86,7 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 `HIT data` 단계에서는 객체 하나가 HIT 하나인 JSON 배열을 올립니다. 파일은 서버로 보내지 않고 브라우저 탭에만 둡니다. 새로고침하면 다시 올려야 하지만, 같은 탭에서 앞 단계에 다녀오면 남아 있습니다.
 
-파일을 올리면 첫 binding이 채워지고 오른쪽에 첫 HIT의 worker 화면이 나옵니다. binding은 **어떤 값이 어느 칸에 들어갈지** 적은 JSON입니다. 첫 binding은 글이 가장 긴 컬럼만 데이터 칸에 넣은 출발점이므로, 왼쪽 편집기에서 고치거나 `Upload binding`으로 파일을 올립니다. 위쪽에서 가안이나 task 종류를 바꾸면 값이 새 칸으로 옮겨지고, LLM을 부르지 않으므로 바로 다시 그려집니다.
+파일을 올리면 첫 binding이 채워지고 오른쪽에 첫 HIT의 worker 화면이 나옵니다. binding은 **어떤 값이 어느 칸에 들어갈지** 적은 JSON입니다. 첫 binding은 글이 가장 긴 컬럼만 데이터 칸에 넣은 출발점이므로, 왼쪽 편집기에서 고치거나 `Upload binding`으로 파일을 올리거나 [LLM에게 쓰게 합니다](#llm에게-binding-쓰게-하기). 위쪽에서 가안이나 task 종류를 바꾸면 값이 새 칸으로 옮겨지고, LLM을 부르지 않으므로 바로 다시 그려집니다.
 
 ```json
 {
@@ -129,11 +129,21 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 [example/6-rough-design/](../example/6-rough-design/)에 합성 데이터와 손으로 쓴 binding이 있으니 그대로 올려 볼 수 있습니다.
 
+### LLM에게 binding 쓰게 하기
+
+`HIT data` 화면의 `What should workers judge?`에 요청 문장을 적고 `Allow API calls`를 체크한 뒤 `Write the binding`을 누릅니다. 유료 호출이므로 서버의 `AGENT_ALLOW_API=1`과 이 체크가 모두 있어야 합니다.
+
+- **보내는 것**: 고른 가안의 칸 목록, task 종류, 요청 문장, 데이터 요약입니다. 요약에는 컬럼마다 값의 모양과 잘린 표본(HIT 두 개)만 들어가며, 파일 전체는 보내지 않습니다.
+- **받는 것**: 같은 형식의 binding 하나입니다. 브라우저가 바로 검사하고, 오류가 있으면 오류와 이전 답을 붙여 최대 3번까지 묻습니다. 그래도 오류가 남으면 마지막 답을 편집기에 두고 알립니다.
+- **결과 확인**: 답은 편집기에 들어가고 미리보기가 바뀝니다. 직접 고칠 수 있고, `Undo`로 이전 binding으로 돌아갈 수 있습니다. 쓴 모델과 시도 횟수, 비용은 버튼 아래에 나옵니다.
+
+LLM은 binding만 쓰고 HTML은 쓰지 않습니다. 화면은 코드가 만들므로 답 형식과 Review 호환은 사람이 쓴 binding과 같습니다. 호출마다 요청과 응답이 `output/bindings/` 아래에 남습니다.
+
+모델 설정은 `deepseek-v4.1-flash`(`environment/models/deepseek-v4.1-flash.yaml`)이고, `environment/.env`의 `AGENT_BINDING_MODEL`로 바꿀 수 있습니다. 형식 설명서는 [agent/binding_reference.md](../agent/binding_reference.md)입니다.
+
 ### 앞으로 할 일
 
-지금은 사람이 binding을 씁니다. 다음 작업은 아래 순서로 진행할 계획입니다.
-
-1. **LLM이 binding 쓰기**: 가안 명세와 데이터 분석 결과를 받아 같은 형식의 binding을 씁니다. 화면 조립과 검사는 지금 코드를 그대로 씁니다.
+1. **binding 형식 보강**: 대조 기준, attention 판정, 체크 값을 게시 설정으로 잇습니다.
 2. **수정 반복**: 드롭다운으로 칸을 고치거나 prompt로 수정을 요청합니다 (`Others`, user feedback).
 3. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
 

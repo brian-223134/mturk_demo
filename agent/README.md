@@ -40,6 +40,7 @@
 | `render.py` | spec의 필드, 문항(한 개 고르기, 여러 개 체크, 척도, 자유 서술), 안내문에서 MTurk crowd-form 템플릿 `template.html`을 만듭니다. | annotation HTML 자동 생성 |
 | `validate.py` | 출력 폴더의 spec, HIT 데이터, 템플릿이 콘솔에 올릴 수 있는 상태인지 검사해 `validation.json`을 씁니다. | annotation HTML 자동 생성 |
 | `cli.py`, `__main__.py` | `python3 -m agent`의 하위 명령과 옵션입니다. | 실행 |
+| `binding.py` | 콘솔의 `HIT data` 화면에서 LLM이 binding(HIT 데이터의 값을 rough design의 칸에 넣는 JSON)을 쓰게 합니다. 형식 설명서는 `binding_reference.md`입니다. | annotation HTML 자동 생성 |
 | `config.py` | `environment/models/*.yaml`의 모델 설정과 `.env` 파일을 읽습니다. | 실행 |
 | `Dockerfile`, `requirements.txt` | agent 실행용 이미지와, 그 안에만 설치하는 PyYAML입니다. | 실행 |
 | `examples/` | 합성 데이터, prompt(markdown), spec으로 된 예시 두 개(`groundedness`, `coverage`)입니다. | 예시 |
@@ -225,8 +226,9 @@ LLM에 관한 설정은 모델마다 하나의 YAML 파일로 `environment/model
 | 설정 이름 | 모델 | 설명 |
 |---|---|---|
 | `default` | `openai/gpt-oss-120b` | 기본 설정입니다. 값이 싸고 JSON 출력을 강제할 수 있으며, 추론량(`reasoning.effort`)을 조절할 수 있습니다. |
-| `qwen3-235b` | `qwen/qwen3-235b-a22b-2507` | 셋 중 가장 쌉니다. 추론 단계 없이 바로 답하는 버전이라 `reasoning` 파라미터가 없습니다. |
+| `qwen3-235b` | `qwen/qwen3-235b-a22b-2507` | 이 가운데 입력과 출력 값이 낮은 편입니다. 추론 단계 없이 바로 답하는 버전이라 `reasoning` 파라미터가 없습니다. |
 | `deepseek-v3.2` | `deepseek/deepseek-v3.2` | 다른 계열의 모델로 결과를 비교할 때 씁니다. 추론량은 `low`로 둡니다. |
+| `deepseek-v4.1-flash` | `deepseek/deepseek-v4.1-flash-1017` | 콘솔에서 LLM이 binding을 쓸 때의 기본 설정입니다(`AGENT_BINDING_MODEL`로 바꿉니다). 날짜가 붙은 snapshot이고 업체를 `crusoe/fp8`로 고정해 결과를 비교하기 좋습니다. fallback은 없습니다. |
 
 콘솔의 Generate from raw data는 이 폴더의 설정을 후보마다 하나씩 고르게 합니다. 새 모델을 쓰려면 `default.yaml`을 복사해 `<이름>.yaml`로 저장하고 고칩니다. 파일을 더하면 콘솔의 모델 목록에도 나타나며, `environment/.env.example`의 설정 목록과 위의 표도 함께 고쳐 둡니다. API 키 같은 비밀은 설정 파일에 적지 않고 `environment/.env`에만 둡니다. `.env`는 저장소에 들어가지 않으며, 형식은 `environment/.env.example`에 있습니다.
 
@@ -242,7 +244,7 @@ LLM에 관한 설정은 모델마다 하나의 YAML 파일로 `environment/model
 
 두 이름을 혼동하기 쉬운데, OpenRouter에서 `provider`는 OpenRouter 자체가 아니라 모델을 실제로 호스팅하는 회사(DeepInfra, GMICloud 등)를 뜻합니다. 그래서 어느 API를 부를지는 `api`에, 어느 호스팅 회사를 쓸지는 `provider`에 적습니다. `provider`는 세 가지 형태로 적을 수 있습니다.
 
-- **적지 않음**: OpenRouter가 그때그때 회사를 고릅니다. 요청 본문에 `provider` 키가 들어가지 않으며, 저장소의 설정 파일들은 모두 이 상태입니다.
+- **적지 않음**: OpenRouter가 그때그때 회사를 고릅니다. 요청 본문에 `provider` 키가 들어가지 않으며, `deepseek-v4.1-flash`를 뺀 저장소의 설정 파일들은 모두 이 상태입니다.
 - **태그**: `gmicloud/fp8`처럼 `회사 슬러그/양자화`를 적습니다 (양자화는 생략할 수 있습니다). 그 회사로만 보내고 다른 회사로 넘어가지 않으며, 요청 본문에는 `{"order": ["gmicloud"], "allow_fallbacks": false, "quantizations": ["fp8"]}`로 들어갑니다.
 - **매핑**: `order`, `allow_fallbacks`, `quantizations`, `ignore`, `sort` 같은 OpenRouter의 라우팅 필드를 직접 적습니다. 요청 본문의 `provider` 객체로 그대로 들어갑니다.
 

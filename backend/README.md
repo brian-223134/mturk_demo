@@ -238,6 +238,7 @@ worker 계정만 부를 수 있습니다(다른 역할은 403). 경로 표는 `a
 | `GET /api/agent/jobs/{id}/inputs` | 저장된 raw 참조, prompt 본문, 모델 설정과 spec 유무입니다. |
 | `PUT /api/agent/jobs/{id}/review` | 실행 상태와 별도로 후보의 품질 평가를 저장합니다. |
 | `POST /api/agent/job-groups` | 같은 원본과 prompt로 모델만 바꾼 후보 job을 한꺼번에 접수합니다 (`multipart/form-data`). 응답은 202 `{"group": {"id", "size"}, "jobs": [<Job>, …]}`입니다. 아래 [후보 묶음](#후보-묶음)을 봅니다. |
+| `POST /api/agent/bindings` | HIT data 화면에서 LLM에 binding을 묻습니다 (유료 호출, 요청의 `allow_api`와 서버의 `AGENT_ALLOW_API=1`이 모두 필요합니다). body는 `{design, task_type, prompt, data, allow_api, errors?, previous?}`이고 `data`는 브라우저가 만든 요약입니다(전체 256KB 이하). 응답은 `{binding, usage, model}`입니다. 검사와 재요청은 브라우저가 하며, 호출마다 `output/bindings/`에 요청과 응답을 남깁니다. |
 | `PUT /api/agent/job-groups/{id}/choice` | 비교한 뒤 고른 후보를 기록합니다. body는 `{"job_id": "<묶음의 job id>"}`이고, 응답은 `{"jobs": [<Job>, …]}`(후보 순서)입니다. |
 | `GET /api/agent/jobs/{id}/files/{name}` | 결과 파일입니다. `job.files`에 있는 이름만 받으며(그 밖의 이름은 404), 확장자에 따라 `Content-Type`을 정하고(`.csv` text/csv, `.html` text/html, `.json` application/json, `.md` text/markdown, `.jsonl` application/x-ndjson) `Content-Disposition: attachment; filename="<name>"`을 붙입니다. |
 

@@ -36,7 +36,7 @@ docker compose exec backend python -m app.users create-admin --email <이메일>
 
 게시, 승인과 반려, pool 편집 같은 변경 사항과 자동 생성 job의 상태는 PostgreSQL(Docker volume `backend-pg`)에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다). 이전 버전에서 SQLite에 쌓은 데이터를 옮기는 방법은 [backend/README.md](backend/README.md#db)에 있습니다.
 
-원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
+**LLM을 쓸 때**(Create → New Project의 `HIT data`에서 binding 쓰기, Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
 ```bash
 cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를, AGENT_ALLOW_API= 에 1 을 적는다
