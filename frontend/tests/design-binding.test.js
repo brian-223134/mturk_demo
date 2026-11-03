@@ -429,3 +429,34 @@ describe('worker 에게 보일 글은 영어', () => {
     assert.deepEqual(checkBinding({ ...base, instructions: 'Read the text.' }, flat).errors, []);
   });
 });
+
+describe('requestBinding 의 수정 요청', () => {
+  const check = (b) => checkBinding(b, reader);
+  const reply = (body) => ({ usage: { cost: 0.001 }, model: { model: 'm' }, ...body });
+
+  it('할 수 없다는 답은 다시 묻지 않고 binding 없이 돌려준다', async () => {
+    const seen = [];
+    const result = await requestBinding({ send: async (body) => { seen.push(body); return reply({ binding: null, cannot: 'layout', message: 'Use the buttons.' }); }, check, request: { prompt: 'Move it', current: binding } });
+    assert.equal(seen.length, 1);
+    assert.equal(result.binding, null);
+    assert.equal(result.cannot, 'layout');
+    assert.equal(result.message, 'Use the buttons.');
+    assert.deepEqual(result.errors, []);
+  });
+
+  it('재요청에도 고칠 binding 과 요청이 함께 가고 마지막 설명을 돌려준다', async () => {
+    const bad = { ...binding, slots: { ...binding.slots, data: { from: 'no_such_column' } } };
+    const replies = [reply({ binding: bad, message: 'first' }), reply({ binding, message: 'second' })];
+    const seen = [];
+    const result = await requestBinding({ send: async (body) => { seen.push(body); return replies[seen.length - 1]; }, check, request: { prompt: 'p', current: binding } });
+    assert.deepEqual(seen[1].current, binding);
+    assert.deepEqual(seen[1].previous, bad);
+    assert.equal(result.message, 'second');
+    assert.equal(result.cannot, null);
+  });
+
+  it('선택지가 목록이 아닌 답도 예외 없이 오류로 알린다', () => {
+    const odd = { ...binding, slots: { ...binding.slots, 'item-choice': { ...binding.slots['item-choice'], options: 'yes or no' } } };
+    assert.ok(check(odd).errors.some((error) => /at least two options/.test(error)));
+  });
+});

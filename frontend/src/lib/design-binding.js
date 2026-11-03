@@ -206,7 +206,7 @@ function slotsOf(design) {
 }
 
 function optionPairs(options) {
-  return (options ?? []).map((option) => (Array.isArray(option) ? [String(option[0]), String(option[1] ?? option[0])] : [String(option), String(option)]));
+  return (Array.isArray(options) ? options : []).map((option) => (Array.isArray(option) ? [String(option[0]), String(option[1] ?? option[0])] : [String(option), String(option)]));
 }
 
 /** binding 을 칸마다 정리한다. 없는 문항 칸은 task 종류의 예시로 채우고 sampled 에 적는다. */
@@ -643,8 +643,9 @@ export function designForRequest(design) {
 
 /**
  * LLM 에 binding 을 묻고 검사한다. 오류가 있으면 오류와 이전 답을 보내 maxAttempts 번까지 다시 묻는다.
- * send(body) 는 POST /api/agent/bindings 이고, check(binding) 은 { errors } 를 돌려준다.
- * → { binding, errors, attempts, usage, model }. errors 가 남아 있으면 사람이 고치도록 마지막 답을 돌려준다.
+ * send(body) 는 POST /api/agent/bindings 이고, check(binding) 은 { errors } 를 돌려준다. request 에 current 가 있으면 수정 요청이다.
+ * → { binding, message, cannot, errors, attempts, usage, model }. errors 가 남아 있으면 사람이 고치도록 마지막 답을 돌려준다.
+ * 할 수 없는 요청이라는 답(cannot)은 다시 묻지 않고 binding 없이 돌려준다.
  */
 export async function requestBinding({ send, check, request, maxAttempts = 3 }) {
   let previous = null;
@@ -657,11 +658,13 @@ export async function requestBinding({ send, check, request, maxAttempts = 3 }) 
     for (const [key, value] of Object.entries(reply.usage ?? {})) {
       if (typeof value === 'number') usage[key] = (usage[key] ?? 0) + value;
     }
+    const common = { message: reply.message ?? null, attempts: attempt, usage, model: reply.model };
+    if (reply.cannot) return { ...common, binding: null, cannot: reply.cannot, errors: [] };
     errors = check(reply.binding).errors;
-    if (errors.length === 0) return { binding: reply.binding, errors, attempts: attempt, usage, model: reply.model };
+    if (errors.length === 0) return { ...common, binding: reply.binding, cannot: null, errors };
     previous = reply.binding;
   }
-  return { binding: last.binding, errors, attempts: maxAttempts, usage, model: last.model };
+  return { binding: last.binding, message: last.message ?? null, cannot: null, errors, attempts: maxAttempts, usage, model: last.model };
 }
 
 // ---- 가안 바꾸기와 첫 binding ---------------------------------------------------------------------

@@ -2,7 +2,8 @@
 //   /create/new                               가안 고르기. 도형 배치만 보이고, 아래에 다른 시작 방법으로 가는 링크가 있다
 //   /create/new/design/:designId(/:taskType)  Vision / Video / Text 고르기. 고른 가안에 예시 자료를 넣어 worker 화면으로 보인다
 //   /create/new/design/:designId/:taskType/data  이미 HIT 로 묶인 JSON 을 올리고 binding 으로 칸에 넣어 실제 데이터로 미리 본다.
-//       binding 은 요청 문장을 받아 LLM 이 쓰거나(유료 호출, 사용자가 허용해야 한다) 사람이 고친다
+//       binding 은 요청 문장을 받아 LLM 이 쓰거나(유료 호출, 사용자가 허용해야 한다) 사람이 고친다.
+//       쓴 뒤에는 같은 칸이 수정 요청이 되고, 답마다 대화에 쌓여 어느 때로든 돌아갈 수 있다 (lib/binding-revision.js)
 // Project 는 미리보기가 끝난 뒤 `Use this design` 에서 저장한다. 올린 데이터는 탭의 메모리에만 두고 서버로 보내지 않는다.
 // 가안의 정의는 lib/rough-designs.js, binding 의 검사와 조립은 lib/design-binding.js 에 있다.
 
@@ -10,6 +11,7 @@ import { agent, api } from '../../api-client/client.js';
 import { el } from '../../components/dom.js';
 import { muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
+import { addAnswer, earlierRequests, isCurrentVersion, withoutUnused } from '../../lib/binding-revision.js';
 import { adaptBinding, attentionItems, bindingSettings, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, judgedCounts, requestBinding, summarizeData } from '../../lib/design-binding.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
 import { readJsonDataFile } from '../../lib/json-data.js';
@@ -27,6 +29,8 @@ const DESIGN_KEY = 'mturk-console:rough-design';
 const PREVIEW_HEIGHT = 880;
 const CHECK_DEBOUNCE_MS = 400;
 const SAMPLE_ROW_LIMIT = 60 * 1024; // backend 의 sampleRow 상한(64KB)보다 조금 작게
+const CHANGE_TEXT_LIMIT = 120;
+const LAYOUT_GUIDE = 'The layout is not changed here. Choose another layout with the Rough design and Task type buttons above; your questions and data move with it.';
 
 // 올린 HIT 데이터와 고치던 binding. 같은 탭에서 앞 단계에 다녀와도 남는다
 let session = null;
@@ -310,7 +314,9 @@ export function renderDesignData(root, params, signal) {
     stopPreview: null,
     prompt: session?.prompt ?? '',
     writing: false,
-    undoText: null,
+    authored: session?.authored ?? false, // 사람이나 LLM 이 쓴 binding 이면 요청은 수정 요청이 된다
+    versions: session?.versions ?? [], // lib/binding-revision.js 의 대화 기록
+    parseFailed: false,
   };
   if (session?.binding) {
     state.binding = { ...adaptBinding(session.binding, design.id), task_type: taskType.id };
@@ -334,7 +340,7 @@ export function renderDesignData(root, params, signal) {
   const editor = el('textarea', { id: 'binding-editor', className: 'binding-editor', rows: 16, spellcheck: 'false', 'aria-label': 'Binding' });
 
   function remember() {
-    session = { file: state.file, reader: state.reader, binding: state.binding, prompt: state.prompt };
+    session = { file: state.file, reader: state.reader, binding: state.binding, prompt: state.prompt, authored: state.authored, versions: state.versions };
   }
 
   function usable() {
@@ -388,6 +394,12 @@ export function renderDesignData(root, params, signal) {
     );
   }
 
+  /** 미룬 검사를 지금 끝낸다. */
+  function flushEdits() {
+    clearTimeout(state.timer);
+    if (editor.value !== state.text) applyText();
+  }
+
   /** 편집기의 글을 읽어 검사하고 화면을 맞춘다. JSON 이 깨져 있으면 직전 미리보기를 지우고 이유를 알린다. */
   function applyText() {
     state.text = editor.value;
@@ -395,10 +407,12 @@ export function renderDesignData(root, params, signal) {
     try {
       parsed = JSON.parse(state.text);
     } catch (error) {
+      state.parseFailed = true;
       state.check = { errors: [`The binding is not valid JSON: ${error.message}`], warnings: [], design: null, taskType: null, tabs: 0 };
       showCheck();
       return;
     }
+    state.parseFailed = false;
     state.binding = parsed;
     state.check = checkBinding(parsed, state.reader);
     remember();
@@ -412,6 +426,8 @@ export function renderDesignData(root, params, signal) {
     );
     if (errors.length > 0) previewSlot.replaceChildren();
     renderControls();
+    renderThread();
+    refreshAgent();
     renderPreview();
     if (!state.nameEdited) nameInput.value = defaultName();
     renderFooter();
@@ -437,19 +453,24 @@ export function renderDesignData(root, params, signal) {
     );
   }
 
-  // ── LLM 에 binding 쓰게 하기 ──
-  const promptInput = el('textarea', { id: 'binding-prompt', rows: 3, placeholder: 'What should workers judge? For example: for each chunk, check every atomic fact the chunk supports.', 'aria-label': 'What workers should judge' });
+  // ── LLM 에 binding 쓰게 하고 고치게 하기 ──
+  const WRITE_PLACEHOLDER = 'For example: for each chunk, check every atomic fact the chunk supports.';
+  const REVISE_PLACEHOLDER = 'For example: rename the options to Yes and No, and shorten the instructions.';
+  const promptLabel = el('label', { for: 'binding-prompt' });
+  const promptInput = el('textarea', { id: 'binding-prompt', rows: 3, 'aria-labelledby': 'binding-prompt-label' });
+  promptLabel.id = 'binding-prompt-label';
   const allowApi = el('input', { type: 'checkbox', id: 'binding-allow-api' });
-  const writeButton = el('button', { type: 'button', className: 'btn btn-primary btn-small', id: 'write-binding' }, 'Write the binding');
-  const undoButton = el('button', { type: 'button', className: 'btn btn-small', id: 'undo-binding', hidden: true }, 'Undo');
+  const writeButton = el('button', { type: 'button', className: 'btn btn-primary btn-small', id: 'write-binding' });
   const agentStatus = el('div', { className: 'muted small', id: 'binding-agent-status' });
   const agentError = el('div', { id: 'binding-agent-error' });
+  const threadSlot = el('div', { className: 'binding-thread', id: 'binding-thread' });
   const agentPanel = el(
     'div',
     { className: 'binding-agent', id: 'binding-agent' },
-    el('label', { for: 'binding-prompt' }, 'What should workers judge?'),
+    threadSlot,
+    promptLabel,
     promptInput,
-    el('div', { className: 'binding-agent-actions' }, el('label', { className: 'check-label' }, allowApi, ' Allow API calls (uses credits)'), writeButton, undoButton),
+    el('div', { className: 'binding-agent-actions' }, el('label', { className: 'check-label' }, allowApi, ' Allow API calls (uses credits)'), writeButton),
     agentStatus,
     agentError,
   );
@@ -462,8 +483,11 @@ export function renderDesignData(root, params, signal) {
   let agentInfo = null; // /api/agent/models. 못 받으면 LLM 을 쓸 수 없다 (prototype 의 mock API)
 
   function refreshAgent() {
-    writeButton.disabled = state.writing || !agentInfo?.api_allowed || !allowApi.checked || promptInput.value.trim() === '';
-    writeButton.textContent = state.writing ? 'Writing…' : 'Write the binding';
+    writeButton.disabled = state.writing || state.parseFailed || !agentInfo?.api_allowed || !allowApi.checked || promptInput.value.trim() === '';
+    writeButton.textContent = state.authored ? (state.writing ? 'Revising…' : 'Revise the binding') : state.writing ? 'Writing…' : 'Write the binding';
+    promptLabel.textContent = state.authored ? 'What should change?' : 'What should workers judge?';
+    promptInput.placeholder = state.authored ? REVISE_PLACEHOLDER : WRITE_PLACEHOLDER;
+    editor.readOnly = state.writing;
   }
 
   function loadAgentInfo() {
@@ -485,46 +509,120 @@ export function renderDesignData(root, params, signal) {
     );
   }
 
+  /** 대화 기록의 binding 으로 돌아간다. 다른 가안에서 쓴 줄이면 주소도 맞춘다. */
+  function restoreVersion(version) {
+    if (state.writing) return;
+    clearTimeout(state.timer);
+    editor.value = version.text;
+    state.authored = version.kind !== 'draft';
+    applyText();
+    const { design: restored, taskType: restoredType } = state.check;
+    if (restored && restoredType) history.replaceState(null, '', designDataPath(restored.id, restoredType.id));
+  }
+
+  function showControls() {
+    controlsSlot.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    controlsSlot.classList.remove('bound-controls-flash');
+    void controlsSlot.offsetWidth; // 같은 애니메이션을 다시 시작한다
+    controlsSlot.classList.add('bound-controls-flash');
+  }
+
+  const clip = (text) => (text.length > CHANGE_TEXT_LIMIT ? `${text.slice(0, CHANGE_TEXT_LIMIT)}…` : text);
+
+  function changeLine({ what, before, after, alert }) {
+    const detail = before === '' ? ['added: ', el('span', { className: 'binding-change-new' }, clip(after))] : after === '' ? ['removed: ', el('span', { className: 'binding-change-old' }, clip(before))] : [el('span', { className: 'binding-change-old' }, clip(before)), ' → ', el('span', { className: 'binding-change-new' }, clip(after))];
+    return el('li', { className: alert ? 'binding-change-alert' : null }, el('strong', {}, `${what} `), detail);
+  }
+
+  function versionNode(version) {
+    const current = isCurrentVersion(version, state.binding);
+    const restore =
+      version.text === undefined
+        ? null
+        : current
+          ? el('span', { className: 'tag binding-current' }, 'Current')
+          : el('button', { type: 'button', className: 'btn btn-small btn-link binding-restore', disabled: state.writing, onClick: () => restoreVersion(version) }, 'Restore');
+    if (version.kind === 'draft' || version.kind === 'edit') {
+      return el('div', { className: 'binding-turn binding-turn-note', dataset: { kind: version.kind } }, el('span', { className: 'muted small' }, version.kind === 'draft' ? 'The first binding, made from your file' : 'Your edits before the next request'), restore);
+    }
+    const alerts = (version.changes ?? []).some((change) => change.alert);
+    return el(
+      'div',
+      { className: 'binding-turn', dataset: { kind: version.kind, cannot: version.cannot ?? '' } },
+      el('div', { className: 'binding-bubble binding-bubble-you' }, version.request),
+      el(
+        'div',
+        { className: 'binding-bubble binding-bubble-model' },
+        version.message ? el('p', {}, version.message) : null,
+        version.kind === 'reply' && !version.message && !version.cannot ? el('p', {}, 'The model changed nothing.') : null,
+        version.cannot === 'layout' ? el('p', { className: 'binding-guide' }, LAYOUT_GUIDE, ' ', el('button', { type: 'button', className: 'btn btn-small btn-link binding-show-controls', onClick: showControls }, 'Show the buttons')) : null,
+        version.changes?.length > 0 ? el('ul', { className: 'binding-changes' }, version.changes.map(changeLine)) : null,
+        alerts ? el('p', { className: 'binding-guide' }, 'Something marked above was removed. If you did not ask for that, restore the previous version.') : null,
+        version.problems?.length > 0 ? el('p', { className: 'binding-guide' }, 'The model could not fix every problem. Fix the problems listed below by hand, or ask again.') : null,
+        el('div', { className: 'binding-turn-foot' }, el('span', { className: 'muted small' }, version.meta ?? ''), restore),
+      ),
+    );
+  }
+
+  function renderThread() {
+    threadSlot.replaceChildren(...state.versions.map(versionNode));
+    threadSlot.hidden = state.versions.length === 0;
+    threadSlot.scrollTop = threadSlot.scrollHeight; // 마지막 답이 보이게 한다
+  }
+
   async function writeWithAgent() {
     if (state.writing) return;
-    const current = state.binding ?? {};
-    const currentDesign = roughDesignById(current.design) ?? design;
+    flushEdits();
+    if (state.parseFailed) return;
+    const before = state.binding ?? {};
+    const revising = state.authored;
+    const request = promptInput.value.trim();
+    const currentDesign = roughDesignById(before.design) ?? design;
     state.writing = true;
     agentError.replaceChildren();
+    renderThread();
     refreshAgent();
     agentStatus.textContent = 'Asking the model. This can take a minute or two.';
     try {
       const result = await requestBinding({
         send: (body) => agent.createBinding(body),
         check: (binding) => checkBinding(binding, state.reader),
-        request: { design: designForRequest(currentDesign), task_type: current.task_type ?? taskType.id, prompt: promptInput.value.trim(), data: summarizeData(state.reader), allow_api: true },
+        request: {
+          design: designForRequest(currentDesign),
+          task_type: before.task_type ?? taskType.id,
+          prompt: request,
+          data: summarizeData(state.reader),
+          allow_api: true,
+          ...(revising ? { current: withoutUnused(before), earlier_requests: earlierRequests(state.versions) } : {}),
+        },
       });
       if (signal.aborted) return;
-      state.undoText = editor.value;
-      undoButton.hidden = false;
-      editor.value = JSON.stringify(result.binding, null, 2);
-      applyText();
       const cost = typeof result.usage.cost === 'number' ? `, $${result.usage.cost.toFixed(4)}` : '';
-      agentStatus.textContent = `Written by ${result.model?.model ?? 'the model'} (${result.model?.provider_tag ?? 'any provider'}): ${result.attempts} attempt(s)${cost}.`;
-      if (result.errors.length > 0) agentError.replaceChildren(notice('warning', 'The model could not fix every problem', 'Its last answer is in the editor. Fix the problems listed below by hand, or ask again.'));
+      const meta = `${result.model?.model ?? 'the model'} (${result.model?.provider_tag ?? 'any provider'}): ${result.attempts} attempt(s)${cost}`;
+      // 가안을 바꿀 때 보관한 값은 LLM 을 거치지 않고 그대로 이어 간다
+      const answer = result.binding && revising && before.unused ? { ...result, binding: { ...result.binding, unused: before.unused } } : result;
+      state.versions = addAnswer(state.versions, { before, authored: state.authored, result: answer, request, meta });
+      state.prompt = '';
+      promptInput.value = '';
+      if (answer.binding) {
+        state.authored = true;
+        editor.value = JSON.stringify(answer.binding, null, 2);
+      }
+      state.writing = false;
+      agentStatus.textContent = `Last answer from ${meta}.`;
+      applyText();
     } catch (error) {
       if (signal.aborted) return;
       agentStatus.textContent = '';
-      agentError.replaceChildren(failureNotice('Could not write the binding', error));
+      agentError.replaceChildren(failureNotice(revising ? 'Could not revise the binding' : 'Could not write the binding', error));
     } finally {
       state.writing = false;
+      renderThread();
       refreshAgent();
     }
   }
 
   writeButton.addEventListener('click', () => void writeWithAgent());
-  undoButton.addEventListener('click', () => {
-    if (state.undoText === null) return;
-    editor.value = state.undoText;
-    state.undoText = null;
-    undoButton.hidden = true;
-    applyText();
-  });
 
   function renderWork() {
     if (!state.file) {
@@ -538,6 +636,7 @@ export function renderDesignData(root, params, signal) {
       bindingFile.value = '';
       if (!file) return;
       editor.value = await file.text();
+      state.authored = true;
       applyText();
     });
     editor.value = state.text;
@@ -579,6 +678,8 @@ export function renderDesignData(root, params, signal) {
     state.hit = 0;
     state.binding = draftBinding(design.id, taskType.id, state.reader);
     state.text = JSON.stringify(state.binding, null, 2);
+    state.authored = false; // 컬럼이 달라지므로 대화도 처음부터다
+    state.versions = [];
     renderUpload();
     renderWork();
   }
@@ -615,6 +716,7 @@ export function renderDesignData(root, params, signal) {
   }
 
   async function useDesign() {
+    flushEdits();
     if (state.saving || !usable()) return;
     const name = nameInput.value.trim();
     if (name === '') return;
@@ -654,6 +756,7 @@ export function renderDesignData(root, params, signal) {
   }
 
   editor.addEventListener('input', () => {
+    state.authored = true;
     clearTimeout(state.timer);
     state.timer = setTimeout(applyText, CHECK_DEBOUNCE_MS);
   });

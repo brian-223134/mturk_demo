@@ -1168,3 +1168,86 @@ label.btn .dropzone-input {
 .binding-agent-actions .check-label {
   margin-right: auto;
 }
+.binding-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #d5e2f6;
+}
+.binding-thread[hidden] {
+  display: none;
+}
+.binding-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.binding-turn-note {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.binding-bubble {
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+.binding-bubble p {
+  margin: 0 0 4px;
+}
+.binding-bubble-you {
+  align-self: flex-end;
+  background: #e3edfb;
+  white-space: pre-wrap;
+}
+.binding-bubble-model {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid #d5e2f6;
+}
+.binding-changes {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+.binding-change-old {
+  color: #8a5a5a;
+  text-decoration: line-through;
+}
+.binding-change-new {
+  color: #1d6b3a;
+}
+.binding-change-alert {
+  color: #a4262c;
+}
+.binding-guide {
+  font-size: 12px;
+  color: #6b4e00;
+}
+.binding-turn-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.binding-current {
+  font-size: 11px;
+}
+.bound-controls-flash {
+  animation: bound-controls-flash 1.6s ease-out;
+}
+@keyframes bound-controls-flash {
+  0%,
+  40% {
+    background: #fff4ce;
+    box-shadow: 0 0 0 6px #fff4ce;
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
