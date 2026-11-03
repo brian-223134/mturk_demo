@@ -54,11 +54,11 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 ## New Project
 
-`New Project`를 열면 화면 배치 가안(rough design)을 먼저 고릅니다. 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
+`New Project`를 열면 화면 배치 가안(rough design)을 먼저 고릅니다. 맞는 가안이 없으면 `F. Others`를 고르고 원하는 화면을 문장으로 설명합니다. 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
 
 ### rough design으로 시작하기
 
-1. **`Rough design`**: 도형으로 그린 가안 5개 중 하나를 고르고 `Next`를 누릅니다. 이 단계에서는 칸의 자리만 보입니다.
+1. **`Rough design`**: 도형으로 그린 가안 5개와 `Others` 중 하나를 고르고 `Next`를 누릅니다. 이 단계에서는 칸의 자리만 보입니다.
 2. **`Task type and preview`**: `Vision`, `Video`, `Text` 중 하나를 고르면 고른 가안에 예시 자료를 넣은 worker 화면이 아래에 나옵니다. 종류를 바꾸면 미리보기도 바로 바뀌고, `Submit`을 누르면 제출되었을 답을 보여 줍니다.
 3. **`HIT data`**: 이미 HIT로 묶인 JSON을 올려 실제 데이터로 미리 봅니다. 아래 [HIT 데이터를 가안에 넣어 보기](#hit-데이터를-가안에-넣어-보기)에 정리되어 있습니다. `Use this design`을 누르면 Project가 저장되고, 정렬한 데이터가 올라간 Publish Batch가 열립니다. 이름과 layout이 모두 같은 Project가 이미 있으면 새로 만들지 않고 그 Project를 씁니다. 데이터 없이 예시 layout만 저장하려면 `Save the sample layout without data`를 누릅니다.
 
@@ -69,6 +69,9 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 | C | `Comparison` | 위에 데이터 두 칸, 아래 고르는 문항 | 둘 중 하나 또는 비슷함 |
 | D | `Tabs` | 탭 3개, 탭마다 데이터와 객관식 | 탭마다 객관식 |
 | E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 라디오로 하나 고르기 |
+| F | `Others` | 정해진 배치 없음. 데이터를 올린 뒤 문장으로 설명 | 요청에 따라 LLM이 고름 |
+
+`Others`는 2단계에 예시 미리보기가 없고, `Save the sample layout without data`도 없습니다. 3단계의 칸이 `What should workers judge, and how should the page look?`로 바뀌며, 요청 전에 보이는 배치는 임시입니다. LLM이 요청과 데이터를 보고 칸과 자리를 정해 `layout`을 씁니다. 그 뒤로는 [칸의 배치 바꾸기](#칸의-배치-바꾸기)와 같습니다. 다른 가안에서 `F. Others`로 넘어오면 지금 배치에서 출발합니다. 만든 배치는 그 Project에만 저장되며, 다음 Project의 가안 목록에는 나오지 않습니다.
 
 `Save the sample layout without data`로 저장한 Project의 데이터 컬럼은 task 종류와 가안에 따라 정해지며, 2단계 미리보기 위의 `Sample data columns`에 나옵니다.
 
@@ -230,8 +233,7 @@ LLM이 받는 배치 요소의 설명은 `agent/binding_reference.md`의 `Laying
 
 ### 앞으로 할 일
 
-1. **`Others`**: 가안을 고르기 전에 원하는 배치를 설명해서 시작하는 입구입니다. 지금은 가안을 하나 고른 뒤 요청으로 배치를 바꿉니다.
-2. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
+1. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
 
 ### 다른 방법으로 시작하기
 
