@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img" aria-label="A city street with buildings, a car, a person and a tree">
+  <rect width="640" height="260" fill="#bfdcf2"/>
+  <circle cx="548" cy="62" r="30" fill="#fbdc7a"/>
+  <rect x="24" y="74" width="118" height="176" fill="#8795a6"/>
+  <rect x="142" y="38" width="108" height="212" fill="#a3796a"/>
+  <rect x="250" y="96" width="132" height="154" fill="#c2b49d"/>
+  <rect x="382" y="58" width="96" height="192" fill="#6f8598"/>
+  <rect x="478" y="118" width="162" height="132" fill="#b98e6e"/>
+  <g fill="#f4eebf">
+    <rect x="44" y="96" width="24" height="28"/><rect x="92" y="96" width="24" height="28"/><rect x="44" y="146" width="24" height="28"/><rect x="92" y="146" width="24" height="28"/>
+    <rect x="162" y="60" width="24" height="28"/><rect x="206" y="60" width="24" height="28"/><rect x="162" y="112" width="24" height="28"/><rect x="206" y="112" width="24" height="28"/><rect x="162" y="164" width="24" height="28"/><rect x="206" y="164" width="24" height="28"/>
+    <rect x="276" y="120" width="28" height="28"/><rect x="330" y="120" width="28" height="28"/>
+    <rect x="402" y="82" width="22" height="28"/><rect x="442" y="82" width="22" height="28"/><rect x="402" y="136" width="22" height="28"/><rect x="442" y="136" width="22" height="28"/>
+    <rect x="502" y="144" width="30" height="28"/><rect x="574" y="144" width="30" height="28"/>
+  </g>
+  <rect y="250" width="640" height="26" fill="#c9c6bd"/>
+  <rect y="276" width="640" height="124" fill="#54585e"/>
+  <g fill="#f1f0e8"><rect x="30" y="334" width="72" height="8"/><rect x="170" y="334" width="72" height="8"/><rect x="310" y="334" width="72" height="8"/><rect x="450" y="334" width="72" height="8"/><rect x="590" y="334" width="50" height="8"/></g>
+  <rect x="566" y="196" width="12" height="62" fill="#6b4a33"/>
+  <circle cx="572" cy="176" r="38" fill="#4e9a59"/>
+  <circle cx="110" cy="232" r="9" fill="#e8b48c"/>
+  <rect x="102" y="241" width="16" height="30" rx="4" fill="#c2453d"/>
+  <rect x="103" y="270" width="6" height="18" fill="#2f3a4c"/><rect x="111" y="270" width="6" height="18" fill="#2f3a4c"/>
+  <path d="M212 318 L232 280 Q238 270 252 270 H344 Q358 270 368 280 L396 306 L432 314 Q446 318 446 332 V346 H212 Z" fill="#d9503f"/>
+  <path d="M244 282 H292 V308 H232 Z M302 282 H346 L372 308 H302 Z" fill="#cfe7f5"/>
+  <circle cx="264" cy="348" r="22" fill="#23262b"/><circle cx="264" cy="348" r="9" fill="#a9adb3"/>
+  <circle cx="396" cy="348" r="22" fill="#23262b"/><circle cx="396" cy="348" r="9" fill="#a9adb3"/>
+</svg>

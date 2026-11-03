@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img" aria-label="A park with trees, a bench, a path and a person riding a bicycle">
+  <rect width="640" height="260" fill="#cfe9f7"/>
+  <circle cx="96" cy="66" r="32" fill="#fbdc7a"/>
+  <g fill="#fff"><ellipse cx="300" cy="62" rx="58" ry="20"/><ellipse cx="342" cy="52" rx="42" ry="20"/><ellipse cx="510" cy="88" rx="50" ry="17"/></g>
+  <path d="M0 220 Q160 170 320 214 T640 200 V260 H0 Z" fill="#8cc083"/>
+  <rect y="230" width="640" height="170" fill="#6dac63"/>
+  <path d="M250 400 Q300 310 420 270 Q520 240 640 236 V272 Q540 274 454 302 Q360 336 340 400 Z" fill="#e3d4ae"/>
+  <rect x="88" y="150" width="20" height="104" fill="#6b4a33"/>
+  <circle cx="98" cy="120" r="62" fill="#3f8a4d"/><circle cx="58" cy="150" r="38" fill="#4c9a59"/><circle cx="140" cy="150" r="40" fill="#4c9a59"/>
+  <rect x="514" y="130" width="16" height="88" fill="#6b4a33"/>
+  <circle cx="522" cy="106" r="50" fill="#57a262"/>
+  <g fill="#8a5a39">
+    <rect x="138" y="300" width="138" height="9" rx="2"/><rect x="138" y="282" width="138" height="7" rx="2"/>
+    <rect x="148" y="309" width="8" height="30"/><rect x="258" y="309" width="8" height="30"/>
+  </g>
+  <g fill="none" stroke="#23262b" stroke-width="5">
+    <circle cx="414" cy="330" r="28"/><circle cx="498" cy="330" r="28"/>
+    <path d="M414 330 L444 286 H482 L498 330 M444 286 L458 330 H414 M458 330 L482 286"/>
+  </g>
+  <circle cx="462" cy="232" r="11" fill="#e8b48c"/>
+  <path d="M452 244 Q470 240 472 262 L466 290 H448 Z" fill="#2d6fb5"/>
+  <path d="M456 288 L470 322" stroke="#2f3a4c" stroke-width="7" stroke-linecap="round" fill="none"/>
+</svg>

@@ -13,6 +13,9 @@ const routes = [
   ['/index.html', null, { redirect: '/create' }],
   ['/create', handlers.create, { tab: 'create' }],
   ['/create/new', handlers.create, { tab: 'create' }],
+  ['/create/new/gallery', handlers.create, { tab: 'create' }],
+  ['/create/new/design/:designId', handlers.create, { tab: 'create' }],
+  ['/create/new/design/:designId/:taskType', handlers.create, { tab: 'create' }],
   ['/create/tutorial', handlers.create, { tab: 'create' }],
   ['/create/project/:projectId', handlers.create, { tab: 'create' }],
   ['/create/project/:projectId/:tab', handlers.create, { tab: 'create' }],
@@ -22,6 +25,14 @@ const routes = [
   ['/manage/:batchId/:tab', handlers.batch, { tab: 'manage' }],
   ['/workers', handlers.workers, { tab: 'workers' }],
 ].map(([pattern, handler, meta]) => ({ ...compilePattern(pattern), handler, meta }));
+
+describe('New Project 의 rough design 경로', () => {
+  it('가안과 task 종류를 params 로 받는다', () => {
+    assert.deepEqual(matchRoute(routes, '/create/new/design/tabs').params, { designId: 'tabs' });
+    assert.deepEqual(matchRoute(routes, '/create/new/design/tabs/video').params, { designId: 'tabs', taskType: 'video' });
+    assert.deepEqual(matchRoute(routes, '/create/new/gallery').params, {});
+  });
+});
 
 describe('compilePattern', () => {
   it(':이름 조각을 키로 뽑고 한 조각짜리 그룹으로 만든다', () => {

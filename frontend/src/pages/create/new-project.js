@@ -1,4 +1,5 @@
-// Create → New Project: 무엇으로 시작할지 고른다 (MTurk 의 "Select a customizable template to start a new project").
+// Create → New Project → Other ways to start (/create/new/gallery): rough design(pages/create/rough-design.js) 대신 무엇으로 시작할지 고른다
+// (MTurk 의 "Select a customizable template to start a new project").
 // 왼쪽은 starter 템플릿(lib/starters.js)과 다른 시작 방법 두 가지(HTML 올리기, 원본 데이터에서 agent 로 만들기), 오른쪽은 고른 것의
 // 설명과 실제 미리보기다. starter 의 미리보기는 표본 행으로 그린 worker 화면 그대로이고 Submit 도 가로채 보인다.
 // Create Project 를 누르면 새 Project 의 임시 저장(lib/project-draft.js, key 'new')을 만들고 편집기로 간다.
@@ -9,8 +10,8 @@ import { confirmModal } from '../../components/modal.js';
 import { loading, muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
-import { NEW_PROJECT, emptyProjectDraft, projectDraftFromStarter, projectDraftStorage, sampleFor } from '../../lib/project-draft.js';
 import { hitsFileOf, parseHits } from '../../lib/job-groups.js';
+import { NEW_PROJECT, emptyProjectDraft, projectDraftFromStarter, projectDraftStorage, sampleFor } from '../../lib/project-draft.js';
 import { applyJobSettings, settingsFromProperties } from '../../lib/settings.js';
 import { STARTERS, STARTER_CATEGORIES, starterById, starterUrl } from '../../lib/starters.js';
 import { extractPlaceholders } from '../../lib/template.js';
@@ -76,6 +77,18 @@ async function startProject(draft, tab, signal) {
   if (!signal.aborted) navigate(`/create/project/${NEW_PROJECT}/${tab}`);
 }
 
+/** 저장하지 않은 새 Project 가 있으면 이어서 고치는 링크가 있는 안내. 없으면 null. */
+export async function pendingProjectNotice() {
+  const pending = await pendingNewProject();
+  if (!pending) return null;
+  return notice(
+    'info',
+    el('span', {}, 'The new project ', el('strong', {}, pending.name.trim() || 'Untitled'), ' has not been saved yet.'),
+    null,
+    el('div', { className: 'notice-actions' }, el('a', { href: `/create/project/${NEW_PROJECT}/properties`, className: 'btn btn-small', id: 'continue-new-project' }, 'Continue editing')),
+  );
+}
+
 export async function renderNewProject(root, signal) {
   let choice = readChoice();
   let stopDetail = null;
@@ -90,7 +103,7 @@ export async function renderNewProject(root, signal) {
     el(
       'section',
       { className: 'panel', id: 'new-project' },
-      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a template to start a new project')),
+      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a template to start a new project'), el('a', { href: '/create/new', className: 'btn btn-small btn-link', id: 'back-to-designs' }, 'Back to rough designs')),
       muted(
         'A new project starts from a template, your own HTML, or a layout generated from raw data. You set its properties and layout here, then publish batches from it in New Batch with an Existing Project. The preview shows sample data; your JSON file replaces it when you publish a batch.',
       ),
@@ -175,17 +188,8 @@ export async function renderNewProject(root, signal) {
 
   renderList();
   await renderDetail();
-  const pending = await pendingNewProject();
-  if (pending && !signal.aborted) {
-    pendingSlot.replaceChildren(
-      notice(
-        'info',
-        el('span', {}, 'The new project ', el('strong', {}, pending.name.trim() || 'Untitled'), ' has not been saved yet.'),
-        null,
-        el('div', { className: 'notice-actions' }, el('a', { href: `/create/project/${NEW_PROJECT}/properties`, className: 'btn btn-small', id: 'continue-new-project' }, 'Continue editing')),
-      ),
-    );
-  }
+  const pending = await pendingProjectNotice();
+  if (pending && !signal.aborted) pendingSlot.replaceChildren(pending);
   return () => {
     if (typeof stopDetail === 'function') stopDetail();
   };

@@ -27,7 +27,7 @@ function openGallery(choice, label) {
       dataset: { open: choice },
       onClick: () => {
         presetChoice(choice);
-        navigate('/create/new');
+        navigate('/create/new/gallery');
       },
     },
     label,
@@ -61,7 +61,7 @@ function exampleLoader() {
           return;
         }
         presetChoice('generate');
-        navigate('/create/new');
+        navigate('/create/new/gallery');
       };
       holder.replaceChildren(
         el('div', { className: 'field' }, el('label', { for: choice.id }, 'Example prompts'), choice, info),
@@ -162,7 +162,7 @@ export function renderTutorial(root) {
       el('p', {}, '연구실에서 자주 쓰는 형태의 starter 템플릿으로 Project를 만들고, attention check가 들어 있는 예시 JSON으로 Batch를 게시해 봅니다.'),
       el('div', { className: 'tutorial-actions' }, openGallery('passage-relevance', 'Passage relevance 열기'), el('a', { href: EXAMPLE_JSON, download: 'passage-relevance.json', className: 'btn btn-small', id: 'tutorial-example-json' }, '예시 JSON 내려받기')),
       steps([
-        [ui('New Project'), '에서 ', ui('Passage relevance'), '를 고르면 오른쪽에 worker 화면이 표본 데이터로 보입니다. ', ui('Submit'), '을 눌러 제출되는 답의 모양도 볼 수 있습니다. ', ui('Create Project'), '를 누릅니다.'],
+        [ui('New Project'), '의 ', ui('Other ways to start'), ' → ', ui('Starter templates'), '에서 ', ui('Passage relevance'), '를 고르면 오른쪽에 worker 화면이 표본 데이터로 보입니다. ', ui('Submit'), '을 눌러 제출되는 답의 모양도 볼 수 있습니다. ', ui('Create Project'), '를 누릅니다.'],
         [ui('Enter Properties'), ': worker에게 보일 제목과 설명, 보상($0.05), HIT당 인원(3명), 시간, worker 조건이 채워져 있습니다. 아래에 HIT 하나의 비용이 계산되어 보입니다.'],
         [ui('Design Layout'), ': 왼쪽에서 HTML을 고치면 오른쪽 미리보기가 바로 바뀝니다. ', ui('Insert element…'), '로 문항을 넣어 보고, ', ui('Checks'), '에 오류가 없는지 확인합니다.'],
         [ui('Preview and Finish'), '에서 ', ui('Finish and publish a batch'), '를 누르면 Project가 저장되고 Publish Batch가 열립니다.'],
