@@ -19,8 +19,9 @@ const { core } = require('../src/elements/ann-elements.js');
 const SRC = new URL('../src/', import.meta.url);
 
 describe('rough design 목록', () => {
-  it('가안 5개와 task 종류 3개가 있고 id 로 찾는다', () => {
-    assert.deepEqual(ROUGH_DESIGNS.map((d) => d.letter), ['A', 'B', 'C', 'D', 'E']);
+  it('가안 5개와 Others, task 종류 3개가 있고 id 로 찾는다', () => {
+    assert.deepEqual(ROUGH_DESIGNS.map((d) => d.letter), ['A', 'B', 'C', 'D', 'E', 'F']);
+    assert.deepEqual(ROUGH_DESIGNS.filter((d) => d.open).map((d) => d.title), ['Others']);
     assert.deepEqual(TASK_TYPES.map((t) => t.id), ['vision', 'video', 'text']);
     assert.equal(roughDesignById('stacked').letter, 'B');
     assert.equal(roughDesignById('nope'), null);

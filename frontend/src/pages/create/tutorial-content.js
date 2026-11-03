@@ -56,7 +56,7 @@ export const TUTORIAL = {
           { actions: [{ open: '/create/new', label: 'New Project 열기', primary: true }, { download: '/example/6-rough-design/chunk-fact-hits.json', file: 'chunk-fact-hits.json', label: '예시 데이터 내려받기' }, { download: '/example/6-rough-design/chunk-fact.binding.json', file: 'chunk-fact.binding.json', label: '예시 binding 내려받기' }] },
           {
             steps: [
-              [u('Rough design'), ': 도형으로 그린 가안 5개 중 하나를 고르고 ', u('Next'), '를 누릅니다. 예시 데이터에는 ', u('E. Item by item'), '이 잘 맞습니다.'],
+              [u('Rough design'), ': 도형으로 그린 가안 5개 중 하나를 고르고 ', u('Next'), '를 누릅니다. 예시 데이터에는 ', u('E. Item by item'), '이 잘 맞습니다. 맞는 가안이 없으면 ', u('F. Others'), '를 고르고 3단계에서 원하는 화면을 문장으로 설명합니다.'],
               [u('Task type and preview'), ': ', u('Vision'), ', ', u('Video'), ', ', u('Text'), ' 중 하나를 고르면 예시 자료를 넣은 화면이 보입니다. 예시 데이터에는 ', u('Text'), '를 고르고 ', u('Next'), '를 누릅니다.'],
               [u('HIT data'), ': 내려받은 예시 데이터를 올립니다. 객체 하나가 HIT 하나인 JSON 배열이며, 파일은 브라우저 탭에만 있고 서버로 보내지 않습니다.'],
               ['binding은 어떤 값을 어느 칸에 넣을지 적은 설정입니다. 왼쪽 폼의 드롭다운으로 고르거나, ', u('Upload binding'), '으로 예시 binding을 올리면 HIT 하나에 탭 11개가 보입니다. 위쪽에서 가안을 바꿔 비교하고 HIT 번호를 넘겨 봅니다. JSON으로 고치려면 ', u('Edit as JSON (advanced)'), '를 엽니다.'],
@@ -211,7 +211,7 @@ export const TUTORIAL = {
           { actions: [{ open: '/create/new', label: 'Open New Project', primary: true }, { download: '/example/6-rough-design/chunk-fact-hits.json', file: 'chunk-fact-hits.json', label: 'Download the example data' }, { download: '/example/6-rough-design/chunk-fact.binding.json', file: 'chunk-fact.binding.json', label: 'Download the example binding' }] },
           {
             steps: [
-              [u('Rough design'), ': choose one of the five layouts drawn as shapes and press ', u('Next'), '. ', u('E. Item by item'), ' suits the example data.'],
+              [u('Rough design'), ': choose one of the five layouts drawn as shapes and press ', u('Next'), '. ', u('E. Item by item'), ' suits the example data. If none fits, choose ', u('F. Others'), ' and describe the page in words in the third step.'],
               [u('Task type and preview'), ': choose ', u('Vision'), ', ', u('Video'), ' or ', u('Text'), ' to see the page with sample material. For the example data, choose ', u('Text'), ' and press ', u('Next'), '.'],
               [u('HIT data'), ': upload the example data. It is a JSON array with one object per HIT. The file stays in your browser tab and is not sent to the server.'],
               ['A binding says which value goes into which slot. Choose values from the dropdowns in the form on the left, or upload the example binding with ', u('Upload binding'), ' to see 11 tabs per HIT. Switch layouts at the top to compare them, and move between HITs. To edit the JSON, open ', u('Edit as JSON (advanced)'), '.'],

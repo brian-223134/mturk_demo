@@ -729,7 +729,7 @@ export function summarizeData(reader) {
 
 /** 가안 정의 중 LLM 이 쓸 부분. */
 export function designForRequest(design) {
-  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ ...(row.columns ? { columns: row.columns } : {}), slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}) };
+  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ ...(row.columns ? { columns: row.columns } : {}), slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}), ...(design.open ? { open: true } : {}) };
 }
 
 /**
@@ -767,7 +767,9 @@ export async function requestBinding({ send, check, request, maxAttempts = 3 }) 
 export function adaptBinding(binding, designId) {
   const staying = binding.design === designId;
   const savedLayout = binding.unused?.layout;
-  const layout = staying ? binding.layout : savedLayout?.design === designId ? savedLayout.layout : undefined;
+  let layout = staying ? binding.layout : savedLayout?.design === designId ? savedLayout.layout : undefined;
+  // Others 로 넘어오면 지금 배치에서 출발한다. 임시 배치로 가면 문항 칸의 값이 사라져 보이기 때문이다
+  if (layout === undefined && !staying && roughDesignById(designId).open) layout = { rows: designOf(binding).rows.map(({ columns, slots }) => ({ ...(columns ? { columns } : {}), slots })) };
   const target = layout !== undefined && layoutErrors(layout).length === 0 ? withLayout(roughDesignById(designId), layout) : roughDesignById(designId);
   const source = { ...binding.unused, ...binding.slots };
   const targetSlots = slotsOf(target);
@@ -816,9 +818,17 @@ export function dropLayout(binding) {
   return adaptBinding(rest, binding.design);
 }
 
-/** 값의 글자 수로 보여 줄 만한 컬럼을 고른다. */
-function pickDataColumns(reader, preferred) {
+/** 값의 글자 수로 보여 줄 만한 컬럼을 고른다. 이미지와 영상 칸이면 주소처럼 보이는 컬럼을 먼저 본다. 글이 src 에 들어가면 올리자마자 오류가 나기 때문이다. */
+function pickDataColumns(reader, preferred, wantsUrl) {
   if (reader.columns.includes(preferred)) return [preferred];
+  if (wantsUrl) {
+    const first = (column) => {
+      const value = reader.cell(0, column);
+      return Array.isArray(value) ? value[0] : value;
+    };
+    const urls = reader.columns.filter((column) => typeof first(column) === 'string' && URL_LIKE.test(first(column).trim()));
+    if (urls.length > 0) return urls;
+  }
   const sampleRows = Math.min(reader.rowCount, 5);
   const score = (column) => {
     let total = 0;
@@ -839,7 +849,7 @@ export function draftBinding(designId, taskTypeId, reader) {
   const design = roughDesignById(designId);
   const taskType = taskTypeById(taskTypeId);
   const content = taskContent(taskType);
-  const columns = pickDataColumns(reader, content.column);
+  const columns = pickDataColumns(reader, content.column, defaultKind(taskType) !== 'text');
   const binding = { design: designId, task_type: taskTypeId, slots: {} };
   const repeat = Array.isArray(reader.cell(0, columns[0]));
   if (repeat) binding.repeat = { over: columns[0], label: content.label };

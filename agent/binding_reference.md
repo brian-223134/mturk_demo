@@ -6,7 +6,7 @@ Reply with **one JSON object** and nothing else.
 
 ## The input you get
 
-- `design`: the rough design the requester chose. `rows` is its layout: `rows[].slots` lists its slots, left to right. Fill only these slots, unless you set `layout`. See [Laying out the page](#laying-out-the-page).
+- `design`: the rough design the requester chose. `rows` is its layout: `rows[].slots` lists its slots, left to right. Fill only these slots, unless you set `layout`. See [Laying out the page](#laying-out-the-page). When `design.open` is true there is no chosen layout; see [When the design is open](#when-the-design-is-open).
 - `task_type`: `vision`, `video` or `text`.
 - `request`: what the requester wants workers to judge. Follow it. The questions you write come from this text.
 - `data`: the shape of the requester's HIT data. Each entry of `columns` has the column `name`, its `shape`, and `samples` from real HITs. Long texts are cut in the samples; the real values are longer. A list column also has `distinct_per_list`: the fewest and the most different values one list holds, counted over every HIT.
@@ -25,7 +25,7 @@ Reply with **one JSON object** and nothing else.
 | `reference` | no | Existing labels to compare worker answers with. See below. Set it when a column holds labels for the question being asked. |
 | `attention` | no | `{"flag": "<path>", "expected": "<option value>"}` when a column marks attention checks with 1. `expected` is the answer attention items must get; give it when the request or the data tells you, otherwise leave it out. |
 | `instructions` | yes | One or two sentences that tell workers what to do. Do not mention attention checks. |
-| `layout` | only when the request asks for an arrangement the design does not have | Where the boxes go. See [Laying out the page](#laying-out-the-page). |
+| `layout` | when the request asks for an arrangement the design does not have, and when `design.open` is true | Where the boxes go. See [Laying out the page](#laying-out-the-page). |
 | `message` | yes | One or two sentences to the requester: what you did, and anything you could not do. Write it in the language of `request`. It is not shown to workers. |
 
 Write `instructions`, `header`, `label`, options and `placeholder` in **English**, even when the request or the data is in another language. The console rejects any other language in these fields.
@@ -230,6 +230,14 @@ Rules:
   ]
 }
 ```
+
+### When the design is open
+
+`design.open` is true when the requester picked none of the rough designs and describes the page in words. `design.rows` is then only a temporary start, not a choice.
+
+- Choose the boxes the task needs, from `request` and the data: `item-choice` when each tab or page has a list of items to judge, `data-a`, `data-b` and `compare` when two things are compared, and otherwise `choice`. Add `free-text` only when the request asks for a written answer.
+- Write `layout` whenever your boxes or their places differ from `design.rows`. Follow every arrangement the request states. Where it states none, follow the "how to place it" column.
+- Say in `message` where you put the boxes, especially what you chose on your own.
 
 ## Revising a binding
 
