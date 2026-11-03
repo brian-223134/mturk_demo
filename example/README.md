@@ -1,6 +1,6 @@
 # example/: Create에 올려 볼 예시 파일
 
-콘솔의 **Create** 탭은 템플릿(`.html`) 하나와 데이터(`.csv`) 하나를 받습니다. 이 폴더에는 그 자리에 올려 볼 수 있는 파일이 들어 있습니다.
+콘솔의 **Create** 탭은 템플릿(`.html`) 하나와 데이터 하나를 받습니다. 데이터는 production 콘솔에서는 JSON(`.json`), 프로토타입 콘솔에서는 CSV(`.csv`)입니다. 이 폴더에는 그 자리에 올려 볼 수 있는 파일이 들어 있습니다.
 어떤 파일을 올리면 화면에 무엇이 표시되는지는 저장소 루트의 [README.md](../README.md#예시-파일로-mock-테스팅-해보기)에 시나리오별로 정리되어 있습니다.
 
 | 폴더 | 파일 | 용도 |
@@ -14,7 +14,7 @@
 | | `large-rows.csv` | 경고 예시: 입력이 64KB를 넘는 행 |
 | `4-saved-templates/` | `chunk-fact-relevance-input.csv` (10행) | 콘솔에 미리 저장된 `Chunk-Fact Relevance` 템플릿에 넣을 입력 |
 | | `query-fact-coverage-input.csv` (8행) | 콘솔에 미리 저장된 `Query-Fact Coverage` 템플릿에 넣을 입력 |
-| `5-project/` | `passage-relevance.csv` (8행) | production 콘솔에서 `Passage relevance` starter로 만든 Project에 올릴 입력입니다. attention 행 2개와 기대 답 컬럼 `attention_expected`, 정답 컬럼 `gold`가 있습니다. 사용법은 [Project로 batch 게시하기](../docs/create-projects.md#따라-하기-starter로-attention-check가-있는-batch-게시하기)에 있습니다. |
+| `5-project/` | `passage-relevance.json` (객체 8개) | production 콘솔에서 `Passage relevance` starter로 만든 Project에 올릴 입력입니다. attention 항목 2개와 기대 답 컬럼 `attention_expected`, 정답 컬럼 `gold`가 있습니다. 사용법은 [Project로 batch 게시하기](../docs/create-projects.md#따라-하기-starter로-attention-check가-있는-batch-게시하기)에 있습니다. |
 
 `3-data-checks/`의 CSV는 `1-task-data/template.html`과 함께 사용합니다.
 

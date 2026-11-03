@@ -9,7 +9,7 @@ Amazon Mechanical Turk(MTurk)로 진행하던 annotation 작업을 **만들고, 
 
 | 탭 | 하는 일 |
 |---|---|
-| **Create** | MTurk처럼 작업의 틀인 Project(worker 화면 + 보상·인원·기간 같은 속성)를 만들고, Project에 CSV를 올려 batch를 게시합니다. 원본 데이터와 prompt로 템플릿을 자동으로 만들 수도 있습니다. |
+| **Create** | MTurk처럼 작업의 틀인 Project(worker 화면 + 보상·인원·기간 같은 속성)를 만들고, Project에 JSON 데이터를 올려 batch를 게시합니다. 원본 데이터와 prompt로 템플릿을 자동으로 만들 수도 있습니다. |
 | **Manage** | batch의 진행률과 비용을 확인하고, 제출된 응답을 승인하거나 반려합니다. 부족한 응답은 다시 모집하고, 결과(majority, Fleiss' κ, Krippendorff's α)를 확인해 내보냅니다. |
 | **Worker Pool** | worker별 품질 지표를 살펴보고, 믿을 만한 worker와 제외할 worker를 pool로 관리합니다. |
 | **Worker 화면** | worker 계정으로 로그인하면 열립니다. 게시된 batch의 HIT를 받아 풀고 제출하며, 제출한 HIT의 검수 결과와 금액을 확인합니다. |
@@ -120,15 +120,15 @@ Docker 없이 실행하려면 Node 24 이상이 필요합니다 (Node에 내장�
 
 ### Create: Project 만들기와 batch 게시
 
-MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 CSV를 올려 **batch**를 게시합니다. Project는 작업의 틀(worker 화면과 속성)이고, batch는 그 틀에 실제 데이터를 넣어 내보낸 한 번의 게시입니다. 같은 Project로 batch를 여러 번 게시할 수 있습니다.
+MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 JSON 데이터를 올려 **batch**를 게시합니다. Project는 작업의 틀(worker 화면과 속성)이고, batch는 그 틀에 실제 데이터를 넣어 내보낸 한 번의 게시입니다. 같은 Project로 batch를 여러 번 게시할 수 있습니다.
 위쪽에 탭이 세 개 있습니다.
 
-- **`New Batch with an Existing Project`**: Project 목록입니다. 행마다 `Publish Batch`(CSV를 올려 게시), `Edit`, `Copy`, `Delete`가 있습니다.
-- **`New Project`**: 무엇으로 시작할지 고릅니다. starter 템플릿 9종(실제 미리보기와 함께), HTML 올리기, 원본 데이터에서 자동으로 만들기(`Generate from raw data`) 중에서 고릅니다.
+- **`New Batch with an Existing Project`**: Project 목록입니다. 행마다 `Publish Batch`(JSON을 올려 게시), `Edit`, `Copy`, `Delete`가 있습니다.
+- **`New Project`**: 화면 배치 가안(rough design) 5개 중 하나를 고르고, Vision·Video·Text 중 task 종류를 고르면 예시 자료를 넣은 worker 화면이 보입니다. 그대로 쓰면 Project가 저장되고 `Upload JSON`으로 넘어갑니다. 아래의 `Other ways to start`에서 starter 템플릿 9종, HTML 올리기, 원본 데이터에서 자동으로 만들기(`Generate from raw data`)도 고를 수 있습니다.
 - **`Tutorial`**: 처음 쓰는 사람을 위한 한국어 따라 하기 안내입니다. 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
 
 Project는 세 탭으로 만듭니다. `Enter Properties`에서 worker에게 보일 제목과 설명, 보상, HIT당 인원, 기간, worker 조건을 정하고, `Design Layout`에서 템플릿 HTML을 고치며 오른쪽의 worker 화면 미리보기를 바로 확인하고, `Preview and Finish`에서 요약을 보고 저장합니다.
-batch는 네 단계로 게시합니다. `Upload CSV`에서 템플릿이 쓰는 컬럼이 있는지 검사하고, `Preview tasks`에서 행마다 worker 화면을 보고, `Review settings`에서 attention 규칙과 Review의 대조 기준을 정한 뒤, `Confirm and publish`에서 비용을 확인하고 게시합니다.
+batch는 네 단계로 게시합니다. `Upload JSON`에서 템플릿이 쓰는 컬럼이 있는지 검사하고, `Preview tasks`에서 행마다 worker 화면을 보고, `Review settings`에서 attention 규칙과 Review의 대조 기준을 정한 뒤, `Confirm and publish`에서 비용을 확인하고 게시합니다.
 
 starter 템플릿은 콘솔이 제공하는 `<ann-*>` 요소로 쓴 짧은 HTML입니다. 요소가 문항을 그리고, 필수 문항을 검사하고, Review가 읽는 형식으로 답을 제출합니다.
 화면별 선택지와 조건은 [Project로 batch 게시하기](docs/create-projects.md)에, 요소는 [`<ann-*>` 요소로 템플릿 쓰기](docs/annotation-elements.md)에 정리되어 있습니다. 프로토타입의 5단계 마법사는 [Create로 batch 게시하기](docs/creating-a-batch.md)에 있습니다.
@@ -143,7 +143,7 @@ batch 이름을 누르면 **상세 화면**이 열립니다. 네 개의 탭으�
 - **`Overview`**: 진행률, 응답 현황(worker가 지금 풀고 있는 `In progress` 포함), 비용을 요약해 보여 주고 아래에 batch 설정을 표시합니다. `Top up incomplete HITs`(부족한 응답 재모집), `Expire now`(지금 만료), `Export` 버튼이 있습니다.
 - **`Review`**: 응답을 검수하는 화면입니다.
   - 상태, attention check 통과 여부, worker, 작업 시간으로 걸러 낸 뒤 검수합니다. 검수 대기 응답마다 `Approve` / `Reject` 라디오가 있고, 기본 정렬(`Row`)에서는 같은 HIT의 응답이 하나로 묶여 HIT 칸의 `Approve all` / `Reject all`로 그 HIT의 worker 전원을 한 번에 정할 수 있습니다. 고른 결정은 페이지를 넘겨도 남으며, 표 위의 `Submit … decisions…`로 한 번에 제출합니다. `Reject attention-failed`는 attention check를 틀린 검수 대기 응답을 모두 `Reject`로 골라 둡니다.
-  - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 batch를 게시할 때 `Review settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 CSV 컬럼을 고를 수도 있습니다.
+  - 표의 `Answers` 열에는 응답마다 worker의 답과 대조 기준이 두 줄로 항상 보이므로, 행을 열지 않고도 한 페이지를 훑으며 고를 수 있습니다. 대조 기준은 batch를 게시할 때 `Review settings`에서 정하며, 기본은 같은 HIT를 수행한 다른 worker들의 majority이고 정답이나 LLM 라벨이 든 데이터 컬럼을 고를 수도 있습니다.
   - 행을 누르면 응답 상세가 열립니다. 문항마다 이 worker의 답, 같은 HIT를 수행한 다른 worker들의 답, 대조 기준을 나란히 보여 줍니다. `Open task`를 누르면 worker가 실제로 본 화면을 그대로 띄웁니다.
   - 반려할 때는 사유를 반드시 입력해야 하며, 자주 쓰는 문구 세 가지를 바로 고를 수 있습니다. attention check를 통과한 응답을 반려하려고 하면 경고가 표시됩니다.
   - MTurk는 응답을 반려해도 그 자리를 다시 열어 주지 않습니다. 그래서 반려를 확정하면 부족해진 만큼 다시 모집할지 곧바로 물어봅니다.
@@ -177,7 +177,7 @@ worker 계정으로 로그인하면 MTurk의 worker 사이트처럼 HIT를 고�
 
 ## 예시 파일로 mock 테스팅 해보기
 
-올려 볼 수 있는 파일은 모두 [example/](example/) 폴더에 준비되어 있습니다. CSV의 한 행이 HIT 하나가 됩니다. 아래에 적은 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구입니다.
+올려 볼 수 있는 파일은 모두 [example/](example/) 폴더에 준비되어 있습니다. production 콘솔은 JSON 배열의 객체 하나를, 프로토타입 콘솔은 CSV의 한 행을 HIT 하나로 만듭니다. 아래에 적은 결과는 이 파일들을 실제로 올려서 확인한 화면의 문구입니다.
 
 ```
 example/
@@ -188,16 +188,16 @@ example/
 │                       excel-cp949.csv, large-rows.csv
 ├─ 4-saved-templates/   chunk-fact-relevance-input.csv,      콘솔에 미리 저장된 템플릿에 넣을 입력
 │                       query-fact-coverage-input.csv
-└─ 5-project/           passage-relevance.csv                starter 로 만든 Project 에 넣을 입력 (attention 행, 정답 컬럼)
+└─ 5-project/           passage-relevance.json               starter 로 만든 Project 에 넣을 입력 (attention 행, 정답 컬럼)
 ```
 
 ### starter로 attention check가 있는 batch 게시하기
 
 | 단계 | 진행 방법 | 화면에 표시되는 내용 |
 |---|---|---|
-| 1. New Project | `Passage relevance`를 고르고 `Create Project`를 누릅니다. | `Enter Properties`에 보상 $0.05, HIT당 3명이 채워져 있고, HIT 하나의 비용 `$0.18`이 보입니다. |
+| 1. New Project | `Other ways to start` → `Starter templates`에서 `Passage relevance`를 고르고 `Create Project`를 누릅니다. | `Enter Properties`에 보상 $0.05, HIT당 3명이 채워져 있고, HIT 하나의 비용 `$0.18`이 보입니다. |
 | 2. Preview and Finish | `Finish and publish a batch`를 누릅니다. | Project가 저장되고 Publish Batch가 열립니다. |
-| 3. Upload CSV | `5-project/passage-relevance.csv`를 올립니다. | `8 rows, 4 columns`, `OK` 2/2 matched. 쓰이지 않는 컬럼 `gold`, `attention_expected`와 빈 셀이 있는 6행이 `WARN`으로 보이며, 이 빈 셀은 attention 행이 아닌 행의 `attention_expected`라 정상입니다. |
+| 3. Upload JSON | `5-project/passage-relevance.json`을 올립니다. | `8 rows, 4 columns`, `OK` 2/2 matched. 쓰이지 않는 컬럼 `gold`, `attention_expected`와 빈 셀이 있는 6행이 `WARN`으로 보이며, 이 빈 셀은 attention 항목이 아닌 객체에 `attention_expected`가 없는 것이라 정상입니다. |
 | 4. Review settings | `Attention check`를 켜고 `Expected answers column` → `attention_expected`, `Compare answers with` → `gold`를 고릅니다. | 첫 행의 `gold`가 `relevant`로 읽힌다는 안내가 보입니다. |
 | 5. Confirm and publish | 비용을 확인하고 게시합니다. | 8 HITs × 3 assignments × $0.05 = $1.20, 수수료 $0.24, 합계 **$1.44**. 게시가 끝나면 새 batch의 Overview로 갑니다. |
 
@@ -205,7 +205,7 @@ example/
 
 ### 프로토타입 콘솔에서
 
-아래 시나리오는 프로토타입 콘솔(http://localhost:8080)의 5단계 마법사 기준입니다. production 콘솔에서도 같은 파일을 New Project → `Upload or paste HTML`과 Publish Batch의 `Upload CSV`에 올리면 CSV 검사 문구가 같게 나옵니다.
+아래 시나리오는 프로토타입 콘솔(http://localhost:8080)의 5단계 마법사 기준이며 CSV를 올립니다. production 콘솔의 Publish Batch는 JSON만 받습니다.
 
 #### 시나리오 1. 처음부터 끝까지 게시해 보기
 
@@ -260,7 +260,7 @@ Preview에는 탭 11개로 구성된 worker 화면이 그대로 나타납니다.
 ### CSV를 만들 때
 
 - 첫 줄에는 컬럼 이름을 쓰고, 둘째 줄부터 한 행이 HIT 하나가 됩니다. 인코딩은 **UTF-8**이어야 합니다 (Excel에서는 "CSV UTF-8"로 저장).
-- 템플릿에 쓰인 모든 `${컬럼명}`이 CSV의 컬럼으로 있어야 합니다. 그 밖의 컬럼이 더 있는 것은 괜찮으며, 정답이나 attention 기대 답처럼 worker에게 보이지 않을 값을 두는 데 씁니다. Publish Batch의 `Download CSV template`으로 맞는 머리줄의 양식을 받을 수 있습니다.
+- 템플릿에 쓰인 모든 `${컬럼명}`이 CSV의 컬럼으로 있어야 합니다. 그 밖의 컬럼이 더 있는 것은 괜찮으며, 정답이나 attention 기대 답처럼 worker에게 보이지 않을 값을 두는 데 씁니다. production 콘솔에서는 Publish Batch의 `Download JSON template`으로 맞는 키의 양식을 받을 수 있습니다.
 - TASK_DATA 방식의 템플릿은 콘솔이 어떤 컬럼이 필요한지 알 수 없으므로 검사 없이 통과합니다. 템플릿이 읽는 키와 CSV의 컬럼 이름을 직접 맞춰 주세요.
 - attention check는 두 방식 중 하나를 씁니다. attention 행의 기대 답을 `{"답 이름": "기대 값"}` 모양으로 한 컬럼에 적는 방식(starter, 자동 생성 결과)과, 예전 템플릿처럼 attention 문항의 이름을 `attention_`으로 시작하게 하고 기대 값 하나를 정하는 방식입니다. 둘 다 `Review settings`에서 고릅니다.
 - `3-data-checks/`와 `4-saved-templates/`의 CSV는 `python3 scripts/build_examples.py`로 다시 만들 수 있습니다.
@@ -305,8 +305,8 @@ Production 백엔드(FastAPI)는 같은 경로를 구현하고 계정, worker의
 
 ## 원본 데이터에서 HIT 만들기 (`agent/`)
 
-annotation 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로부터 `hits.csv`와 `template.html`을 자동으로 만드는 파이프라인입니다.
-원본의 구조를 분석하고(`profile`), 작업 명세(task spec)를 정한 뒤(`plan`), HIT 단위 CSV와 템플릿을 만들어(`preprocess`, `render`) 검증합니다(`validate`). LLM(OpenRouter)이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나오고, 명세를 손으로 고쳐 LLM 없이 다시 만들 수 있습니다.
+annotation 원본 데이터(JSON)와 "무엇을 판정하게 할지" 적은 prompt로부터 `hits.json`과 `template.html`을 자동으로 만드는 파이프라인입니다.
+원본의 구조를 분석하고(`profile`), 작업 명세(task spec)를 정한 뒤(`plan`), HIT 단위 JSON과 템플릿을 만들어(`preprocess`, `render`) 검증합니다(`validate`). LLM(OpenRouter)이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나오고, 명세를 손으로 고쳐 LLM 없이 다시 만들 수 있습니다.
 탭 하나에 문항을 여러 개 둘 수 있고, 문항은 단일 선택, 체크박스 다중 선택, 척도(likert), 자유 서술 네 가지입니다. attention 탭은 worker 화면에서 다른 탭과 구별되지 않습니다.
 
 **콘솔에서 쓰기** (권장): Create → New Project → `Generate from raw data`에서 원본과 prompt를 올려 돌리고, 결과의 `Use this result`로 Project를 만들어 바로 게시합니다. 실행 준비는 [빠른 시작](#빠른-시작)의 OpenRouter 키 설정과 같고, 화면 사용법은 [원본 데이터에서 자동으로 만들기](docs/create-projects.md#원본-데이터에서-자동으로-만들기)에 있습니다.
@@ -324,7 +324,7 @@ docker compose --profile agent run --rm agent run var/<task>/raw.json --prompt @
 docker compose --profile agent run --rm -v ./assets:/work/assets:ro agent run assets/<파일>.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>
 ```
 
-명령줄로 만든 `template.html`과 `hits.csv`는 New Project → `Upload or paste HTML`과 Publish Batch의 `Upload CSV`로 올립니다. 모델 고르기, 출력 파일, prompt 쓰는 법은 [agent/README.md](agent/README.md)에 정리되어 있습니다.
+명령줄로 만든 `template.html`은 New Project → `Upload or paste HTML`로 올립니다. `hits.json`은 Publish Batch의 `Upload JSON`에 올립니다. 모델 고르기, 출력 파일, prompt 쓰는 법은 [agent/README.md](agent/README.md)에 정리되어 있습니다.
 
 ## Preview
 
@@ -336,7 +336,7 @@ production 콘솔에서 전체 흐름을 한 번 따라가 보는 순서입니�
 3. **반려와 재모집**: 두 건을 골라 반려합니다. attention check를 통과한 응답이라는 경고가 표시되고, 반려를 확정하면 다시 모집할지 물어봅니다. 나머지 응답은 승인합니다.
 4. **HITs**: `Incomplete only`를 켜고, HIT 하나에 큰 수를 추가해 봅니다. 9개를 넘을 수 없다는 이유와 함께 건너뛰는 것을 볼 수 있습니다.
 5. **Results**: Fleiss' κ가 0.731로 표시됩니다. 이 값은 statsmodels의 `fleiss_kappa` 결과와 소수 여섯째 자리까지 일치하며, 테스트로 고정되어 있습니다. Export로 받는 CSV는 MTurk Requester 웹사이트의 결과 CSV와 컬럼이 같아서 기존 분석 스크립트를 그대로 쓸 수 있습니다.
-6. **Create**: `Tutorial` 탭의 순서대로 starter로 Project를 만들고, [위의 예시](#starter로-attention-check가-있는-batch-게시하기)처럼 `5-project/passage-relevance.csv`를 올려 게시합니다. 잔액이 줄고 Manage 목록에 새 batch가 생깁니다. 이어서 Tutorial의 `원본 데이터에서 자동으로 만들기`에서 `Load prompt + example data`를 눌러 합성 예시가 채워진 Generate from raw data를 열고, `Optional task spec · offline replay`에 `agent/examples/groundedness/task_spec.json`을 올려 LLM 없이 자동 생성을 해 봅니다.
+6. **Create**: `Tutorial` 탭의 순서대로 starter로 Project를 만들고, [위의 예시](#starter로-attention-check가-있는-batch-게시하기)처럼 `5-project/passage-relevance.json`을 올려 게시합니다. 잔액이 줄고 Manage 목록에 새 batch가 생깁니다. 이어서 Tutorial의 `원본 데이터에서 자동으로 만들기`에서 `Load prompt + example data`를 눌러 합성 예시가 채워진 Generate from raw data를 열고, `Optional task spec · offline replay`에 `agent/examples/groundedness/task_spec.json`을 올려 LLM 없이 자동 생성을 해 봅니다.
 7. **Worker Pool**: `Rej%`를 내림차순으로 정렬해 상위 worker를 선택하고 `Block…`을 누른 뒤, 기본 선택지인 "Excluded pool에 추가"를 고릅니다. 이어서 Pools에서 `Fill by criteria…`로 Trusted pool을 채워 봅니다.
    기본 조건(승인 20건 이상, attention 실패 0%, 일치율 90% 이상)으로는 해당하는 worker가 없습니다. 예시 데이터에서는 승인이 가장 많은 worker가 20건이고 attention 실패율이 5%이기 때문입니다. **승인 기준을 5로 낮추면 7명**이 나옵니다.
    이렇게 만든 pool은 Project의 `Enter Properties`에서 참여 또는 제외로 지정합니다.
@@ -378,9 +378,9 @@ prototype/          프로토타입 콘솔(React + antd)과 mock API 서버. npm
 ├─ Dockerfile       web, api, dev, test 이미지. 빌드 컨텍스트는 data/와 example/을 함께 복사하기 위해 저장소 루트입니다
 ├─ nginx.conf       web 이미지의 nginx 설정 (정적 파일, /api 프록시)
 └─ package.json, vite.config.ts, tsconfig.json, index.html
-agent/              원본 데이터와 prompt로 HIT 단위 CSV와 템플릿을 만드는 파이프라인 (Python)
+agent/              원본 데이터와 prompt로 HIT 단위 JSON과 템플릿을 만드는 파이프라인 (Python)
 data/               시작 데이터 (JSON + 템플릿 HTML)
-example/            Create에 올려 볼 예시 템플릿과 CSV
+example/            Create에 올려 볼 예시 템플릿과 데이터(JSON, 프로토타입용 CSV)
 docs/               Create의 사용 방법(production, 프로토타입), <ann-*> 요소, 화면에 나오는 값을 읽는 방법, prompt 실험
 environment/        agent의 모델 설정(models/)과, OpenRouter 키를 두는 .env (.env 는 저장소에 들어가지 않습니다)
 scripts/            데이터 변환과 예시 파일 생성 스크립트 (Python)

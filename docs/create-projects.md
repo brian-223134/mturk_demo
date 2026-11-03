@@ -1,6 +1,6 @@
 # Project로 batch 게시하기 (production 콘솔)
 
-production 콘솔(http://localhost:3000)의 Create는 MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 CSV를 올려 batch를 게시합니다.
+production 콘솔(http://localhost:3000)의 Create는 MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 JSON 데이터를 올려 batch를 게시합니다.
 Project는 worker에게 보일 화면(layout)과 작업 속성(제목, 보상, 인원, 기간, worker 조건)을 묶은 것입니다. 같은 Project로 batch를 여러 번 게시할 수 있습니다.
 프로토타입(http://localhost:8080)의 Create는 이전과 같은 5단계 마법사이며, 그 설명은 [Create로 batch 게시하기](creating-a-batch.md)에 있습니다.
 
@@ -14,18 +14,18 @@ Create 위쪽에는 MTurk와 같은 두 갈래가 있습니다. 둘의 차이는
 | | `New Project` | `New Batch with an Existing Project` |
 |---|---|---|
 | 만드는 것 | **Project**: 어떤 작업인지 정한 틀 | **batch**: 그 틀에 실제 데이터를 넣어 worker에게 내보낸 한 번의 게시 |
-| 담는 것 | worker가 보는 화면(layout), 제목·설명, 보상, HIT당 응답 수, 기간, worker 조건, 검수 설정의 기본값, 미리보기용 표본 값 | CSV(한 행 = HIT 하나), 이번 게시의 검수 설정(attention, 자유 서술, 대조 기준), batch 이름 |
-| 하는 일 | 갤러리에서 시작 방법을 고르고 Enter Properties, Design Layout, Preview and Finish로 만듭니다 | Project 목록에서 `Publish Batch`를 눌러 CSV를 올리고 게시합니다. Project를 고치거나(`Edit`) 복사·삭제도 여기서 합니다 |
+| 담는 것 | worker가 보는 화면(layout), 제목·설명, 보상, HIT당 응답 수, 기간, worker 조건, 검수 설정의 기본값, 미리보기용 표본 값 | HIT 데이터(JSON 객체 하나 = HIT 하나), 이번 게시의 검수 설정(attention, 자유 서술, 대조 기준), batch 이름 |
+| 하는 일 | 갤러리에서 시작 방법을 고르고 Enter Properties, Design Layout, Preview and Finish로 만듭니다 | Project 목록에서 `Publish Batch`를 눌러 JSON을 올리고 게시합니다. Project를 고치거나(`Edit`) 복사·삭제도 여기서 합니다 |
 | 횟수 | 작업 종류마다 한 번 | 같은 Project로 여러 번 (예: 파일럿 20개, 본 실험 400개) |
 | 결과 | 저장된 Project. 아직 worker에게는 아무것도 나가지 않습니다 | Manage에 나타나는 batch와 HIT. 비용이 잔액에서 빠집니다 |
 
-예를 들어 "passage가 fact를 지지하는지 판정하는 작업"은 Project 하나입니다. 그 Project로 이번 주 CSV를 올리면 batch 하나가 생기고, 다음 주에 다른 CSV를 올리면 batch가 하나 더 생깁니다.
+예를 들어 "passage가 fact를 지지하는지 판정하는 작업"은 Project 하나입니다. 그 Project로 이번 주 데이터를 올리면 batch 하나가 생기고, 다음 주에 다른 데이터를 올리면 batch가 하나 더 생깁니다.
 Project를 고쳐도 이미 게시한 batch는 게시할 때의 layout 사본을 갖고 있어서 바뀌지 않습니다.
 
 **원본 데이터에서 자동으로 만들 때**(`New Project` → `Generate from raw data`)는 두 단계가 이어집니다.
 
-1. 모델만 다른 agent **job** 세 개(후보 A, B, C)가 동시에 돌며, 후보마다 layout(`template.html`), HIT CSV(`hits.csv`), 설정(`settings.json`)을 만듭니다. 후보는 Project가 아니며, `Generate from raw data`의 `Templates` 목록에만 있습니다.
-2. 후보를 나란히 비교하고 `Choose this template`으로 하나를 고르면, 그 후보의 layout과 설정이 **Project**로 저장되고 CSV를 올린 **Publish Batch**가 열립니다. 그 뒤로는 일반 Project와 같습니다.
+1. 모델만 다른 agent **job** 세 개(후보 A, B, C)가 동시에 돌며, 후보마다 layout(`template.html`), HIT 데이터(`hits.json`), 설정(`settings.json`)을 만듭니다. 후보는 Project가 아니며, `Generate from raw data`의 `Templates` 목록에만 있습니다.
+2. 후보를 나란히 비교하고 `Choose this template`으로 하나를 고르면, 그 후보의 layout과 설정이 **Project**로 저장되고 `hits.json`의 HIT 데이터가 올라간 **Publish Batch**가 열립니다. 그 뒤로는 일반 Project와 같습니다.
 
 그래서 화면에 미리보기가 세 군데 있고, 보는 것이 다릅니다.
 
@@ -33,18 +33,18 @@ Project를 고쳐도 이미 게시한 batch는 게시할 때의 layout 사본을
 |---|---|---|
 | 후보 묶음의 `Compare and choose` | New Project → Generate from raw data → `Templates` 목록 | 후보마다 LLM에 준 prompt, LLM이 쓴 명세(`Task spec`), HIT 한 행의 worker 화면, 평가 메모. 나란히 비교하고 Project로 쓸 후보를 고릅니다 |
 | Project 편집기의 `Preview and Finish` | 목록의 `Edit` → 세 번째 탭 | Project의 속성 요약과, 표본 값으로 그린 worker 화면 |
-| Publish Batch의 `Preview tasks` | 목록의 `Publish Batch` → 두 번째 단계 | 올린 CSV의 행을 하나씩 넣은 실제 worker 화면 |
+| Publish Batch의 `Preview tasks` | 목록의 `Publish Batch` → 두 번째 단계 | 올린 데이터의 HIT를 하나씩 넣은 실제 worker 화면 |
 
 자동 생성 결과로 만든 Project에는 후보 비교 화면이 없습니다. 그 Project의 명세와 prompt를 다시 보려면 Generate from raw data의 `Templates` 목록에서 같은 이름의 묶음을 찾습니다. 고른 후보에는 `Chosen`이 표시되어 있습니다.
 
 ## Project 목록
 
-Project마다 이름, layout의 종류, worker에게 보일 제목, 보상, HIT당 응답 수, layout이 읽는 CSV 컬럼, 마지막 수정 시각이 보입니다.
+Project마다 이름, layout의 종류, worker에게 보일 제목, 보상, HIT당 응답 수, layout이 읽는 데이터 컬럼, 마지막 수정 시각이 보입니다.
 layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-html-elements를 외부에서 불러오는 템플릿), `HTML`(그 밖의 HTML) 중 하나로 표시됩니다.
 
 행마다 버튼이 네 개 있습니다.
 
-- `Publish Batch`: 이 Project에 CSV를 올려 batch를 게시합니다.
+- `Publish Batch`: 이 Project에 JSON 데이터를 올려 batch를 게시합니다.
 - `Edit`: Project 편집기를 엽니다.
 - `Copy`: 이름 뒤에 `(copy)`를 붙인 사본을 만들고 그 편집기를 엽니다.
 - `Delete`: Project를 지웁니다. 이미 게시한 batch는 게시할 때의 layout 사본을 따로 가지고 있으므로 영향을 받지 않습니다.
@@ -54,15 +54,45 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 ## New Project
 
+`New Project`를 열면 화면 배치 가안(rough design)을 먼저 고릅니다. 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
+
+### rough design으로 시작하기
+
+1. **`Rough design`**: 도형으로 그린 가안 5개 중 하나를 고르고 `Next`를 누릅니다. 이 단계에서는 칸의 자리만 보입니다.
+2. **`Task type and preview`**: `Vision`, `Video`, `Text` 중 하나를 고르면 고른 가안에 예시 자료를 넣은 worker 화면이 아래에 나옵니다. 종류를 바꾸면 미리보기도 바로 바뀌고, `Submit`을 누르면 제출되었을 답을 보여 줍니다. Project 이름을 확인하고 `Use this design`을 누르면 Project가 저장됩니다. 이름과 layout이 모두 같은 Project가 이미 있으면 새로 만들지 않고 그 Project를 씁니다.
+3. **`HIT data`**: 저장한 Project의 Publish Batch가 `Upload JSON`부터 열립니다.
+
+| 가안 | 이름 | 배치 | 답 |
+|---|---|---|---|
+| A | `Side by side` | 왼쪽 위 데이터, 오른쪽 위 HIT, 아래 넓은 약술형 칸 | 객관식, 약술형(선택) |
+| B | `Stacked` | 위 데이터, 아래 왼쪽 객관식, 아래 오른쪽 약술형 | 객관식, 약술형(선택) |
+| C | `Comparison` | 위에 데이터 두 칸, 아래 고르는 문항 | 둘 중 하나 또는 비슷함 |
+| D | `Tabs` | 탭 3개, 탭마다 데이터와 객관식 | 탭마다 객관식 |
+| E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 체크 |
+
+데이터 컬럼은 task 종류와 가안에 따라 정해지며, 미리보기 위의 `Data columns you will upload next`에 나옵니다.
+
+| task 종류 | 데이터 컬럼 | 값 |
+|---|---|---|
+| `Vision` | `image_url` | 이미지 주소 |
+| `Video` | `video_url` | 영상 주소 |
+| `Text` | `text` | 보여 줄 글 |
+
+`Comparison`은 컬럼 이름 뒤에 `_a`, `_b`가, `Tabs`는 `_1`~`_3`이 붙습니다. `Item by item`에는 항목 목록을 배열로 적는 `items` 컬럼이 더 있습니다.
+
+미리보기의 자료와 문항은 예시입니다. 실제 작업에 맞는 문항은 Project 편집기의 `Design Layout`에서 고칩니다. `Video` 미리보기에는 영상 파일 대신 표본 그림을 플레이어 모양으로 보여 주며, 데이터에 영상 주소를 넣으면 실제 플레이어가 나옵니다.
+
+### 다른 방법으로 시작하기
+
 왼쪽에서 시작할 것을 고르면 오른쪽에 설명과 실제 미리보기가 나옵니다. 미리보기는 표본 데이터로 그린 worker 화면 그대로이며, `Submit`을 누르면 제출되었을 답을 보여 줍니다.
 `Create Project`를 누르면 그 내용으로 새 Project 편집기가 열립니다.
 
 starter 템플릿은 아홉 가지입니다. 모두 `<ann-*>` 요소로 쓴 수십 줄짜리 HTML입니다.
 
-| 분류 | 이름 | CSV 컬럼 | 답 |
+| 분류 | 이름 | 데이터 컬럼 | 답 |
 |---|---|---|---|
 | Retrieval & grounding | `Passage relevance` | `query`, `passage` | `relevance`: relevant, partially_relevant, not_relevant |
-| | `Statement support (checklist)` | `passage`, `facts`(JSON 배열) | 항목마다 `supported_<n>`: supported, not_supported |
+| | `Statement support (checklist)` | `passage`, `facts`(배열) | 항목마다 `supported_<n>`: supported, not_supported |
 | | `Several passages per HIT (tabs)` | `query`, `passage_1`~`passage_3` | 탭마다 `relevance_<n>`: relevant, not_relevant |
 | Text | `Text classification` | `text` | `sentiment`: positive, negative, mixed, neutral |
 | | `Multi-label tagging` | `text` | 태그마다 `topic_<태그>`: yes, no |
@@ -74,11 +104,11 @@ starter 템플릿은 아홉 가지입니다. 모두 `<ann-*>` 요소로 쓴 수�
 그 밖의 시작 방법이 두 가지 있습니다.
 
 - **`Upload or paste HTML`**: 빈 layout으로 시작해 Design Layout에서 파일을 올리거나 HTML을 붙여 넣습니다. `${컬럼명}`이나 `window.TASK_DATA`를 쓰는 기존 템플릿, `<crowd-form>`을 쓰는 MTurk 템플릿도 그대로 동작합니다.
-- **`Generate from raw data`**: 원본 데이터와 prompt로 agent가 layout과 HIT CSV를 만듭니다. 아래 [원본 데이터에서 자동으로 만들기](#원본-데이터에서-자동으로-만들기)에 정리되어 있습니다.
+- **`Generate from raw data`**: 원본 데이터와 prompt로 agent가 layout과 HIT 데이터를 만듭니다. 아래 [원본 데이터에서 자동으로 만들기](#원본-데이터에서-자동으로-만들기)에 정리되어 있습니다.
 
 ## 원본 데이터에서 자동으로 만들기
 
-`New Project` → `Generate from raw data`는 원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt로 agent job을 돌립니다. `Generate`를 누르면 같은 원본과 prompt로 모델만 바꾼 후보 세 개가 동시에 돌고, 끝나면 비교해서 하나를 고릅니다.
+`New Project` → `Generate from raw data`는 원본 데이터(JSON)와 "무엇을 판정하게 할지" 적은 prompt로 agent job을 돌립니다. `Generate`를 누르면 같은 원본과 prompt로 모델만 바꾼 후보 세 개가 동시에 돌고, 끝나면 비교해서 하나를 고릅니다.
 job은 원본의 구조를 분석하고(`profile`), LLM이 작업 명세 `task_spec.json`을 쓰고(`plan`), 코드가 그 명세대로 데이터를 HIT로 자르고(`preprocess`), 템플릿을 그리고(`render`), 결과를 검사합니다(`validate`).
 LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만듭니다. 그래서 같은 명세로 다시 돌리면 결과가 똑같이 나옵니다. 파이프라인과 출력 파일은 [agent/README.md](../agent/README.md)에 있습니다.
 
@@ -104,7 +134,7 @@ LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만�
 - `Summary`: 쓴 레코드 수, 항목 수, HIT 수, HIT당 항목 수, attention 항목 수, 정답 라벨의 분포
 - `Validation`: 구조 검사 결과 (`OK`면 게시할 수 있는 형태입니다. 문구나 라벨 대응이 원하는 대로인지는 사람이 봐야 합니다)
 - `LLM usage`: 호출 수, 토큰, 비용
-- `Files`: `task_spec.json`, `template.html`, `hits.csv`, `settings.json`, LLM에 보낸 요청과 받은 응답 등. 눌러서 내려받을 수 있습니다.
+- `Files`: `task_spec.json`, `template.html`, `hits.json`, `settings.json`, LLM에 보낸 요청과 받은 응답 등. 눌러서 내려받을 수 있습니다.
 - `Planner notes`: LLM이 명세를 그렇게 짠 이유
 
 묶음 카드의 버튼은 두 가지입니다.
@@ -112,7 +142,7 @@ LLM이 쓰는 것은 명세 하나뿐이고, 데이터와 HTML은 코드가 만�
 - `Compare and choose`: 모든 후보가 끝나고 하나 이상 성공하면 누를 수 있습니다. 성공한 후보만 나란히 여는 비교 창에서 결과 요약표와 함께 후보마다 `Requester prompt`, `Task spec`, HIT 한 행을 worker 화면으로 그린 미리보기를 보고, 평가 메모를 남길 수 있습니다. 공통 항목이 있으면 같은 항목을 모든 후보에서 함께 봅니다. 후보는 일부러 모델만 바꾼 것이므로 모델 차이는 경고하지 않고, 샘플링이나 HIT 구성이 다를 때만 알립니다.
 - `Reuse inputs`: 묶음의 원본과 prompt를 입력 칸에 다시 채웁니다. 원본은 서버에 남아 있으므로 다시 올리지 않아도 됩니다.
 
-비교 창에서 마음에 드는 후보의 `Choose this template`을 누르면 그 후보를 고른 것으로 기록하고, 그 후보의 결과로 Project를 저장한 뒤 hits.csv를 올린 상태로 Publish Batch를 엽니다. 이후는 [Publish Batch](#publish-batch)와 같습니다. settings.json의 attention 규칙과 대조 기준 컬럼은 `Review settings`에 미리 채워집니다. 고른 후보에는 `Chosen`이 표시되며, 다시 비교 창을 열어 다른 후보를 고르면 같은 이름의 Project를 덮어씁니다.
+비교 창에서 마음에 드는 후보의 `Choose this template`을 누르면 그 후보를 고른 것으로 기록하고, 그 후보의 결과로 Project를 저장한 뒤 hits.json을 올린 상태로 Publish Batch를 엽니다. 이후는 [Publish Batch](#publish-batch)와 같습니다. settings.json의 attention 규칙과 대조 기준 컬럼은 `Review settings`에 미리 채워집니다. 고른 후보에는 `Chosen`이 표시되며, 다시 비교 창을 열어 다른 후보를 고르면 같은 이름의 Project를 덮어씁니다.
 
 task spec으로 돌린 job은 후보 없이 job 카드 하나로 보이고, 카드에서 `Preview & evaluate`(결과 보기와 평가)와 `Use this result`(Project 저장과 Publish Batch)를 씁니다. 후보 묶음이 생기기 전에 만든 job도 같은 모양입니다.
 서로 다른 실행의 결과를 함께 보고 싶으면 후보 칸이나 job 카드의 `Compare`를 2~3개 체크하고 목록 위쪽의 `Compare selected`를 누릅니다.
@@ -164,38 +194,38 @@ backend는 job을 기본으로 세 개까지 동시에 돌립니다. 이 수는 
 - `Upload .html`: 파일 내용으로 layout을 바꿉니다 (`.html`, `.htm`, `.txt`, `.py`).
 - `Element reference`: 요소와 속성의 요약입니다.
 - `Checks`: layout을 저장하기 전에 알 수 있는 문제를 보여 줍니다. 오류(`ERROR`)가 있으면 저장할 수 없습니다. 요소를 불러오는 `<script>`가 없는 경우, 문항에 `name`이 없거나 겹치는 경우, 선택지가 없는 경우, 문항이 `<ann-form>` 밖에 있는 경우가 오류입니다. 모르는 `<ann-…>` 요소는 경고(`WARN`), crowd-html-elements를 외부에서 불러오는 템플릿은 안내(`INFO`)로 표시됩니다.
-- `Variables`: layout이 읽는 `${컬럼}`마다 미리보기에 넣을 표본 값을 적습니다. 표본 값은 Project와 함께 저장되며, 게시할 때는 CSV의 값이 들어갑니다. 비워 둔 변수는 미리보기에 `${컬럼}` 그대로 보입니다.
+- `Variables`: layout이 읽는 `${컬럼}`마다 미리보기에 넣을 표본 값을 적습니다. 표본 값은 Project와 함께 저장되며, 게시할 때는 올린 데이터의 값이 들어갑니다. 비워 둔 변수는 미리보기에 `${컬럼}` 그대로 보입니다.
 - `Answer fields`: 미리보기가 보고한 답 칸 목록입니다. 이름과 종류(choice, scale, checkbox, text), 필수 여부가 보입니다.
 
 ### 3. `Preview and Finish`
 
 Project의 요약, 표본 값으로 그린 worker 화면 전체, 답 칸 목록이 나옵니다.
 
-- `Download CSV template`: layout이 읽는 컬럼을 머리줄로, 표본 값을 첫 행으로 둔 CSV를 내려받습니다. 이 형식대로 행을 늘려 Publish Batch에 올립니다.
+- `Download JSON template`: layout이 읽는 컬럼을 키로, 표본 값을 값으로 둔 JSON을 내려받습니다. 이 형식대로 객체를 늘려 Publish Batch에 올립니다.
 - `Finish`: 저장하고 Project 목록으로 갑니다.
 - `Finish and publish a batch`: 저장하고 바로 그 Project의 Publish Batch를 엽니다.
 
 ## Publish Batch
 
 Project의 `Publish Batch`를 누르면 네 단계로 게시합니다. 보상, 인원, 기간, worker 조건은 Project의 속성을 그대로 쓰며, 바꾸려면 위쪽의 `Edit project`로 Project를 고칩니다.
-입력은 올린 CSV까지 브라우저에 임시 저장됩니다. 한 번에 하나만 저장되므로, 다른 Project의 Publish Batch를 열면 이전 것은 바뀝니다. `Start over`는 CSV와 검수 설정을 버립니다.
+입력은 올린 데이터까지 브라우저에 임시 저장됩니다. 한 번에 하나만 저장되므로, 다른 Project의 Publish Batch를 열면 이전 것은 바뀝니다. `Start over`는 데이터와 검수 설정을 버립니다.
 
 | 단계 | 내용 |
 |---|---|
-| 1. `Upload CSV` | CSV를 올리면 layout이 읽는 컬럼이 모두 있는지 검사합니다. 빠진 컬럼이 있으면 다음으로 갈 수 없습니다. `Download CSV template`으로 양식을 받을 수 있고, `Use the sample row`는 Project의 표본 값으로 HIT 1개짜리 데이터를 만듭니다. |
-| 2. `Preview tasks` | CSV의 행을 하나씩 골라 worker 화면을 그대로 미리 봅니다. 답 칸 목록은 batch의 `answerSchema`로 저장됩니다. |
-| 3. `Review settings` | attention 규칙, 자유 서술 답, Review의 대조 기준을 정합니다. CSV의 컬럼에 달린 설정이라 batch마다 정하며, 처음 값은 Project에 저장된 값입니다. layout에 자유 서술 문항(`ann-textarea`)이 있으면 그 이름이 자유 서술 답으로 미리 채워집니다. |
+| 1. `Upload JSON` | 객체 하나가 HIT 하나인 JSON 배열을 올리면 layout이 읽는 컬럼이 모두 있는지 검사합니다. 빠진 컬럼이 있으면 다음으로 갈 수 없습니다. 값이 배열이나 객체면 JSON 글로 들어갑니다. `Download JSON template`으로 양식을 받을 수 있고, `Use the sample row`는 Project의 표본 값으로 HIT 1개짜리 데이터를 만듭니다. |
+| 2. `Preview tasks` | 데이터의 HIT를 하나씩 골라 worker 화면을 그대로 미리 봅니다. 답 칸 목록은 batch의 `answerSchema`로 저장됩니다. |
+| 3. `Review settings` | attention 규칙, 자유 서술 답, Review의 대조 기준을 정합니다. 데이터의 컬럼에 달린 설정이라 batch마다 정하며, 처음 값은 Project에 저장된 값입니다. layout에 자유 서술 문항(`ann-textarea`)이 있으면 그 이름이 자유 서술 답으로 미리 채워집니다. |
 | 4. `Confirm and publish` | 비용 견적(보상 + 수수료)과 잔액, 전체 요약을 확인하고 batch 이름을 정해 게시합니다. 요약의 `Workers receive`는 worker의 작업 화면에 보낼 입력 컬럼과 보내지 않는 컬럼(템플릿이 쓰지 않는 컬럼, 정답이 든 컬럼)입니다. 게시가 끝나면 그 batch의 Overview로 가고, worker의 `HITs` 목록에 그 batch가 나타납니다. |
 
 Overview의 `Project` 칸에서 batch를 게시한 Project의 편집기로 갈 수 있습니다.
 
 ## 따라 하기: starter로 attention check가 있는 batch 게시하기
 
-1. `New Project`에서 `Passage relevance`를 고르고 `Create Project`를 누릅니다.
+1. `New Project`의 `Other ways to start` → `Starter templates`에서 `Passage relevance`를 고르고 `Create Project`를 누릅니다.
 2. `Enter Properties`에는 starter의 값이 채워져 있습니다 (`Reward per assignment` $0.05, `Number of assignments per task` 3). 비용 줄에 `$0.18`이 보입니다.
 3. `Design Layout`에서 문항을 바꾸거나 `Insert element…`로 `<ann-textarea>`를 `</ann-form>` 앞에 넣어 봅니다. 미리보기와 `Answer fields`가 함께 바뀝니다.
 4. `Preview and Finish`에서 `Finish and publish a batch`를 누릅니다.
-5. `Upload CSV`에 [example/5-project/passage-relevance.csv](../example/5-project/passage-relevance.csv)를 올립니다. `2/2 matched`가 표시되고, 쓰이지 않는 컬럼 `gold`, `attention_expected`와 빈 셀이 있는 6행이 경고로 보입니다. 빈 셀은 attention 행이 아닌 행의 `attention_expected`이므로 정상입니다.
+5. `Upload JSON`에 [example/5-project/passage-relevance.json](../example/5-project/passage-relevance.json)을 올립니다. `2/2 matched`가 표시되고, 쓰이지 않는 컬럼 `gold`, `attention_expected`와 빈 셀이 있는 6행이 경고로 보입니다. 빈 셀은 attention 항목이 아닌 객체에 `attention_expected`가 없는 것이므로 정상입니다.
 6. `Preview tasks`에서 행을 넘겨 봅니다. 5행과 8행이 질문과 상관없는 passage를 붙인 attention 행입니다.
 7. `Review settings`에서 `Attention check`를 켜고 `Expected answers column`, `attention_expected`를 고릅니다. `Compare answers with`에서는 `Input column: gold`를 고릅니다.
 8. `Confirm and publish`에서 비용이 `8 HITs × 3 assignments × $0.05` = $1.20, 수수료 $0.24, 합계 $1.44인 것을 확인하고 게시합니다.
