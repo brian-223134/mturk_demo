@@ -5,7 +5,7 @@
 import { extractPlaceholders } from './template.js';
 
 export const ELEMENTS_SCRIPT = '/elements/ann-elements.js';
-export const QUESTION_TAGS = ['ann-choice', 'ann-likert', 'ann-checklist', 'ann-textarea'];
+export const QUESTION_TAGS = ['ann-choice', 'ann-likert', 'ann-checklist', 'ann-item-choice', 'ann-textarea'];
 export const MEDIA_TAGS = ['ann-image', 'ann-video'];
 export const KNOWN_TAGS = ['ann-form', 'ann-instructions', 'ann-text', ...MEDIA_TAGS, ...QUESTION_TAGS, 'ann-option', 'ann-item', 'ann-tabs', 'ann-tab', 'ann-columns', 'ann-column'];
 
@@ -112,11 +112,16 @@ export function lintLayout(html) {
       }
       seen.set(name, (seen.get(name) ?? 0) + 1);
     }
-    if (tag.name === 'ann-choice') {
+    if (tag.name === 'ann-choice' || tag.name === 'ann-item-choice') {
       const options = innerTags(tags, index).filter((t) => !t.closing && t.name === 'ann-option').length;
       const shorthand = (tag.attributes.options ?? '').split(',').filter((s) => s.trim() !== '').length;
       if (options === 0 && shorthand === 0) problems.push({ level: 'error', message: `${label} has no options. Add <ann-option value="…"> children or options="a, b".` });
       if (options + shorthand === 1) problems.push({ level: 'warning', message: `${label} has only one option.` });
+    }
+    if (tag.name === 'ann-item-choice') {
+      const inner = innerTags(tags, index);
+      const hasItems = inner.some((t) => !t.closing && (t.name === 'ann-item' || (t.name === 'script' && /json/i.test(t.attributes.type ?? ''))));
+      if (!hasItems) problems.push({ level: 'error', message: `${label} has no items. Add <ann-item> children or a <script type="application/json"> list.` });
     }
     if (tag.name === 'ann-likert') {
       const min = Number.parseInt(tag.attributes.min ?? '1', 10);
@@ -143,7 +148,7 @@ export function lintLayout(html) {
     problems.push({ level: 'error', message: `${outside.join(', ')} ${outside.length === 1 ? 'is' : 'are'} outside <ann-form>. Move ${outside.length === 1 ? 'it' : 'them'} inside the form, or the answers are not sent.` });
   }
   if (forms > 1) problems.push({ level: 'warning', message: `The layout has ${forms} <ann-form> elements. Use one form so that one Submit sends every answer.` });
-  if (usesAnn && forms > 0 && questions.length === 0) problems.push({ level: 'warning', message: 'The form has no questions (ann-choice, ann-likert, ann-checklist, ann-textarea).' });
+  if (usesAnn && forms > 0 && questions.length === 0) problems.push({ level: 'warning', message: 'The form has no questions (ann-choice, ann-likert, ann-checklist, ann-item-choice, ann-textarea).' });
 
   if (usesCrowd) {
     problems.push({ level: 'info', message: 'This layout uses crowd-html-elements loaded from assets.crowd.aws, which this console does not host. Layouts built with <ann-*> elements do not depend on it.' });

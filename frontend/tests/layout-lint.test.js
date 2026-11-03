@@ -79,3 +79,18 @@ describe('lintLayout', () => {
     assert.ok(hasLayoutErrors(lintLayout('')));
   });
 });
+
+describe('ann-item-choice 검사', () => {
+  const script = '<script src="/elements/ann-elements.js"></script>';
+  it('항목과 선택지가 있으면 문제가 없다', () => {
+    const good = lintLayout(`${script}<ann-form><ann-item-choice name="s" options="yes, no"><script type="application/json">\${facts}</script></ann-item-choice></ann-form>`);
+    assert.deepEqual(good.problems, []);
+    assert.deepEqual(good.questions, [{ tag: 'ann-item-choice', name: 's' }]);
+  });
+  it('항목이나 선택지가 없으면 오류다', () => {
+    const noItems = lintLayout(`${script}<ann-form><ann-item-choice name="s" options="yes, no"></ann-item-choice></ann-form>`);
+    assert.match(noItems.problems[0].message, /has no items/);
+    const noOptions = lintLayout(`${script}<ann-form><ann-item-choice name="s"><ann-item>x</ann-item></ann-item-choice></ann-form>`);
+    assert.match(noOptions.problems[0].message, /has no options/);
+  });
+});

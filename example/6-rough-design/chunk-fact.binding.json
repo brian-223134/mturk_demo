@@ -16,14 +16,32 @@
         "from": "retrieved_chunk[i]"
       }
     ],
-    "checklist": {
+    "item-choice": {
       "name": "supported",
-      "header": "Which atomic facts does this chunk support?",
-      "items": "atomic_facts[i]"
+      "header": "Does this chunk support each atomic fact?",
+      "items": "atomic_facts[i]",
+      "options": [
+        [
+          "grounded",
+          "Grounded"
+        ],
+        [
+          "not_grounded",
+          "Not grounded"
+        ]
+      ]
     }
   },
-  "attention": {
-    "flag": "attention_check[i]"
+  "reference": {
+    "selected": "chunk_fact_relevance_check",
+    "key": "Chunk {i}",
+    "item": "Atomic fact{n}",
+    "yes": "grounded",
+    "no": "not_grounded"
   },
-  "instructions": "For each chunk, read the query and the chunk, then check every atomic fact that the chunk supports."
+  "attention": {
+    "flag": "attention_check[i]",
+    "expected": "not_grounded"
+  },
+  "instructions": "For each chunk, read the query and the chunk, then decide whether the chunk supports each atomic fact."
 }

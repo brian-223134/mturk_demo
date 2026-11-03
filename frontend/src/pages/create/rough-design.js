@@ -1,15 +1,16 @@
 // New Project 의 첫 흐름: rough design 고르기 → task 종류 고르기와 예시 미리보기 → HIT 데이터를 넣어 미리 보기 → Publish Batch.
 //   /create/new                               가안 고르기. 도형 배치만 보이고, 아래에 다른 시작 방법으로 가는 링크가 있다
 //   /create/new/design/:designId(/:taskType)  Vision / Video / Text 고르기. 고른 가안에 예시 자료를 넣어 worker 화면으로 보인다
-//   /create/new/design/:designId/:taskType/data  이미 HIT 로 묶인 JSON 을 올리고 binding 으로 칸에 넣어 실제 데이터로 미리 본다
+//   /create/new/design/:designId/:taskType/data  이미 HIT 로 묶인 JSON 을 올리고 binding 으로 칸에 넣어 실제 데이터로 미리 본다.
+//       binding 은 요청 문장을 받아 LLM 이 쓰거나(유료 호출, 사용자가 허용해야 한다) 사람이 고친다
 // Project 는 미리보기가 끝난 뒤 `Use this design` 에서 저장한다. 올린 데이터는 탭의 메모리에만 두고 서버로 보내지 않는다.
 // 가안의 정의는 lib/rough-designs.js, binding 의 검사와 조립은 lib/design-binding.js 에 있다.
 
-import { api } from '../../api-client/client.js';
+import { agent, api } from '../../api-client/client.js';
 import { el } from '../../components/dom.js';
 import { muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
-import { adaptBinding, attentionItems, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, draftBinding } from '../../lib/design-binding.js';
+import { adaptBinding, attentionItems, bindingSettings, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, judgedCounts, requestBinding, summarizeData } from '../../lib/design-binding.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
 import { readJsonDataFile } from '../../lib/json-data.js';
 import { sampleFor, toSaveRequest } from '../../lib/project-draft.js';
@@ -307,6 +308,9 @@ export function renderDesignData(root, params, signal) {
     nameEdited: false,
     timer: null,
     stopPreview: null,
+    prompt: session?.prompt ?? '',
+    writing: false,
+    undoText: null,
   };
   if (session?.binding) {
     state.binding = { ...adaptBinding(session.binding, design.id), task_type: taskType.id };
@@ -330,7 +334,7 @@ export function renderDesignData(root, params, signal) {
   const editor = el('textarea', { id: 'binding-editor', className: 'binding-editor', rows: 16, spellcheck: 'false', 'aria-label': 'Binding' });
 
   function remember() {
-    session = { file: state.file, reader: state.reader, binding: state.binding };
+    session = { file: state.file, reader: state.reader, binding: state.binding, prompt: state.prompt };
   }
 
   function usable() {
@@ -361,6 +365,11 @@ export function renderDesignData(root, params, signal) {
     const frame = previewFrame({ html, row, height: PREVIEW_HEIGHT });
     state.stopPreview = frame.destroy;
     const attention = attentionItems(state.binding, tabs, state.reader, state.hit);
+    const counts = judgedCounts(state.binding, currentDesign, currentType, tabs, state.reader, state.hit);
+    const checks = [
+      attention.length > 0 ? `Attention item(s) in this HIT: ${attention.join(', ')}${counts.attention > 0 ? ` (answers checked in Review: ${counts.attention})` : ''}. Workers cannot tell them apart.` : null,
+      counts.reference > 0 ? `Reference labels for this HIT: ${counts.reference}. Review compares answers with them.` : null,
+    ].filter(Boolean);
     const hitSelect = el('select', { id: 'bound-hit', 'aria-label': 'HIT' }, Array.from({ length: Math.min(state.reader.rowCount, 200) }, (_, index) => el('option', { value: String(index) }, `HIT ${index + 1}`)));
     hitSelect.value = String(state.hit);
     hitSelect.addEventListener('change', () => {
@@ -374,7 +383,7 @@ export function renderDesignData(root, params, signal) {
         el('h4', { className: 'section-title' }, `Preview: ${currentDesign.title} with your data`),
         el('span', { className: 'panel-actions' }, hitSelect, el('span', { className: 'muted small', id: 'bound-hit-count' }, `of ${state.reader.rowCount.toLocaleString('en-US')} HITs`)),
       ),
-      attention.length > 0 ? muted(`Attention item(s) in this HIT: ${attention.join(', ')}. Workers cannot tell them apart.`) : null,
+      checks.length > 0 ? muted(checks.join(' ')) : null,
       frame.node,
     );
   }
@@ -428,6 +437,95 @@ export function renderDesignData(root, params, signal) {
     );
   }
 
+  // ── LLM 에 binding 쓰게 하기 ──
+  const promptInput = el('textarea', { id: 'binding-prompt', rows: 3, placeholder: 'What should workers judge? For example: for each chunk, check every atomic fact the chunk supports.', 'aria-label': 'What workers should judge' });
+  const allowApi = el('input', { type: 'checkbox', id: 'binding-allow-api' });
+  const writeButton = el('button', { type: 'button', className: 'btn btn-primary btn-small', id: 'write-binding' }, 'Write the binding');
+  const undoButton = el('button', { type: 'button', className: 'btn btn-small', id: 'undo-binding', hidden: true }, 'Undo');
+  const agentStatus = el('div', { className: 'muted small', id: 'binding-agent-status' });
+  const agentError = el('div', { id: 'binding-agent-error' });
+  const agentPanel = el(
+    'div',
+    { className: 'binding-agent', id: 'binding-agent' },
+    el('label', { for: 'binding-prompt' }, 'What should workers judge?'),
+    promptInput,
+    el('div', { className: 'binding-agent-actions' }, el('label', { className: 'check-label' }, allowApi, ' Allow API calls (uses credits)'), writeButton, undoButton),
+    agentStatus,
+    agentError,
+  );
+  promptInput.addEventListener('input', () => {
+    state.prompt = promptInput.value;
+    remember();
+    refreshAgent();
+  });
+  allowApi.addEventListener('change', () => refreshAgent());
+  let agentInfo = null; // /api/agent/models. 못 받으면 LLM 을 쓸 수 없다 (prototype 의 mock API)
+
+  function refreshAgent() {
+    writeButton.disabled = state.writing || !agentInfo?.api_allowed || !allowApi.checked || promptInput.value.trim() === '';
+    writeButton.textContent = state.writing ? 'Writing…' : 'Write the binding';
+  }
+
+  function loadAgentInfo() {
+    agent.listModels().then(
+      (models) => {
+        if (signal.aborted) return;
+        agentInfo = models;
+        allowApi.disabled = !models.api_allowed;
+        if (!models.api_allowed) agentStatus.textContent = 'LLM calls are disabled on this server. Set AGENT_ALLOW_API=1 in environment/.env, or edit the binding by hand.';
+        else agentStatus.textContent = `Model config: ${models.binding_model}. The file stays here; only its structure and a few cut samples are sent.`;
+        refreshAgent();
+      },
+      () => {
+        if (signal.aborted) return;
+        agentStatus.textContent = 'The agent is not available on this server. Edit the binding by hand.';
+        allowApi.disabled = true;
+        refreshAgent();
+      },
+    );
+  }
+
+  async function writeWithAgent() {
+    if (state.writing) return;
+    const current = state.binding ?? {};
+    const currentDesign = roughDesignById(current.design) ?? design;
+    state.writing = true;
+    agentError.replaceChildren();
+    refreshAgent();
+    agentStatus.textContent = 'Asking the model. This can take a minute or two.';
+    try {
+      const result = await requestBinding({
+        send: (body) => agent.createBinding(body),
+        check: (binding) => checkBinding(binding, state.reader),
+        request: { design: designForRequest(currentDesign), task_type: current.task_type ?? taskType.id, prompt: promptInput.value.trim(), data: summarizeData(state.reader), allow_api: true },
+      });
+      if (signal.aborted) return;
+      state.undoText = editor.value;
+      undoButton.hidden = false;
+      editor.value = JSON.stringify(result.binding, null, 2);
+      applyText();
+      const cost = typeof result.usage.cost === 'number' ? `, $${result.usage.cost.toFixed(4)}` : '';
+      agentStatus.textContent = `Written by ${result.model?.model ?? 'the model'} (${result.model?.provider_tag ?? 'any provider'}): ${result.attempts} attempt(s)${cost}.`;
+      if (result.errors.length > 0) agentError.replaceChildren(notice('warning', 'The model could not fix every problem', 'Its last answer is in the editor. Fix the problems listed below by hand, or ask again.'));
+    } catch (error) {
+      if (signal.aborted) return;
+      agentStatus.textContent = '';
+      agentError.replaceChildren(failureNotice('Could not write the binding', error));
+    } finally {
+      state.writing = false;
+      refreshAgent();
+    }
+  }
+
+  writeButton.addEventListener('click', () => void writeWithAgent());
+  undoButton.addEventListener('click', () => {
+    if (state.undoText === null) return;
+    editor.value = state.undoText;
+    state.undoText = null;
+    undoButton.hidden = true;
+    applyText();
+  });
+
   function renderWork() {
     if (!state.file) {
       workSlot.replaceChildren();
@@ -443,8 +541,11 @@ export function renderDesignData(root, params, signal) {
       applyText();
     });
     editor.value = state.text;
+    promptInput.value = state.prompt;
+    refreshAgent();
     workSlot.replaceChildren(
       controlsSlot,
+      agentPanel,
       el(
         'div',
         { className: 'binding-split' },
@@ -452,7 +553,7 @@ export function renderDesignData(root, params, signal) {
           'div',
           { className: 'binding-column' },
           el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Binding'), el('span', { className: 'panel-actions' }, el('label', { className: 'btn btn-small', for: 'binding-file' }, 'Upload binding', bindingFile))),
-          muted('Says which data goes into which slot. Use a column name, then [i] for the current item when the HIT repeats. The agent will write this in a later step; for now edit it here.'),
+          muted('Says which data goes into which slot. Use a column name, then [i] for the current item when the HIT repeats. You can edit what the model wrote.'),
           editor,
           problemsSlot,
         ),
@@ -524,9 +625,10 @@ export function renderDesignData(root, params, signal) {
     const html = buildBoundTemplate(state.binding, currentDesign, currentType, tabs);
     const data = boundData(state.binding, currentDesign, currentType, tabs, state.reader, state.file.fileName);
     const sample = sampleFor(html, data.rows[0] ?? {});
-    const settings = settingsFromProperties(taskContent(currentType).properties);
+    const properties = settingsFromProperties(taskContent(currentType).properties);
+    const settings = { ...properties, ...bindingSettings(state.binding) };
     try {
-      const project = await saveProject({ name, html, settings, sampleRow: JSON.stringify(sample).length <= SAMPLE_ROW_LIMIT ? sample : {} });
+      const project = await saveProject({ name, html, settings: properties, sampleRow: JSON.stringify(sample).length <= SAMPLE_ROW_LIMIT ? sample : {} });
       if (signal.aborted) return;
       // 메모리 사본으로 Publish Batch 에 넘긴다 (IndexedDB 에 다 쓰기를 기다리지 않는다)
       void draftStorage().save({ ...emptyDraft(), templateId: project.id, data, settings });
@@ -571,6 +673,7 @@ export function renderDesignData(root, params, signal) {
     ),
   );
   renderUpload();
+  loadAgentInfo();
   renderWork();
   if (!state.file) renderFooter();
   return () => {

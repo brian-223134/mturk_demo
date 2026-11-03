@@ -22,6 +22,7 @@
  *   ann-choice        하나 고르기 (라디오). 선택지는 <ann-option> 또는 options="a, b"
  *   ann-likert        min~max 점수 하나 고르기
  *   ann-checklist     항목마다 해당 여부 체크 (+ "해당 없음"). 항목은 <ann-item> 또는 JSON 배열 <script type="application/json">
+ *   ann-item-choice   목록의 항목마다 하나 고르기 (라디오). 항목은 <ann-item> 또는 JSON 배열, 선택지는 <ann-option> 또는 options="a, b"
  *   ann-textarea      자유 서술
  *   ann-tabs/ann-tab  한 HIT 에 항목이 여러 개일 때 탭으로 나눈다. 탭 제목에 남은 필수 문항 수가 보인다
  *
@@ -29,6 +30,7 @@
  *   - 제출: 숨은 input_answers 에 [{name, value}] JSON 배열을 넣고 form.submit() 을 부른다. 값은 모두 문자열이다.
  *     ann-choice, ann-likert 는 고른 값, ann-textarea 는 앞뒤 공백을 뺀 글(비어 있으면 뺀다),
  *     ann-checklist 는 칸이 하나라도 체크되면 항목마다 `<name>_<key>` 이름으로 checked-value 또는 unchecked-value 를 낸다.
+ *     ann-item-choice 는 답한 항목마다 `<name>_<key>` 이름으로 고른 값을 낸다.
  *   - window.TASK_ANSWER_SCHEMA: 답 칸 목록 [{name, type, values, required}] (화면 순서). type 은 choice | likert |
  *     multi_select | text. 콘솔 미리보기가 이것으로 문항을 알고, 게시할 때 batch 의 answerSchema 로 저장된다.
  *   - 제출 전에는 ann-form 에 취소할 수 있는 `ann-submit` 이벤트(detail.answers)를 낸다.
@@ -45,7 +47,7 @@
   'use strict';
 
   var VERSION = '1';
-  var TYPES = { choice: 'choice', likert: 'likert', checklist: 'multi_select', textarea: 'text' };
+  var TYPES = { choice: 'choice', likert: 'likert', checklist: 'multi_select', 'item-choice': 'choice', textarea: 'text' };
 
   // ── core: DOM 없이 쓰는 함수 ────────────────────────────────────────────────
 
@@ -103,6 +105,11 @@
         return { name: itemName(model.name, key), type: TYPES.checklist, values: [model.checkedValue, model.uncheckedValue], required: model.required };
       });
     }
+    if (model.kind === 'item-choice') {
+      return model.keys.map(function (key) {
+        return { name: itemName(model.name, key), type: TYPES['item-choice'], values: model.values.slice(), required: model.required };
+      });
+    }
     return [{ name: model.name, type: TYPES[model.kind], values: model.kind === 'textarea' ? [] : model.values.slice(), required: model.required }];
   }
 
@@ -114,6 +121,7 @@
 
   function isAnswered(model, value) {
     if (model.kind === 'checklist') return model.keys.length === 0 || Boolean(value && (value.none || value.checked.length > 0));
+    if (model.kind === 'item-choice') return model.keys.every(function (key) { return Boolean(value && value[key]); });
     if (model.kind === 'textarea') return typeof value === 'string' && value.length >= Math.max(1, model.minLength || 0);
     return value !== null && value !== undefined && value !== '';
   }
@@ -125,13 +133,15 @@
     }
     if (!model.required || isAnswered(model, value)) return null;
     if (model.kind === 'checklist') return 'Check every item that applies, or the last box if none apply.';
+    if (model.kind === 'item-choice') return 'Choose an answer for every item.';
     if (model.kind === 'textarea') return model.minLength > 0 ? 'Write at least ' + model.minLength + ' characters.' : 'Write an answer.';
     return 'Choose an answer.';
   }
 
   /**
    * entries: [{ model, value }] (화면 순서). → { answers: [{name, value}], problems: [{ index, message }] }.
-   * value 는 choice/likert 면 고른 값(없으면 null), textarea 면 앞뒤 공백을 뺀 글, checklist 면 { checked: [key], none }.
+   * value 는 choice/likert 면 고른 값(없으면 null), textarea 면 앞뒤 공백을 뺀 글, checklist 면 { checked: [key], none },
+   * item-choice 면 { key: 고른 값 }.
    */
   function collect(entries) {
     var answers = [];
@@ -145,6 +155,12 @@
         if (!value || !(value.none || value.checked.length > 0)) return;
         model.keys.forEach(function (key) {
           answers.push({ name: itemName(model.name, key), value: value.checked.indexOf(key) >= 0 ? model.checkedValue : model.uncheckedValue });
+        });
+        return;
+      }
+      if (model.kind === 'item-choice') {
+        model.keys.forEach(function (key) {
+          if (value && value[key]) answers.push({ name: itemName(model.name, key), value: String(value[key]) });
         });
         return;
       }
@@ -190,7 +206,7 @@
     ':root{--ann-accent:#1d5fc4;--ann-accent-soft:#e8f0fc;--ann-text:#1f1f1f;--ann-muted:#646464;--ann-border:#dcdcd8;--ann-bg:#f4f4f2;--ann-card:#fff;--ann-error:#c62f2f;--ann-done:#13893a}',
     'ann-form{display:block;max-width:1000px;margin:0 auto;padding:16px;color:var(--ann-text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}',
     'body:has(> ann-form),body:has(> form > ann-form){background:var(--ann-bg);margin:0}',
-    'ann-instructions,ann-text,ann-choice,ann-likert,ann-checklist,ann-textarea,ann-tabs,ann-tab,ann-image,ann-video,ann-column{display:block;min-width:0}',
+    'ann-instructions,ann-text,ann-choice,ann-likert,ann-checklist,ann-textarea,ann-item-choice,ann-tabs,ann-tab,ann-image,ann-video,ann-column{display:block;min-width:0}',
     'ann-option,ann-item{display:none}',
     // 위의 display 규칙이 hidden 속성을 덮지 않게 한다 (탭 전환, 탭 상태, 오류 문구가 hidden 으로 숨는다)
     'ann-tab[hidden],.ann-tab-status[hidden],.ann-error[hidden]{display:none}',
@@ -233,6 +249,11 @@
     '.ann-checklist-item:last-child{border-bottom:0}',
     '.ann-checklist-key{color:var(--ann-muted);font-variant-numeric:tabular-nums;min-width:1.6em}',
     '.ann-checklist-none{margin-top:4px;font-style:italic}',
+    '.ann-item-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:6px 16px;align-items:center;padding:8px 0;border-bottom:1px solid #eeeeea}',
+    '.ann-item-row:last-child{border-bottom:0}',
+    '.ann-item-row .ann-options{flex-direction:row;flex-wrap:wrap;gap:2px 8px}',
+    '.ann-item-text{overflow-wrap:anywhere}',
+    '@media (max-width:640px){.ann-item-row{grid-template-columns:1fr}}',
     '.ann-textarea textarea{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--ann-border);border-radius:4px;resize:vertical;clear:both;display:block}',
     '.ann-counter{color:var(--ann-muted);font-size:12px;margin-top:2px}',
     '.ann-error{color:var(--ann-error);font-size:13px;margin-top:6px}',
@@ -640,6 +661,60 @@
     );
 
     define(
+      'ann-item-choice',
+      function (element) {
+        var doc = element.ownerDocument;
+        var parts = questionShell(element, 'item-choice');
+        var read = readOptions(element);
+        var items = [];
+        var extra = [];
+        var jsonText = null;
+        read.extra.forEach(function (child) {
+          if (isTag(child, 'ann-item')) items.push({ key: child.getAttribute('key'), html: child.innerHTML.trim() });
+          else if (isTag(child, 'script') && /json/i.test(child.getAttribute('type') || '')) jsonText = child.textContent;
+          else extra.push(child);
+        });
+        if (items.length === 0 && jsonText !== null) items = parseItems(jsonText).map(function (item) { return { key: item.key, text: item.text }; });
+        var keys = itemKeys(items);
+        element.__annKeys = keys;
+        element.__annValues = read.options.map(function (o) { return o.value; });
+        appendDescription(parts.shell, extra);
+        var name = element.getAttribute('name') || '';
+        var list = make(doc, 'div', 'ann-item-rows');
+        items.forEach(function (item, index) {
+          var row = make(doc, 'div', 'ann-item-row');
+          var text = make(doc, 'div', 'ann-item-text');
+          if (item.html !== undefined) text.innerHTML = item.html;
+          else text.textContent = item.text;
+          row.appendChild(text);
+          var choices = make(doc, 'div', 'ann-options');
+          read.options.forEach(function (o) { choices.appendChild(optionLabel(doc, 'radio', itemName(name, keys[index]), o.value, o.labelHtml)); });
+          row.appendChild(choices);
+          list.appendChild(row);
+        });
+        if (items.length === 0) list.appendChild(make(doc, 'span', 'ann-description', 'No items.'));
+        parts.shell.appendChild(list);
+        parts.shell.appendChild(parts.error);
+        element.replaceChildren(parts.shell);
+      },
+      {
+        annModel: function () {
+          return { kind: 'item-choice', name: this.getAttribute('name') || '', required: flag(this, 'required'), keys: (this.__annKeys || []).slice(), values: (this.__annValues || []).slice() };
+        },
+        annValue: function () {
+          var value = {};
+          var element = this;
+          var name = element.getAttribute('name') || '';
+          (element.__annKeys || []).forEach(function (key) {
+            var chosen = checkedValue(element, itemName(name, key));
+            if (chosen !== null && chosen !== undefined) value[key] = chosen;
+          });
+          return value;
+        },
+      },
+    );
+
+    define(
       'ann-textarea',
       function (element) {
         var doc = element.ownerDocument;
@@ -763,7 +838,7 @@
       var attempted = false;
 
       function questions() {
-        return Array.prototype.slice.call(form.querySelectorAll('ann-choice, ann-likert, ann-checklist, ann-textarea')).filter(function (q) {
+        return Array.prototype.slice.call(form.querySelectorAll('ann-choice, ann-likert, ann-checklist, ann-item-choice, ann-textarea')).filter(function (q) {
           return typeof q.annModel === 'function';
         });
       }

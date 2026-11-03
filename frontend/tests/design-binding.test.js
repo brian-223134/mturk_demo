@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { checkData } from '../src/lib/data-check.js';
-import { adaptBinding, attentionItems, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, draftBinding, parseCell, parsePath } from '../src/lib/design-binding.js';
+import { adaptBinding, attentionItems, boundData, boundRow, bindingSettings, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, parseCell, parsePath, requestBinding, summarizeData } from '../src/lib/design-binding.js';
 import { parseJsonData } from '../src/lib/json-data.js';
 import { hasLayoutErrors, lintLayout } from '../src/lib/layout-lint.js';
 import { ROUGH_DESIGNS, TASK_TYPES, roughDesignById, taskTypeById } from '../src/lib/rough-designs.js';
@@ -65,6 +65,7 @@ describe('손으로 쓴 Chunk-Fact binding', () => {
     assert.deepEqual(lint.problems.filter((p) => p.level === 'warning'), []);
     assert.equal(lint.questions.length, 11);
     assert.equal(lint.questions[10].name, 'supported_11');
+    assert.equal(lint.questions[0].tag, 'ann-item-choice');
   });
 
   it('칸의 값은 원본 목록의 같은 번호 값이다', () => {
@@ -72,7 +73,7 @@ describe('손으로 쓴 Chunk-Fact binding', () => {
     const facts = reader.cell(0, 'atomic_facts');
     assert.equal(chunks.length, 11);
     assert.equal(row.slot_data_f2_3, chunks[2]);
-    assert.deepEqual(JSON.parse(row.slot_checklist_3), facts[2]);
+    assert.deepEqual(JSON.parse(row.slot_item_choice_3), facts[2]);
     assert.equal(row.slot_data_f1_1, reader.cell(0, 'query')[0]);
   });
 
@@ -85,11 +86,11 @@ describe('손으로 쓴 Chunk-Fact binding', () => {
   it('게시용 데이터: 쓰지 않은 컬럼은 그대로 남고 쓴 컬럼은 칸으로 바뀌어 Upload JSON 검사를 통과한다', () => {
     const bound = boundData(binding, check.design, check.taskType, check.tabs, reader, 'x.json');
     assert.equal(bound.rows.length, data.rows.length);
-    for (const kept of ['idx', 'qid', 'key_counts', 'attention_check']) assert.equal(bound.rows[1][kept], data.rows[1][kept]);
+    for (const kept of ['idx', 'qid', 'key_counts', 'chunk_fact_relevance_check', 'attention_check']) assert.equal(bound.rows[1][kept], data.rows[1][kept]);
     for (const moved of ['query', 'retrieved_chunk', 'atomic_facts']) assert.equal(moved in bound.rows[0], false);
     const result = checkData(extractPlaceholders(html), bound.columns, bound.rows);
     assert.deepEqual(result.missingColumns, []);
-    assert.deepEqual(result.unusedColumns, ['idx', 'qid', 'key_counts', 'attention_check']);
+    assert.deepEqual(result.unusedColumns, ['idx', 'qid', 'key_counts', 'chunk_fact_relevance_check', 'attention_check', 'slot_reference', 'slot_attention']);
   });
 
   it('attention 항목 번호를 알린다', () => {
@@ -103,14 +104,14 @@ describe('손으로 쓴 Chunk-Fact binding', () => {
 
 describe('값 넣기의 안전', () => {
   const unsafe = readerOf([{ list: ['<b>x</b> ${y} & "q"', 'b'], items: [['</script><i>', 'ok']] }]);
-  const b = { design: 'item-list', task_type: 'text', repeat: { over: 'list' }, slots: { data: { from: 'list[i]' }, checklist: { header: 'H "1" ${z}', items: 'items[0]' } } };
+  const b = { design: 'item-list', task_type: 'text', repeat: { over: 'list' }, slots: { data: { from: 'list[i]' }, 'item-choice': { header: 'H "1" ${z}', items: 'items[0]' } } };
   const { check, html } = build(b, unsafe);
 
   it('글은 HTML 로 해석되지 않고 항목은 script 를 닫지 못한다', () => {
     const row = boundRow(b, check.design, check.taskType, check.tabs, unsafe, 0);
     assert.equal(row.slot_data_1, '&lt;b&gt;x&lt;/b&gt; ${y} &amp; "q"');
-    assert.equal(row.slot_checklist_1.includes('</script>'), false);
-    assert.deepEqual(JSON.parse(row.slot_checklist_1), ['</script><i>', 'ok']);
+    assert.equal(row.slot_item_choice_1.includes('</script>'), false);
+    assert.deepEqual(JSON.parse(row.slot_item_choice_1), ['</script><i>', 'ok']);
   });
 
   it('머리글의 따옴표와 ${ 는 템플릿을 깨지 않는다', () => {
@@ -175,9 +176,13 @@ describe('가안 바꾸기', () => {
     const away = adaptBinding(binding, 'compare');
     assert.equal(away.slots['data-a'].from, 'query[i]');
     assert.equal(away.slots['data-b'].from, 'retrieved_chunk[i]');
-    assert.ok(away.unused.checklist);
+    assert.ok(away.unused['item-choice']);
+    assert.equal('reference' in away, false, '문항 칸이 달라지면 대조 기준을 보관한다');
+    assert.equal(away.unused.judged.expected, 'not_grounded');
     const back = adaptBinding(away, 'item-list');
     assert.deepEqual(back.slots, binding.slots);
+    assert.deepEqual(back.reference, binding.reference);
+    assert.deepEqual(back.attention, binding.attention);
     assert.equal('unused' in back, false);
   });
 
@@ -221,5 +226,206 @@ describe('영상과 이미지 칸', () => {
     const check = checkBinding(b, urls);
     assert.ok(buildBoundTemplate(b, roughDesignById('stacked'), taskTypeById('video'), 0).includes('<ann-video label="Video" src="${slot_data}">'));
     assert.equal(boundRow(b, check.design, check.taskType, 0, urls, 0).slot_data, '/m/a%22b.mp4');
+  });
+});
+
+describe('LLM 에 보내는 요약', () => {
+  const summary = summarizeData(reader);
+  const byName = Object.fromEntries(summary.columns.map((c) => [c.name, c]));
+
+  it('구조와 잘린 표본만 담고 파일 전체보다 훨씬 작다', () => {
+    assert.equal(summary.hit_count, 3);
+    assert.deepEqual(summary.columns.map((c) => c.name), data.columns);
+    assert.equal(byName.retrieved_chunk.shape, 'list[11] of str');
+    assert.match(byName.atomic_facts.shape, /^list\[11\] of list\[str\]/);
+    assert.equal(byName.retrieved_chunk.samples.length, 2);
+    assert.equal(byName.retrieved_chunk.samples[0].length, 4, '목록은 앞의 3개와 남은 수');
+    assert.ok(JSON.stringify(summary).length < JSON.stringify(data.rows).length / 3);
+  });
+
+  it('긴 글은 자르고 원래 길이를 알린다', () => {
+    const long = 'x'.repeat(1000);
+    const [column] = summarizeData(readerOf([{ text: long }])).columns;
+    assert.equal(column.shape, 'str');
+    assert.ok(column.samples[0].endsWith('… (1000 characters)'));
+    assert.ok(column.samples[0].length < 320);
+  });
+
+  it('가안 정의에서 칸 목록만 보낸다', () => {
+    const tabs = designForRequest(roughDesignById('tabs'));
+    assert.deepEqual(tabs.rows, [{ slots: ['data'] }, { slots: ['choice'] }]);
+    assert.equal(tabs.one_tab_per_item, true);
+    assert.equal('tabs' in tabs, false, '가안의 예시 탭 수는 보내지 않는다');
+    assert.equal('one_tab_per_item' in designForRequest(roughDesignById('stacked')), false);
+  });
+});
+
+describe('requestBinding', () => {
+  const check = (b) => checkBinding(b, reader);
+  const good = binding;
+  const bad = { ...binding, slots: { ...binding.slots, data: { from: 'no_such_column' } } };
+  const fake = (replies) => {
+    const seen = [];
+    return { seen, send: async (body) => { seen.push(body); return { binding: replies[seen.length - 1], usage: { prompt_tokens: 10, cost: 0.001, note: 'x' }, model: { model: 'm', provider_tag: 'p/fp8' } }; } };
+  };
+
+  it('첫 답이 맞으면 한 번만 묻는다', async () => {
+    const { send, seen } = fake([good]);
+    const result = await requestBinding({ send, check, request: { prompt: 'p' } });
+    assert.equal(seen.length, 1);
+    assert.equal('errors' in seen[0], false);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.attempts, 1);
+    assert.equal(result.model.provider_tag, 'p/fp8');
+  });
+
+  it('검사에 걸리면 오류와 이전 답을 보내 다시 묻고 사용량을 더한다', async () => {
+    const { send, seen } = fake([bad, good]);
+    const result = await requestBinding({ send, check, request: { prompt: 'p' } });
+    assert.equal(seen.length, 2);
+    assert.deepEqual(seen[1].previous, bad);
+    assert.match(seen[1].errors[0], /no column "no_such_column"/);
+    assert.equal(seen[1].prompt, 'p');
+    assert.equal(result.attempts, 2);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.usage.prompt_tokens, 20);
+    assert.equal(result.usage.note, undefined);
+  });
+
+  it('끝까지 틀리면 마지막 답과 오류를 돌려주고 횟수를 넘지 않는다', async () => {
+    const { send, seen } = fake([bad, bad, bad, good]);
+    const result = await requestBinding({ send, check, request: {} });
+    assert.equal(seen.length, 3);
+    assert.deepEqual(result.binding, bad);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.attempts, 3);
+  });
+
+  it('호출 실패는 그대로 던진다', async () => {
+    await assert.rejects(requestBinding({ send: async () => { throw new Error('boom'); }, check, request: {} }), /boom/);
+  });
+});
+
+describe('LLM 설명서 (agent/binding_reference.md)', () => {
+  const reference = readFileSync(new URL('../../agent/binding_reference.md', import.meta.url), 'utf8');
+
+  it('예시 binding 은 검사를 통과하는 example/6-rough-design 의 binding 과 같다', () => {
+    const block = /```json\n([\s\S]*?)\n```/.exec(reference)[1];
+    assert.deepEqual(JSON.parse(block), binding);
+  });
+
+  it('검사가 아는 칸을 모두 설명한다', () => {
+    for (const slot of ['data', 'data-a', 'data-b', 'choice', 'compare', 'item-choice', 'free-text', 'context', 'reference', 'kind']) assert.ok(reference.includes(`\`${slot}\``), slot);
+  });
+});
+
+describe('대조 기준과 attention', () => {
+  const rowsOf = (b, r = reader) => {
+    const check = checkBinding(b, r);
+    assert.deepEqual(check.errors, []);
+    return { check, data: boundData(b, check.design, check.taskType, check.tabs, r, 'x.json') };
+  };
+
+  it('selected: 고른 항목은 yes, 없는 항목은 no 이고 attention 항목은 뺀다', () => {
+    const { data: bound } = rowsOf(binding);
+    const labels = reader.cell(1, 'chunk_fact_relevance_check');
+    const facts = reader.cell(1, 'atomic_facts');
+    const flags = reader.cell(1, 'attention_check');
+    const reference = JSON.parse(bound.rows[1].slot_reference);
+    const attention = JSON.parse(bound.rows[1].slot_attention);
+    const expected = {};
+    const expectedAttention = {};
+    facts.forEach((list, tab) => list.forEach((_, item) => {
+      const name = `supported_${tab + 1}_${item + 1}`;
+      if (flags[tab] === '1') expectedAttention[name] = 'not_grounded';
+      else expected[name] = (labels[`Chunk ${tab}`] ?? []).includes(`Atomic fact${item + 1}`) ? 'grounded' : 'not_grounded';
+    }));
+    assert.deepEqual(reference, expected);
+    assert.deepEqual(attention, expectedAttention);
+    assert.ok(Object.values(reference).includes('grounded'));
+  });
+
+  it('map: 키의 {i}, {n} 을 채워 라벨을 읽는다', () => {
+    const r = readerOf([{ q: ['a', 'b'], facts: [['x', 'y'], ['z']], coverage: { general_0_1: 'Covered', general_0_2: 'Not covered', general_1_1: 'Covered' } }]);
+    const b = { design: 'item-list', task_type: 'text', repeat: { over: 'q' }, slots: { data: { from: 'q[i]' }, 'item-choice': { name: 'general', header: 'H', items: 'facts[i]', options: ['Covered', 'Not covered'] } }, reference: { map: 'coverage', key: 'general_{i}_{n}' } };
+    assert.deepEqual(JSON.parse(rowsOf(b, r).data.rows[0].slot_reference), { general_1_1: 'Covered', general_1_2: 'Not covered', general_2_1: 'Covered' });
+  });
+
+  it('value: 칸마다 라벨이 있는 경우와 항목 목록인 경우', () => {
+    const r = readerOf([{ text: ['a', 'b'], gold: ['yes', 'no'] }]);
+    const b = { design: 'tabs', task_type: 'text', repeat: { over: 'text' }, slots: { data: { from: 'text[i]' }, choice: { name: 'answer', header: 'H', options: ['yes', 'no'] } }, reference: { value: 'gold[i]' } };
+    assert.deepEqual(JSON.parse(rowsOf(b, r).data.rows[0].slot_reference), { answer_1: 'yes', answer_2: 'no' });
+    const items = readerOf([{ passage: 'p', facts: ['x', 'y'], gold: ['yes', 'no'] }]);
+    const flat = { design: 'item-list', task_type: 'text', slots: { data: { from: 'passage' }, 'item-choice': { name: 's', header: 'H', items: 'facts', options: ['yes', 'no'] } }, reference: { value: 'gold' } };
+    assert.deepEqual(JSON.parse(rowsOf(flat, items).data.rows[0].slot_reference), { s_1: 'yes', s_2: 'no' });
+  });
+
+  it('없는 라벨 값과 선택지 밖의 값은 오류, 일부만 있으면 경고다', () => {
+    const r = readerOf([{ text: ['a', 'b'], gold: ['yes', 'maybe'] }]);
+    const b = { design: 'tabs', task_type: 'text', repeat: { over: 'text' }, slots: { data: { from: 'text[i]' }, choice: { header: 'H', options: ['yes', 'no'] } }, reference: { value: 'gold[i]' } };
+    assert.match(checkBinding(b, r).errors.join(), /label\(s\) "maybe" are not options/);
+    assert.match(checkBinding({ ...b, reference: { value: 'text[9]' } }, r).errors.join(), /no labels were found/);
+    assert.match(checkBinding({ ...b, reference: { value: 'nope' } }, r).errors.join(), /is not a path to a column/);
+    assert.match(checkBinding({ ...b, reference: { value: 'gold[i]', map: 'gold' } }, r).errors.join(), /exactly one/);
+    const some = readerOf([{ text: ['a', 'b'], gold: ['yes'] }]);
+    assert.match(checkBinding(b, some).warnings.join(), /cover 1 of 2 answers/);
+  });
+
+  it('attention.expected 는 선택지 안에 있어야 한다', () => {
+    assert.match(checkBinding({ ...binding, attention: { flag: 'attention_check[i]', expected: 'nope' } }, reader).errors.join(), /is not one of the options/);
+    assert.match(checkBinding({ ...binding, attention: { expected: 'grounded' } }, reader).errors.join(), /needs attention.flag/);
+  });
+
+  it('게시 설정으로 잇는다', () => {
+    assert.deepEqual(bindingSettings(binding), { referenceColumn: 'slot_reference', attentionEnabled: true, attentionMode: 'column', attentionColumn: 'slot_attention', attentionMinRatio: 1 });
+    assert.deepEqual(bindingSettings({ attention: { flag: 'x' } }), {});
+  });
+});
+
+describe('데이터 칸의 종류와 context', () => {
+  const images = readerOf([{ photo: 'https://x.test/a.jpg', caption: 'A dog on a beach', question: 'Q <1>' }]);
+
+  it('이미지 칸에 글이 들어가면 고치라고 알리고, kind 가 text 면 글로 보인다', () => {
+    const wrong = { design: 'stacked', task_type: 'vision', slots: { data: [{ from: 'photo' }, { from: 'caption' }] } };
+    assert.match(checkBinding(wrong, images).errors.join(), /"caption" does not look like a URL/);
+    const right = { design: 'stacked', task_type: 'vision', slots: { data: [{ from: 'photo' }, { label: 'Caption', from: 'caption', kind: 'text' }] } };
+    const { check, html } = build(right, images);
+    assert.ok(html.includes('<ann-image label="Image" src="${slot_data_f1}">'));
+    assert.ok(html.includes('<ann-text label="Caption">${slot_data_f2}</ann-text>'));
+    assert.equal(boundRow(right, check.design, check.taskType, 0, images, 0).slot_data_f2, 'A dog on a beach');
+    assert.match(checkBinding({ ...right, slots: { data: { from: 'photo', kind: 'audio' } } }, images).errors.join(), /"kind" must be/);
+  });
+
+  it('context 는 칸들 위에 글로 보이고 컬럼이 따로 생긴다', () => {
+    const pair = readerOf([{ question: 'Q <1>', a: 'first', b: 'second' }]);
+    const b = { design: 'compare', task_type: 'text', context: { label: 'Question', from: 'question' }, slots: { 'data-a': { from: 'a' }, 'data-b': { from: 'b' }, compare: { header: 'H' } } };
+    const { check, html } = build(b, pair);
+    assert.ok(html.indexOf('slot_context') < html.indexOf('slot_data_a'));
+    const row = boundRow(b, check.design, check.taskType, 0, pair, 0);
+    assert.equal(row.slot_context, 'Q &lt;1&gt;');
+    assert.equal('question' in row, false);
+    assert.match(checkBinding({ ...b, context: { from: 'nope' } }, pair).errors.join(), /context\[0\]\.from: the data has no column/);
+  });
+});
+
+describe('worker 에게 보일 글은 영어', () => {
+  const flat = readerOf([{ text: '한글 데이터' }]);
+  const base = { design: 'stacked', task_type: 'text', slots: { data: { label: 'Text', from: 'text' } } };
+
+  it('직접 쓴 글의 한글, 한자, 가나는 오류이고 어디인지 알린다', () => {
+    const cases = [
+      [{ ...base, instructions: '읽으세요' }, /^instructions:/],
+      [{ ...base, slots: { data: { label: '리뷰', from: 'text' } } }, /^slots\.data\[0\]\.label:/],
+      [{ ...base, slots: { ...base.slots, choice: { header: '감정은?', options: ['a', 'b'] } } }, /^slots\.choice\.header:/],
+      [{ ...base, slots: { ...base.slots, choice: { header: 'H', options: [['a', '예'], ['b', 'No']] } } }, /^slots\.choice\.options\[0\]:/],
+      [{ ...base, slots: { ...base.slots, 'free-text': { header: 'H', placeholder: '理由' } } }, /^slots\.free-text\.placeholder:/],
+      [{ ...base, repeat: { over: 'text', label: 'テスト' } }, /repeat\.label:|repeat\.over/],
+      [{ ...base, context: { label: '질문', from: 'text' } }, /^context\[0\]\.label:/],
+    ];
+    for (const [binding_, pattern] of cases) assert.ok(checkBinding(binding_, flat).errors.some((e) => pattern.test(e)), String(pattern));
+  });
+
+  it('데이터의 값은 보지 않는다', () => {
+    assert.deepEqual(checkBinding({ ...base, instructions: 'Read the text.' }, flat).errors, []);
   });
 });

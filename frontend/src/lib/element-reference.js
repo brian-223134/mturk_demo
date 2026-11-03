@@ -89,6 +89,18 @@ export const ELEMENT_REFERENCE = [
       '<ann-checklist name="supported" header="Which statements does the passage support?" required\n               checked-value="supported" unchecked-value="not_supported">\n  <script type="application/json">${facts}</script>\n</ann-checklist>',
   },
   {
+    tag: 'ann-item-choice',
+    summary: 'One answer for every item of a list (radio buttons in each row). One answer per item, named name_key. Items come from <ann-item> children or a JSON array column.',
+    attributes: [
+      ['name', 'Answer name prefix. Required and unique.'],
+      ['header', 'The question.'],
+      ['required', 'Every item must be answered.'],
+      ['options', 'Short form "a, b, c" when value and label are the same. Otherwise use <ann-option value="…">Label</ann-option> children.'],
+    ],
+    snippet:
+      '<ann-item-choice name="support" header="Does the passage support each statement?" required>\n  <ann-option value="supported">Supported</ann-option>\n  <ann-option value="not_supported">Not supported</ann-option>\n  <script type="application/json">${facts}</script>\n</ann-item-choice>',
+  },
+  {
     tag: 'ann-textarea',
     summary: 'Free text. The trimmed text is sent; an empty optional answer is left out. Review shows it as text and keeps it out of κ and agreement.',
     attributes: [

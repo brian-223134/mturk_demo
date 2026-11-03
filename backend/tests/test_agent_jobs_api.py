@@ -279,3 +279,76 @@ def test_legacy_job_files_are_imported_once(make_client, make_database, make_set
     (folder / "job.json").write_text(json.dumps(stale), encoding="utf-8")
     with make_client() as client:
         assert client.get(f"{JOBS}/{job['id']}").json()["name"] == "old"   # DB 가 기준
+
+
+BINDING_BODY = {
+    "design": {"id": "item-list", "rows": [{"slots": ["data", "item-choice"]}]},
+    "task_type": "text",
+    "prompt": "Check which facts each chunk supports.",
+    "data": {"hit_count": 1, "columns": [{"name": "chunks", "shape": "list[3] of str", "samples": []}]},
+    "allow_api": True,
+}
+
+
+def test_binding_needs_both_permissions(client: TestClient, settings: Settings) -> None:
+    """요청과 서버가 모두 허용해야 하며, 막히면 OpenRouter 를 부르지 않는다."""
+    assert settings.api_allowed is False
+    response = client.post("/api/agent/bindings", json=BINDING_BODY)
+    assert response.status_code == 400 and "Calling OpenRouter is not allowed" in response.json()["error"]["message"]
+    response = client.post("/api/agent/bindings", json={**BINDING_BODY, "allow_api": False})
+    assert response.status_code == 400
+    assert not (settings.output_dir / "bindings").exists()
+
+
+def test_binding_rejects_bad_requests(client: TestClient) -> None:
+    for change, message in [
+        ({"design": "item-list"}, '"design"'),
+        ({"task_type": "audio"}, '"task_type"'),
+        ({"prompt": "  "}, '"prompt"'),
+        ({"data": {"rows": []}}, '"data"'),
+        ({"errors": "no"}, '"errors"'),
+        ({"previous": []}, '"previous"'),
+        ({"data": {"columns": [{"name": "x" * 300_000}]}}, "too large"),
+    ]:
+        response = client.post("/api/agent/bindings", json={**BINDING_BODY, **change})
+        assert response.status_code == 400, change
+        assert message in response.json()["error"]["message"], change
+
+
+def test_binding_returns_the_model_reply(make_client, monkeypatch) -> None:
+    """서버와 요청이 모두 허용하면 모델 설정대로 부르고, 답과 사용량, 모델 정보를 돌려준다. 네트워크는 쓰지 않는다."""
+    seen = {}
+
+    def fake_write(config, api_key, allow_api, request, log_dir):
+        seen.update(model=config.model, allow_api=allow_api, request=request, log_dir=log_dir)
+        return {"binding": {"design": "item-list", "task_type": "text", "slots": {}}, "usage": {"calls": 1, "cost": 0.002}}
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_binding", fake_write)
+    with make_client(api_allowed=True) as client:
+        response = client.post("/api/agent/bindings", json={**BINDING_BODY, "errors": ["bad path"], "previous": {"design": "x"}})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["binding"]["design"] == "item-list"
+    assert body["usage"]["cost"] == 0.002
+    assert body["model"] == {"name": "deepseek-v4.1-flash", "model": "deepseek/deepseek-v4.1-flash-1017", "provider_tag": "crusoe/fp8"}
+    assert seen["allow_api"] is True
+    assert seen["request"]["errors"] == ["bad path"] and seen["request"]["previous"] == {"design": "x"}
+    assert "allow_api" not in seen["request"], "허용 여부는 모델에 보내지 않는다"
+    assert seen["log_dir"].is_dir() and seen["log_dir"].parent.name == "bindings"
+
+
+def test_binding_reports_a_failed_call(make_client, monkeypatch) -> None:
+    from agent.planner.openrouter import PlannerError
+
+    def fail(*args):
+        raise PlannerError("provider is down")
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_binding", fail)
+    with make_client(api_allowed=True) as client:
+        response = client.post("/api/agent/bindings", json=BINDING_BODY)
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "The model call failed: provider is down"
+
+
+def test_models_names_the_binding_model(client: TestClient) -> None:
+    assert client.get("/api/agent/models").json()["binding_model"] == "deepseek-v4.1-flash"

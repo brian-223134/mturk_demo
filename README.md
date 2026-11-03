@@ -36,7 +36,7 @@ docker compose exec backend python -m app.users create-admin --email <이메일>
 
 게시, 승인과 반려, pool 편집 같은 변경 사항과 자동 생성 job의 상태는 PostgreSQL(Docker volume `backend-pg`)에 저장되므로 컨테이너를 내렸다 올려도 유지됩니다. 처음 상태로 되돌리려면 `docker compose down -v`로 DB를 지웁니다 (프로토타입의 DB도 함께 지워집니다). 이전 버전에서 SQLite에 쌓은 데이터를 옮기는 방법은 [backend/README.md](backend/README.md#db)에 있습니다.
 
-원본 데이터에서 **LLM으로** 템플릿을 만들 때(Create → New Project → Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
+**LLM을 쓸 때**(Create → New Project의 `HIT data`에서 binding 쓰기, Generate from raw data)만 OpenRouter 키가 필요합니다. 유료 호출이라 `environment/.env`에서 호출을 허용하고, 화면의 폼에서도 job마다 `Allow API calls (uses credits)`를 체크해야 합니다(둘 중 하나만으로는 호출하지 않습니다). 키가 없어도 저장소의 예시 명세(`agent/examples/*/task_spec.json`)를 올리면 LLM 없이 생성해 볼 수 있습니다.
 
 ```bash
 cp environment/.env.example environment/.env      # OPENROUTER_KEY= 에 키를, AGENT_ALLOW_API= 에 1 을 적는다
@@ -125,7 +125,7 @@ MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 JSON 데�
 
 - **`New Batch with an Existing Project`**: Project 목록입니다. 행마다 `Publish Batch`(JSON을 올려 게시), `Edit`, `Copy`, `Delete`가 있습니다.
 - **`New Project`**: 화면 배치 가안(rough design) 5개 중 하나를 고르고, Vision·Video·Text 중 task 종류를 고르면 예시 자료를 넣은 worker 화면이 보입니다. 이어서 이미 HIT로 묶인 JSON을 올리면 실제 데이터를 가안에 넣어 미리 볼 수 있고, 마음에 들면 Project로 저장해 게시합니다. 아래의 `Other ways to start`에서 starter 템플릿 9종, HTML 올리기, 원본 데이터에서 자동으로 만들기(`Generate from raw data`)도 고를 수 있습니다.
-- **`Tutorial`**: 처음 쓰는 사람을 위한 한국어 따라 하기 안내입니다. 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
+- **`Tutorial`**: 처음 쓰는 사람을 위한 따라 하기 안내입니다. 한국어(`KR`)와 영어(`EN`) 중에서 고릅니다. 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
 
 Project는 세 탭으로 만듭니다. `Enter Properties`에서 worker에게 보일 제목과 설명, 보상, HIT당 인원, 기간, worker 조건을 정하고, `Design Layout`에서 템플릿 HTML을 고치며 오른쪽의 worker 화면 미리보기를 바로 확인하고, `Preview and Finish`에서 요약을 보고 저장합니다.
 batch는 네 단계로 게시합니다. `Upload JSON`에서 템플릿이 쓰는 컬럼이 있는지 검사하고, `Preview tasks`에서 행마다 worker 화면을 보고, `Review settings`에서 attention 규칙과 Review의 대조 기준을 정한 뒤, `Confirm and publish`에서 비용을 확인하고 게시합니다.

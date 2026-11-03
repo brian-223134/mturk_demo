@@ -22,9 +22,12 @@ runner 가 동시에 돌린다.
 from __future__ import annotations
 
 import hashlib
+import asyncio
+import json
 import logging
 import re
 import shutil
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,7 +35,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
 
-from agent.config import ConfigError, load_model_config, selected_model_name
+from agent.binding import write_binding
+from agent.config import ConfigError, binding_model_name, load_model_config, selected_model_name
+from agent.planner.openrouter import PlannerError, resolve_api_key
 from agent.spec import SpecError, load_spec
 from agent.prompt_variants import EXAMPLE_RAW, prompt_candidates
 
@@ -41,6 +46,7 @@ from app.agent_jobs.models import (INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARK
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
 from app.auth import current_user
 from app.errors import ApiError, invalid
+from app.routers.common import object_body, read_body
 from app.settings import ALLOW_API_VARIABLE, Settings
 
 log = logging.getLogger("backend")
@@ -133,8 +139,8 @@ async def list_models(request: Request) -> dict:
             log.warning("model config %s skipped: %s", path.name, error)
             continue
         models.append({"name": config.name, "model": config.model, "api": config.api, "provider_tag": config.provider_tag})
-    return {"models": models, "default": selected_model_name(settings.env_file), "api_allowed": settings.api_allowed,
-            "prompt_candidates": prompt_candidates()}
+    return {"models": models, "default": selected_model_name(settings.env_file), "binding_model": binding_model_name(settings.env_file),
+            "api_allowed": settings.api_allowed, "prompt_candidates": prompt_candidates()}
 
 
 @router.get("/example/raw.json")
@@ -209,10 +215,15 @@ def check_llm_allowed(fields: JobForm, settings: Settings) -> None:
     """spec 없이 LLM 이 명세를 쓰는 job 의 조건: prompt 가 있고, 요청과 서버가 모두 호출을 허용한다."""
     if not fields.has_prompt:
         raise invalid('Either "spec" (a task_spec.json file, no LLM call) or "prompt" (a file) / "prompt_text" is required.')
-    if not fields.allow_api and not settings.api_allowed:
+    check_api_allowed(fields.allow_api, settings)
+
+
+def check_api_allowed(allow_api: bool, settings: Settings) -> None:
+    """유료 호출의 조건: 요청과 서버가 모두 허용한다."""
+    if not allow_api and not settings.api_allowed:
         raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false and the server was started "
                       f"without {ALLOW_API_VARIABLE}=1 in environment/.env or the shell (both are required). Upload a \"spec\" file to run without an LLM.")
-    if not fields.allow_api:
+    if not allow_api:
         raise invalid("Calling OpenRouter is not allowed: the request has allow_api=false (send allow_api=true; "
                       f"the server has {ALLOW_API_VARIABLE}=1).")
     if not settings.api_allowed:
@@ -290,6 +301,56 @@ async def create_job(request: Request) -> dict:
     finally:
         await fields.close()
     return {"job": runner.submit(job, current_user(request)["id"])}
+
+
+# ---- binding --------------------------------------------------------------------------------
+
+BINDING_REQUEST_LIMIT = 256 * 1024
+BINDING_DIR = "bindings"   # output 아래에 호출마다 요청과 응답을 남기는 폴더
+
+
+def binding_request(body: object) -> dict:
+    """POST /bindings 의 body 를 검사한다. 원본 파일이 아니라 브라우저가 만든 요약이 오므로 크기를 작게 제한한다."""
+    data = object_body(body, "binding request")
+    design, task_type, prompt, summary = data.get("design"), data.get("task_type"), data.get("prompt"), data.get("data")
+    if not isinstance(design, dict) or not isinstance(design.get("id"), str) or not isinstance(design.get("rows"), list):
+        raise invalid('"design" must be a rough design with "id" and "rows".')
+    if task_type not in ("vision", "video", "text"):
+        raise invalid('"task_type" must be vision, video or text.')
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise invalid('"prompt" must say what workers should judge.')
+    if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
+        raise invalid('"data" must be a summary of the HIT data with "columns".')
+    errors, previous = data.get("errors"), data.get("previous")
+    if errors is not None and not (isinstance(errors, list) and all(isinstance(e, str) for e in errors)):
+        raise invalid('"errors" must be a list of strings.')
+    if previous is not None and not isinstance(previous, dict):
+        raise invalid('"previous" must be the previous binding.')
+    if len(json.dumps(data, ensure_ascii=False)) > BINDING_REQUEST_LIMIT:
+        raise invalid(f"The binding request is too large (at most {BINDING_REQUEST_LIMIT // 1024} KB). Send a summary of the data, not the data.")
+    return {"design": design, "task_type": task_type, "prompt": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous}
+
+
+@router.post("/bindings")
+async def create_binding(request: Request) -> dict:
+    """가안과 데이터 요약으로 LLM 에 binding 을 묻는다 (유료 호출). 검사와 재요청은 브라우저가 맡는다."""
+    settings = _settings(request)
+    body = await read_body(request)
+    task = binding_request(body)
+    check_api_allowed(body.get("allow_api") is True, settings)
+    name = binding_model_name(settings.env_file)
+    try:
+        config = load_model_config(name, settings.models_dir)
+    except ConfigError as error:
+        raise invalid(f"The binding model config {name!r} cannot be used: {error}") from None
+    log_dir = settings.output_dir / BINDING_DIR / f"binding-{now_iso().replace(':', '').replace('.', '-')}-{uuid.uuid4().hex[:6]}"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # OpenRouter 를 기다리는 동안 다른 요청을 막지 않게 스레드에서 부른다
+        result = await asyncio.to_thread(write_binding, config, resolve_api_key(None, settings.env_file), True, task, log_dir)
+    except PlannerError as error:
+        raise invalid(f"The model call failed: {error}") from None
+    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag}}
 
 
 @router.post("/job-groups", status_code=202)

@@ -9,7 +9,7 @@ Project는 worker에게 보일 화면(layout)과 작업 속성(제목, 보상, �
 ## Create의 화면: Project와 batch
 
 Create 위쪽에는 MTurk와 같은 두 갈래가 있습니다. 둘의 차이는 **무엇을 만드느냐**입니다.
-그 옆의 `Tutorial` 탭(`/create/tutorial`)은 이 문서의 내용을 따라 하기 순서로 줄인 한국어 안내이며, 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
+그 옆의 `Tutorial` 탭(`/create/tutorial`)은 이 문서의 내용을 따라 하기 순서로 줄인 안내이며, 오른쪽 위에서 한국어(`KR`)와 영어(`EN`)를 고릅니다. 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
 
 | | `New Project` | `New Batch with an Existing Project` |
 |---|---|---|
@@ -68,7 +68,7 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 | B | `Stacked` | 위 데이터, 아래 왼쪽 객관식, 아래 오른쪽 약술형 | 객관식, 약술형(선택) |
 | C | `Comparison` | 위에 데이터 두 칸, 아래 고르는 문항 | 둘 중 하나 또는 비슷함 |
 | D | `Tabs` | 탭 3개, 탭마다 데이터와 객관식 | 탭마다 객관식 |
-| E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 체크 |
+| E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 라디오로 하나 고르기 |
 
 `Save the sample layout without data`로 저장한 Project의 데이터 컬럼은 task 종류와 가안에 따라 정해지며, 2단계 미리보기 위의 `Sample data columns`에 나옵니다.
 
@@ -86,22 +86,55 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 `HIT data` 단계에서는 객체 하나가 HIT 하나인 JSON 배열을 올립니다. 파일은 서버로 보내지 않고 브라우저 탭에만 둡니다. 새로고침하면 다시 올려야 하지만, 같은 탭에서 앞 단계에 다녀오면 남아 있습니다.
 
-파일을 올리면 첫 binding이 채워지고 오른쪽에 첫 HIT의 worker 화면이 나옵니다. binding은 **어떤 값이 어느 칸에 들어갈지** 적은 JSON입니다. 첫 binding은 글이 가장 긴 컬럼만 데이터 칸에 넣은 출발점이므로, 왼쪽 편집기에서 고치거나 `Upload binding`으로 파일을 올립니다. 위쪽에서 가안이나 task 종류를 바꾸면 값이 새 칸으로 옮겨지고, LLM을 부르지 않으므로 바로 다시 그려집니다.
+파일을 올리면 첫 binding이 채워지고 오른쪽에 첫 HIT의 worker 화면이 나옵니다. binding은 **어떤 값이 어느 칸에 들어갈지** 적은 JSON입니다. 첫 binding은 글이 가장 긴 컬럼만 데이터 칸에 넣은 출발점이므로, 왼쪽 편집기에서 고치거나 `Upload binding`으로 파일을 올리거나 [LLM에게 쓰게 합니다](#llm에게-binding-쓰게-하기). 위쪽에서 가안이나 task 종류를 바꾸면 값이 새 칸으로 옮겨지고, LLM을 부르지 않으므로 바로 다시 그려집니다.
 
 ```json
 {
   "design": "item-list",
   "task_type": "text",
-  "repeat": { "over": "retrieved_chunk", "label": "Chunk" },
+  "repeat": {
+    "over": "retrieved_chunk",
+    "label": "Chunk"
+  },
   "slots": {
     "data": [
-      { "label": "Query", "from": "query[i]" },
-      { "label": "Chunk", "from": "retrieved_chunk[i]" }
+      {
+        "label": "Query",
+        "from": "query[i]"
+      },
+      {
+        "label": "Chunk",
+        "from": "retrieved_chunk[i]"
+      }
     ],
-    "checklist": { "name": "supported", "header": "Which atomic facts does this chunk support?", "items": "atomic_facts[i]" }
+    "item-choice": {
+      "name": "supported",
+      "header": "Does this chunk support each atomic fact?",
+      "items": "atomic_facts[i]",
+      "options": [
+        [
+          "grounded",
+          "Grounded"
+        ],
+        [
+          "not_grounded",
+          "Not grounded"
+        ]
+      ]
+    }
   },
-  "attention": { "flag": "attention_check[i]" },
-  "instructions": "For each chunk, read the query and the chunk, then check every atomic fact that the chunk supports."
+  "reference": {
+    "selected": "chunk_fact_relevance_check",
+    "key": "Chunk {i}",
+    "item": "Atomic fact{n}",
+    "yes": "grounded",
+    "no": "not_grounded"
+  },
+  "attention": {
+    "flag": "attention_check[i]",
+    "expected": "not_grounded"
+  },
+  "instructions": "For each chunk, read the query and the chunk, then decide whether the chunk supports each atomic fact."
 }
 ```
 
@@ -109,33 +142,56 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 |---|---|
 | `design`, `task_type` | 가안(`side-by-side`, `stacked`, `compare`, `tabs`, `item-list`)과 종류(`vision`, `video`, `text`)입니다. |
 | `repeat` | HIT 안의 항목마다 탭을 하나씩 만듭니다. `over`는 목록을 가리키는 경로, `label`은 탭 제목입니다. `Tabs` 가안에는 필수입니다. |
-| `slots.data` (`Comparison`은 `data-a`, `data-b`) | 데이터 칸입니다. `{ "label", "from" }`이며, 여러 값을 보이려면 배열로 씁니다. |
+| `slots.data` (`Comparison`은 `data-a`, `data-b`) | 데이터 칸입니다. `{ "label", "from" }`이며, 여러 값을 보이려면 배열로 씁니다. `kind`(`image`, `video`, `text`)를 주면 값을 그 모양으로 보입니다. 기본은 task 종류를 따르므로, Vision·Video에서 글을 함께 보이려면 그 값에 `"kind": "text"`를 줍니다. |
 | `slots.choice`, `slots.compare` | 객관식입니다. `header`, `name`, `options`(`["yes", "no"]` 또는 `[["yes", "Yes"], …]`)를 씁니다. |
-| `slots.checklist` | 항목별 체크입니다. `items`는 경로나 글 목록입니다. |
+| `slots.item-choice` | 항목마다 라디오로 하나를 고릅니다. `header`, `name`, `options`, `items`(경로나 글 목록)를 씁니다. 모든 항목에 답해야 제출할 수 있습니다. |
 | `slots.free-text` | 약술형입니다. `header`, `name`, `placeholder`를 씁니다. |
-| `attention.flag` | 항목이 attention인지 가리키는 경로입니다. 미리보기에서 번호를 알리는 데만 씁니다. |
+| `context` | 어느 칸에도 맞지 않지만 worker가 읽어야 하는 값입니다. 데이터 칸과 같은 모양이고, 칸들 위에 글로 보입니다. 예를 들어 비교할 두 답의 질문입니다. |
+| `reference` | 데이터의 기존 라벨로 Review의 대조 기준을 만듭니다. 아래 표를 봅니다. |
+| `attention` | `flag`는 항목이 attention인지 가리키는 경로이고, `expected`는 그 항목에 와야 할 답입니다. `expected`가 있으면 게시할 때 판정합니다. |
 | `instructions` | worker에게 보일 안내문입니다. 없으면 task 종류의 예시 안내문을 씁니다. |
 | `unused` | 가안을 바꿀 때 새 가안에 없는 문항을 보관하는 자리입니다. 직접 쓰지 않아도 됩니다. |
 
 경로는 컬럼 이름 뒤에 `[i]`(지금 탭의 항목), `[0]`(번호), `.key`(객체의 키)를 붙입니다. 셀이 `"['a', 'b']"` 같은 Python 리스트 문자열이어도 구조로 읽습니다.
 
+`reference`는 라벨의 모양에 따라 셋 중 하나로 씁니다. 키의 `{i}`는 0부터 세는 탭 번호, `{n}`은 1부터 세는 항목 번호입니다.
+
+| 모양 | 쓰는 경우 |
+|---|---|
+| `{"value": "<경로>"}` | 칸마다 라벨이 있을 때입니다. `item-choice`면 항목 순서의 목록입니다. |
+| `{"map": "<경로>", "key": "general_{i}_{n}"}` | 키에 번호가 든 객체일 때입니다. |
+| `{"selected": "<경로>", "key": "Chunk {i}", "item": "Atomic fact{n}", "yes": "…", "no": "…"}` | 긍정인 항목만 적힌 목록일 때입니다. 적히지 않은 항목은 `no`입니다. |
+
+라벨이 문항의 선택지에 없거나 앞쪽 HIT에서 라벨을 찾지 못하면 오류로 알립니다. attention 항목은 대조 기준에서 빠집니다.
+
 - 잘못된 binding은 이유를 알리고 미리보기와 `Use this design`을 막습니다. 예를 들어 없는 컬럼, 가안에 없는 칸, `repeat` 없이 쓴 `[i]`가 그렇습니다.
+- Vision·Video의 칸에 주소가 아닌 값이 들어가면 오류로 알립니다.
+- worker에게 보일 글(안내문, 문항, 라벨, 선택지)은 영어로 씁니다. 한글이나 한자, 가나가 있으면 오류로 알리고, LLM이 쓴 답이면 다시 쓰게 합니다. 데이터의 값은 검사하지 않습니다.
 - binding에 없는 문항 칸은 예시 문항으로 보이고 경고합니다. 게시 전에 실제 문항으로 바꿉니다.
 - HIT마다 항목 수가 다르면 가장 큰 수만큼 탭을 만들고 경고합니다. 짧은 HIT에는 빈 탭이 남습니다.
 
-게시용 데이터는 칸마다 새 컬럼(`slot_data_1`, `slot_checklist_1` …)을 만들고, binding이 쓰지 않은 원래 컬럼(`qid`, `attention_check` 등)은 그대로 둡니다. 글은 HTML로 해석되지 않게 바꿔 넣습니다.
+게시용 데이터는 칸마다 새 컬럼(`slot_data_1`, `slot_item_choice_1` …)을 만들고, binding이 쓰지 않은 원래 컬럼(`qid`, `attention_check` 등)은 그대로 둡니다. 글은 HTML로 해석되지 않게 바꿔 넣습니다.
 
-**아직 하지 않는 것**: `attention.flag`는 게시 설정으로 이어지지 않습니다. attention 판정이 필요하면 `Review settings`에서 따로 정합니다.
+`reference`와 `attention.expected`가 있으면 `slot_reference`, `slot_attention` 컬럼을 만들고 `Review settings`에 미리 채웁니다. 두 컬럼은 worker에게 보내지 않습니다. 가안을 바꿔 문항 칸이 달라지면 이 둘은 `unused`에 보관했다가, 돌아오면 되살립니다.
 
 [example/6-rough-design/](../example/6-rough-design/)에 합성 데이터와 손으로 쓴 binding이 있으니 그대로 올려 볼 수 있습니다.
 
+### LLM에게 binding 쓰게 하기
+
+`HIT data` 화면의 `What should workers judge?`에 요청 문장을 적고 `Allow API calls`를 체크한 뒤 `Write the binding`을 누릅니다. 유료 호출이므로 서버의 `AGENT_ALLOW_API=1`과 이 체크가 모두 있어야 합니다.
+
+- **보내는 것**: 고른 가안의 칸 목록, task 종류, 요청 문장, 데이터 요약입니다. 요약에는 컬럼마다 값의 모양과 잘린 표본(HIT 두 개)만 들어가며, 파일 전체는 보내지 않습니다.
+- **받는 것**: 같은 형식의 binding 하나입니다. 브라우저가 바로 검사하고, 오류가 있으면 오류와 이전 답을 붙여 최대 3번까지 묻습니다. 그래도 오류가 남으면 마지막 답을 편집기에 두고 알립니다.
+- **결과 확인**: 답은 편집기에 들어가고 미리보기가 바뀝니다. 직접 고칠 수 있고, `Undo`로 이전 binding으로 돌아갈 수 있습니다. 쓴 모델과 시도 횟수, 비용은 버튼 아래에 나옵니다.
+
+LLM은 binding만 쓰고 HTML은 쓰지 않습니다. 화면은 코드가 만들므로 답 형식과 Review 호환은 사람이 쓴 binding과 같습니다. 호출마다 요청과 응답이 `output/bindings/` 아래에 남습니다.
+
+모델 설정은 `deepseek-v4.1-flash`(`environment/models/deepseek-v4.1-flash.yaml`)이고, `environment/.env`의 `AGENT_BINDING_MODEL`로 바꿀 수 있습니다. 형식 설명서는 [agent/binding_reference.md](../agent/binding_reference.md)입니다.
+
 ### 앞으로 할 일
 
-지금은 사람이 binding을 씁니다. 다음 작업은 아래 순서로 진행할 계획입니다.
-
-1. **LLM이 binding 쓰기**: 가안 명세와 데이터 분석 결과를 받아 같은 형식의 binding을 씁니다. 화면 조립과 검사는 지금 코드를 그대로 씁니다.
-2. **수정 반복**: 드롭다운으로 칸을 고치거나 prompt로 수정을 요청합니다 (`Others`, user feedback).
-3. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
+1. **수정 반복**: 드롭다운으로 칸을 고치거나 prompt로 수정을 요청합니다 (`Others`, user feedback).
+2. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
 
 ### 다른 방법으로 시작하기
 
