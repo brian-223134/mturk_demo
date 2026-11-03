@@ -124,7 +124,7 @@ MTurk의 Requester 화면처럼 **Project**를 만든 뒤, Project에 JSON 데�
 위쪽에 탭이 세 개 있습니다.
 
 - **`New Batch with an Existing Project`**: Project 목록입니다. 행마다 `Publish Batch`(JSON을 올려 게시), `Edit`, `Copy`, `Delete`가 있습니다.
-- **`New Project`**: 화면 배치 가안(rough design) 5개 중 하나를 고르고, Vision·Video·Text 중 task 종류를 고르면 예시 자료를 넣은 worker 화면이 보입니다. 그대로 쓰면 Project가 저장되고 `Upload JSON`으로 넘어갑니다. 아래의 `Other ways to start`에서 starter 템플릿 9종, HTML 올리기, 원본 데이터에서 자동으로 만들기(`Generate from raw data`)도 고를 수 있습니다.
+- **`New Project`**: 화면 배치 가안(rough design) 5개 중 하나를 고르고, Vision·Video·Text 중 task 종류를 고르면 예시 자료를 넣은 worker 화면이 보입니다. 이어서 이미 HIT로 묶인 JSON을 올리면 실제 데이터를 가안에 넣어 미리 볼 수 있고, 마음에 들면 Project로 저장해 게시합니다. 아래의 `Other ways to start`에서 starter 템플릿 9종, HTML 올리기, 원본 데이터에서 자동으로 만들기(`Generate from raw data`)도 고를 수 있습니다.
 - **`Tutorial`**: 처음 쓰는 사람을 위한 한국어 따라 하기 안내입니다. 단계마다 그 화면으로 바로 가는 버튼이 있습니다.
 
 Project는 세 탭으로 만듭니다. `Enter Properties`에서 worker에게 보일 제목과 설명, 보상, HIT당 인원, 기간, worker 조건을 정하고, `Design Layout`에서 템플릿 HTML을 고치며 오른쪽의 worker 화면 미리보기를 바로 확인하고, `Preview and Finish`에서 요약을 보고 저장합니다.
@@ -188,7 +188,9 @@ example/
 │                       excel-cp949.csv, large-rows.csv
 ├─ 4-saved-templates/   chunk-fact-relevance-input.csv,      콘솔에 미리 저장된 템플릿에 넣을 입력
 │                       query-fact-coverage-input.csv
-└─ 5-project/           passage-relevance.json               starter 로 만든 Project 에 넣을 입력 (attention 행, 정답 컬럼)
+├─ 5-project/           passage-relevance.json               starter 로 만든 Project 에 넣을 입력 (attention 행, 정답 컬럼)
+└─ 6-rough-design/      chunk-fact-hits.json,                rough design 에 넣어 미리 볼 HIT 데이터와 손으로 쓴 binding
+                        chunk-fact.binding.json
 ```
 
 ### starter로 attention check가 있는 batch 게시하기

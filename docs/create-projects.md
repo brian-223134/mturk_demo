@@ -59,8 +59,8 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 ### rough design으로 시작하기
 
 1. **`Rough design`**: 도형으로 그린 가안 5개 중 하나를 고르고 `Next`를 누릅니다. 이 단계에서는 칸의 자리만 보입니다.
-2. **`Task type and preview`**: `Vision`, `Video`, `Text` 중 하나를 고르면 고른 가안에 예시 자료를 넣은 worker 화면이 아래에 나옵니다. 종류를 바꾸면 미리보기도 바로 바뀌고, `Submit`을 누르면 제출되었을 답을 보여 줍니다. Project 이름을 확인하고 `Use this design`을 누르면 Project가 저장됩니다. 이름과 layout이 모두 같은 Project가 이미 있으면 새로 만들지 않고 그 Project를 씁니다.
-3. **`HIT data`**: 저장한 Project의 Publish Batch가 `Upload JSON`부터 열립니다.
+2. **`Task type and preview`**: `Vision`, `Video`, `Text` 중 하나를 고르면 고른 가안에 예시 자료를 넣은 worker 화면이 아래에 나옵니다. 종류를 바꾸면 미리보기도 바로 바뀌고, `Submit`을 누르면 제출되었을 답을 보여 줍니다.
+3. **`HIT data`**: 이미 HIT로 묶인 JSON을 올려 실제 데이터로 미리 봅니다. 아래 [HIT 데이터를 가안에 넣어 보기](#hit-데이터를-가안에-넣어-보기)에 정리되어 있습니다. `Use this design`을 누르면 Project가 저장되고, 정렬한 데이터가 올라간 Publish Batch가 열립니다. 이름과 layout이 모두 같은 Project가 이미 있으면 새로 만들지 않고 그 Project를 씁니다. 데이터 없이 예시 layout만 저장하려면 `Save the sample layout without data`를 누릅니다.
 
 | 가안 | 이름 | 배치 | 답 |
 |---|---|---|---|
@@ -70,7 +70,7 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 | D | `Tabs` | 탭 3개, 탭마다 데이터와 객관식 | 탭마다 객관식 |
 | E | `Item by item` | 왼쪽 데이터, 오른쪽 항목 목록 | 항목마다 체크 |
 
-데이터 컬럼은 task 종류와 가안에 따라 정해지며, 미리보기 위의 `Data columns you will upload next`에 나옵니다.
+`Save the sample layout without data`로 저장한 Project의 데이터 컬럼은 task 종류와 가안에 따라 정해지며, 2단계 미리보기 위의 `Sample data columns`에 나옵니다.
 
 | task 종류 | 데이터 컬럼 | 값 |
 |---|---|---|
@@ -80,7 +80,62 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 `Comparison`은 컬럼 이름 뒤에 `_a`, `_b`가, `Tabs`는 `_1`~`_3`이 붙습니다. `Item by item`에는 항목 목록을 배열로 적는 `items` 컬럼이 더 있습니다.
 
-미리보기의 자료와 문항은 예시입니다. 실제 작업에 맞는 문항은 Project 편집기의 `Design Layout`에서 고칩니다. `Video` 미리보기에는 영상 파일 대신 표본 그림을 플레이어 모양으로 보여 주며, 데이터에 영상 주소를 넣으면 실제 플레이어가 나옵니다.
+2단계 미리보기의 자료와 문항은 예시입니다. `Video` 미리보기에는 영상 파일 대신 표본 그림을 플레이어 모양으로 보여 주며, 데이터에 영상 주소를 넣으면 실제 플레이어가 나옵니다.
+
+### HIT 데이터를 가안에 넣어 보기
+
+`HIT data` 단계에서는 객체 하나가 HIT 하나인 JSON 배열을 올립니다. 파일은 서버로 보내지 않고 브라우저 탭에만 둡니다. 새로고침하면 다시 올려야 하지만, 같은 탭에서 앞 단계에 다녀오면 남아 있습니다.
+
+파일을 올리면 첫 binding이 채워지고 오른쪽에 첫 HIT의 worker 화면이 나옵니다. binding은 **어떤 값이 어느 칸에 들어갈지** 적은 JSON입니다. 첫 binding은 글이 가장 긴 컬럼만 데이터 칸에 넣은 출발점이므로, 왼쪽 편집기에서 고치거나 `Upload binding`으로 파일을 올립니다. 위쪽에서 가안이나 task 종류를 바꾸면 값이 새 칸으로 옮겨지고, LLM을 부르지 않으므로 바로 다시 그려집니다.
+
+```json
+{
+  "design": "item-list",
+  "task_type": "text",
+  "repeat": { "over": "retrieved_chunk", "label": "Chunk" },
+  "slots": {
+    "data": [
+      { "label": "Query", "from": "query[i]" },
+      { "label": "Chunk", "from": "retrieved_chunk[i]" }
+    ],
+    "checklist": { "name": "supported", "header": "Which atomic facts does this chunk support?", "items": "atomic_facts[i]" }
+  },
+  "attention": { "flag": "attention_check[i]" },
+  "instructions": "For each chunk, read the query and the chunk, then check every atomic fact that the chunk supports."
+}
+```
+
+| 키 | 설명 |
+|---|---|
+| `design`, `task_type` | 가안(`side-by-side`, `stacked`, `compare`, `tabs`, `item-list`)과 종류(`vision`, `video`, `text`)입니다. |
+| `repeat` | HIT 안의 항목마다 탭을 하나씩 만듭니다. `over`는 목록을 가리키는 경로, `label`은 탭 제목입니다. `Tabs` 가안에는 필수입니다. |
+| `slots.data` (`Comparison`은 `data-a`, `data-b`) | 데이터 칸입니다. `{ "label", "from" }`이며, 여러 값을 보이려면 배열로 씁니다. |
+| `slots.choice`, `slots.compare` | 객관식입니다. `header`, `name`, `options`(`["yes", "no"]` 또는 `[["yes", "Yes"], …]`)를 씁니다. |
+| `slots.checklist` | 항목별 체크입니다. `items`는 경로나 글 목록입니다. |
+| `slots.free-text` | 약술형입니다. `header`, `name`, `placeholder`를 씁니다. |
+| `attention.flag` | 항목이 attention인지 가리키는 경로입니다. 미리보기에서 번호를 알리는 데만 씁니다. |
+| `instructions` | worker에게 보일 안내문입니다. 없으면 task 종류의 예시 안내문을 씁니다. |
+| `unused` | 가안을 바꿀 때 새 가안에 없는 문항을 보관하는 자리입니다. 직접 쓰지 않아도 됩니다. |
+
+경로는 컬럼 이름 뒤에 `[i]`(지금 탭의 항목), `[0]`(번호), `.key`(객체의 키)를 붙입니다. 셀이 `"['a', 'b']"` 같은 Python 리스트 문자열이어도 구조로 읽습니다.
+
+- 잘못된 binding은 이유를 알리고 미리보기와 `Use this design`을 막습니다. 예를 들어 없는 컬럼, 가안에 없는 칸, `repeat` 없이 쓴 `[i]`가 그렇습니다.
+- binding에 없는 문항 칸은 예시 문항으로 보이고 경고합니다. 게시 전에 실제 문항으로 바꿉니다.
+- HIT마다 항목 수가 다르면 가장 큰 수만큼 탭을 만들고 경고합니다. 짧은 HIT에는 빈 탭이 남습니다.
+
+게시용 데이터는 칸마다 새 컬럼(`slot_data_1`, `slot_checklist_1` …)을 만들고, binding이 쓰지 않은 원래 컬럼(`qid`, `attention_check` 등)은 그대로 둡니다. 글은 HTML로 해석되지 않게 바꿔 넣습니다.
+
+**아직 하지 않는 것**: `attention.flag`는 게시 설정으로 이어지지 않습니다. attention 판정이 필요하면 `Review settings`에서 따로 정합니다.
+
+[example/6-rough-design/](../example/6-rough-design/)에 합성 데이터와 손으로 쓴 binding이 있으니 그대로 올려 볼 수 있습니다.
+
+### 앞으로 할 일
+
+지금은 사람이 binding을 씁니다. 다음 작업은 아래 순서로 진행할 계획입니다.
+
+1. **LLM이 binding 쓰기**: 가안 명세와 데이터 분석 결과를 받아 같은 형식의 binding을 씁니다. 화면 조립과 검사는 지금 코드를 그대로 씁니다.
+2. **수정 반복**: 드롭다운으로 칸을 고치거나 prompt로 수정을 요청합니다 (`Others`, user feedback).
+3. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
 
 ### 다른 방법으로 시작하기
 
