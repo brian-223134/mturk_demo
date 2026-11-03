@@ -1114,12 +1114,16 @@ a.btn:hover {
 }
 .binding-split {
   display: grid;
-  grid-template-columns: minmax(280px, 2fr) minmax(0, 5fr);
+  grid-template-columns: minmax(340px, 2fr) minmax(0, 5fr);
   gap: 16px;
   align-items: start;
 }
 .binding-column {
   min-width: 0;
+}
+.binding-column:last-child {
+  position: sticky;
+  top: 8px;
 }
 .binding-editor {
   width: 100%;
@@ -1138,6 +1142,9 @@ label.btn .dropzone-input {
 @media (max-width: 1000px) {
   .binding-split {
     grid-template-columns: 1fr;
+  }
+  .binding-column:last-child {
+    position: static;
   }
 }
 
@@ -1167,6 +1174,74 @@ label.btn .dropzone-input {
 }
 .binding-agent-actions .check-label {
   margin-right: auto;
+}
+.binding-form-wrap {
+  min-width: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+.binding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bf-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border, #d9dde3);
+  border-radius: var(--radius);
+}
+.bf-section legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+.bf-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border, #d9dde3);
+}
+.bf-control,
+.bf-options {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.bf-label {
+  font-size: 12px;
+  color: var(--muted, #5f6b7a);
+}
+.bf-control input,
+.bf-control select,
+.bf-control textarea,
+.bf-section > textarea,
+.bf-option input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+.bf-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.bf-section .btn-link {
+  align-self: flex-start;
+}
+.binding-json {
+  margin-top: 10px;
+}
+.binding-json summary {
+  cursor: pointer;
+  font-weight: 600;
 }
 .binding-thread {
   display: flex;

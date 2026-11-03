@@ -3,7 +3,8 @@
 //   /create/new/design/:designId(/:taskType)  Vision / Video / Text 고르기. 고른 가안에 예시 자료를 넣어 worker 화면으로 보인다
 //   /create/new/design/:designId/:taskType/data  이미 HIT 로 묶인 JSON 을 올리고 binding 으로 칸에 넣어 실제 데이터로 미리 본다.
 //       binding 은 요청 문장을 받아 LLM 이 쓰거나(유료 호출, 사용자가 허용해야 한다) 사람이 고친다.
-//       쓴 뒤에는 같은 칸이 수정 요청이 되고, 답마다 대화에 쌓여 어느 때로든 돌아갈 수 있다 (lib/binding-revision.js)
+//       쓴 뒤에는 같은 칸이 수정 요청이 되고, 답마다 대화에 쌓여 어느 때로든 돌아갈 수 있다 (lib/binding-revision.js).
+//       사람은 드롭다운 폼(binding-form.js)으로 고치고, JSON 편집기는 고급 기능으로 접어 둔다. 둘은 같은 binding 을 고친다
 // Project 는 미리보기가 끝난 뒤 `Use this design` 에서 저장한다. 올린 데이터는 탭의 메모리에만 두고 서버로 보내지 않는다.
 // 가안의 정의는 lib/rough-designs.js, binding 의 검사와 조립은 lib/design-binding.js 에 있다.
 
@@ -21,6 +22,7 @@ import { settingsFromProperties } from '../../lib/settings.js';
 import { STARTERS } from '../../lib/starters.js';
 import { extractPlaceholders } from '../../lib/template.js';
 import { navigate } from '../../router.js';
+import { bindingForm } from './binding-form.js';
 import { createSubnav, failureNotice, field, placeholderTags, segmented, stepFooter } from './common.js';
 import { pendingProjectNotice, presetChoice } from './new-project.js';
 
@@ -338,6 +340,7 @@ export function renderDesignData(root, params, signal) {
   const problemsSlot = el('div', { id: 'binding-problems' });
   const previewSlot = el('div', { id: 'bound-preview' });
   const editor = el('textarea', { id: 'binding-editor', className: 'binding-editor', rows: 16, spellcheck: 'false', 'aria-label': 'Binding' });
+  const formSlot = el('fieldset', { className: 'binding-form-wrap', id: 'binding-form-wrap' });
 
   function remember() {
     session = { file: state.file, reader: state.reader, binding: state.binding, prompt: state.prompt, authored: state.authored, versions: state.versions };
@@ -394,6 +397,26 @@ export function renderDesignData(root, params, signal) {
     );
   }
 
+  /** 폼을 지금 binding 으로 다시 그린다. 그리는 동안 잃는 입력 위치는 되돌린다. */
+  function renderForm() {
+    const focused = formSlot.contains(document.activeElement) ? document.activeElement.id : null;
+    if (!state.check?.design || !state.check?.taskType) {
+      formSlot.replaceChildren(muted('The form cannot read this binding. Fix the problems below in the JSON editor.'));
+      return;
+    }
+    formSlot.replaceChildren(bindingForm({ get: () => state.binding, check: state.check, reader: state.reader, onChange: changeFromForm }));
+    if (focused) document.getElementById(focused)?.focus();
+  }
+
+  function changeFromForm(next, structural) {
+    state.binding = next;
+    state.authored = true;
+    editor.value = JSON.stringify(next, null, 2);
+    clearTimeout(state.timer);
+    if (structural) applyText();
+    else state.timer = setTimeout(() => applyText({ keepForm: true }), CHECK_DEBOUNCE_MS);
+  }
+
   /** 미룬 검사를 지금 끝낸다. */
   function flushEdits() {
     clearTimeout(state.timer);
@@ -401,7 +424,7 @@ export function renderDesignData(root, params, signal) {
   }
 
   /** 편집기의 글을 읽어 검사하고 화면을 맞춘다. JSON 이 깨져 있으면 직전 미리보기를 지우고 이유를 알린다. */
-  function applyText() {
+  function applyText({ keepForm = false } = {}) {
     state.text = editor.value;
     let parsed;
     try {
@@ -409,23 +432,24 @@ export function renderDesignData(root, params, signal) {
     } catch (error) {
       state.parseFailed = true;
       state.check = { errors: [`The binding is not valid JSON: ${error.message}`], warnings: [], design: null, taskType: null, tabs: 0 };
-      showCheck();
+      showCheck({ keepForm });
       return;
     }
     state.parseFailed = false;
     state.binding = parsed;
     state.check = checkBinding(parsed, state.reader);
     remember();
-    showCheck();
+    showCheck({ keepForm });
   }
 
-  function showCheck() {
+  function showCheck({ keepForm = false } = {}) {
     const { errors, warnings } = state.check;
     problemsSlot.replaceChildren(
       ...[problemList('binding-errors', 'error', 'The binding cannot be used yet', errors), problemList('binding-warnings', 'warning', 'Check these before you publish', warnings)].filter(Boolean),
     );
     if (errors.length > 0) previewSlot.replaceChildren();
     renderControls();
+    if (!keepForm) renderForm();
     renderThread();
     refreshAgent();
     renderPreview();
@@ -488,6 +512,7 @@ export function renderDesignData(root, params, signal) {
     promptLabel.textContent = state.authored ? 'What should change?' : 'What should workers judge?';
     promptInput.placeholder = state.authored ? REVISE_PLACEHOLDER : WRITE_PLACEHOLDER;
     editor.readOnly = state.writing;
+    formSlot.disabled = state.writing;
   }
 
   function loadAgentInfo() {
@@ -652,9 +677,16 @@ export function renderDesignData(root, params, signal) {
           'div',
           { className: 'binding-column' },
           el('div', { className: 'panel-head' }, el('h4', { className: 'section-title' }, 'Binding'), el('span', { className: 'panel-actions' }, el('label', { className: 'btn btn-small', for: 'binding-file' }, 'Upload binding', bindingFile))),
-          muted('Says which data goes into which slot. Use a column name, then [i] for the current item when the HIT repeats. You can edit what the model wrote.'),
-          editor,
+          muted('Choose which data goes into which slot. The lists come from your file. You can change what the model wrote.'),
           problemsSlot,
+          formSlot,
+          el(
+            'details',
+            { className: 'binding-json', id: 'binding-json' },
+            el('summary', {}, 'Edit as JSON (advanced)'),
+            muted('A path is a column name, then [i] for the current item when the HIT repeats, [0] for a fixed item, or .key for a key.'),
+            editor,
+          ),
         ),
         el('div', { className: 'binding-column' }, previewSlot),
       ),

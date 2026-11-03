@@ -487,6 +487,17 @@ function itemsOf(spec, reader, rowIndex, tabIndex) {
   return asItems(resolve(parsed, reader.cell(rowIndex, parsed.column), tabIndex ?? 0));
 }
 
+/** 폼에 보일 칸의 값. 없는 문항 칸은 예시로 채운다. */
+export function filledSlots(binding, design, taskType) {
+  return normalize(binding, design, taskType).slots;
+}
+
+/** 대조 기준과 attention 이 가리키는 문항의 { slot, options }. 문항이 없는 가안이면 null. */
+export function judgedOptions(binding, design, taskType) {
+  const slot = judgedSlot(design);
+  return slot ? { slot, options: normalize(binding, design, taskType).slots[slot].options } : null;
+}
+
 /** 게시 설정에 얹을 값: 대조 기준과 attention 의 컬럼. */
 export function bindingSettings(binding) {
   const settings = {};
