@@ -443,6 +443,36 @@ describe('binding 의 layout', () => {
   });
 });
 
+describe('LLM 설명서의 배치 요소', () => {
+  const reference = readFileSync(new URL('../../agent/binding_reference.md', import.meta.url), 'utf8');
+  const section = reference.slice(reference.indexOf('## Laying out the page'), reference.indexOf('## Revising a binding'));
+
+  it('코드가 아는 칸을 표에 모두 적고, 없는 칸은 적지 않는다', () => {
+    const boxes = section.slice(section.indexOf('| box |'), section.indexOf('### The `layout` key'));
+    const listed = boxes.split('\n').filter((line) => line.startsWith('| `')).flatMap((line) => [...line.split('|')[1].matchAll(/`([a-z-]+)`/g)].map((match) => match[1]));
+    assert.deepEqual(listed.sort(), Object.keys(SLOT_LABELS).sort());
+  });
+
+  it('예시 배치는 모두 검사를 통과한다', () => {
+    const blocks = [...section.matchAll(/```json\n([\s\S]*?)\n```/g)].map((match) => JSON.parse(match[1]));
+    assert.equal(blocks.length, 3);
+    for (const layout of blocks) assert.deepEqual(layoutErrors(layout), []);
+  });
+
+  it('검사의 한도를 그대로 적는다', () => {
+    assert.match(section, /at most 6/);
+    assert.match(section, /at most 3 columns/);
+    assert.deepEqual(layoutErrors({ rows: ['data', 'data-a', 'data-b', 'choice', 'compare', 'free-text'].map((slot) => ({ slots: [slot] })) }), []);
+    assert.deepEqual(layoutErrors({ rows: [{ columns: '1fr 99fr 2fr', slots: ['data', 'choice', 'free-text'] }] }), []);
+  });
+
+  it('배치 요청은 할 수 없는 요청이 아니다', () => {
+    const cannot = reference.slice(reference.indexOf('## What you cannot do'));
+    assert.match(cannot, /Moving, resizing, adding and removing boxes is yours/);
+    assert.doesNotMatch(cannot.slice(cannot.indexOf('{"cannot": "layout"')).split('\n')[0], /moves|resizes|adds/);
+  });
+});
+
 describe('대조 기준과 attention', () => {
   const rowsOf = (b, r = reader) => {
     const check = checkBinding(b, r);

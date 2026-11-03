@@ -39,6 +39,8 @@ def build_messages(request: dict) -> list[dict]:
         if request.get("earlier_requests"):
             task["earlier_requests"] = request["earlier_requests"]
     opening = "Revise the current binding as requested." if current else "Write the binding for this task."
+    # 설명서 안의 규칙만으로는 한국어 요청에 영어로 답할 때가 있어 요청 바로 앞에서 다시 말한다
+    opening += " Write `message` in the language of `request`."
     messages = [
         {"role": "system", "content": reference_text()},
         {"role": "user", "content": f"{opening}\n\n```json\n{_dump(task)}\n```"},

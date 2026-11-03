@@ -60,6 +60,10 @@ class MessagesTest(unittest.TestCase):
         self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user"])
         self.assertIn('"current"', messages[1]["content"])
 
+    def test_message_language_is_asked_right_before_the_request(self):
+        for request in (REQUEST, {**REQUEST, "current": {"design": "item-list"}}):
+            self.assertIn("Write `message` in the language of `request`.", binding_module.build_messages(request)[1]["content"].split("```json")[0])
+
     def test_no_errors_means_no_previous(self):
         messages = binding_module.build_messages({**REQUEST, "previous": {"design": "x"}, "errors": []})
         self.assertEqual(len(messages), 2)
@@ -100,6 +104,12 @@ class WriteTest(unittest.TestCase):
         with mock.patch("agent.planner.openrouter.OpenRouterPlanner._post", return_value=payload):
             result = binding_module.write_binding(config(), "key", True, REQUEST)
         self.assertEqual(result["provider"], "Parasail")
+
+    def test_layout_comes_back_with_the_binding(self):
+        layout = {"rows": [{"columns": "2fr 3fr", "slots": ["item-choice", "data"]}]}
+        result = self.reply_of({"slots": {"data": {"from": "chunks[i]"}}, "layout": layout, "message": "Moved it."})
+        self.assertEqual(result["binding"]["layout"], layout)
+        self.assertEqual(result["message"], "Moved it.")
 
     def reply_of(self, reply):
         payload = {"choices": [{"message": {"content": json.dumps(reply)}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 5, "completion_tokens": 2, "cost": 0.01}}
