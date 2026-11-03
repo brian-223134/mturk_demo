@@ -308,6 +308,9 @@ def test_binding_rejects_bad_requests(client: TestClient) -> None:
         ({"data": {"rows": []}}, '"data"'),
         ({"errors": "no"}, '"errors"'),
         ({"previous": []}, '"previous"'),
+        ({"current": []}, '"current"'),
+        ({"earlier_requests": "no"}, '"earlier_requests"'),
+        ({"earlier_requests": [1]}, '"earlier_requests"'),
         ({"data": {"columns": [{"name": "x" * 300_000}]}}, "too large"),
     ]:
         response = client.post("/api/agent/bindings", json={**BINDING_BODY, **change})
@@ -335,6 +338,24 @@ def test_binding_returns_the_model_reply(make_client, monkeypatch) -> None:
     assert seen["request"]["errors"] == ["bad path"] and seen["request"]["previous"] == {"design": "x"}
     assert "allow_api" not in seen["request"], "허용 여부는 모델에 보내지 않는다"
     assert seen["log_dir"].is_dir() and seen["log_dir"].parent.name == "bindings"
+
+
+def test_binding_revision_reaches_the_agent_and_cannot_comes_back(make_client, monkeypatch) -> None:
+    """수정 요청은 current 와 earlier_requests 를 agent 로 넘기고, 할 수 없다는 답은 binding 없이 돌아온다."""
+    seen = {}
+
+    def fake_write(config, api_key, allow_api, request, log_dir):
+        seen.update(request=request)
+        return {"binding": None, "cannot": "layout", "message": "Use the buttons.", "usage": {"calls": 1}}
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_binding", fake_write)
+    with make_client(api_allowed=True) as client:
+        response = client.post("/api/agent/bindings", json={**BINDING_BODY, "current": {"design": "item-list"}, "earlier_requests": ["Use Yes and No."]})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["binding"] is None and body["cannot"] == "layout" and body["message"] == "Use the buttons."
+    assert seen["request"]["current"] == {"design": "item-list"}
+    assert seen["request"]["earlier_requests"] == ["Use Yes and No."]
 
 
 def test_binding_reports_a_failed_call(make_client, monkeypatch) -> None:

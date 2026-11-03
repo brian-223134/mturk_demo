@@ -10,6 +10,8 @@ Reply with **one JSON object** and nothing else.
 - `task_type`: `vision`, `video` or `text`.
 - `request`: what the requester wants workers to judge. Follow it. The questions you write come from this text.
 - `data`: the shape of the requester's HIT data. Each entry of `columns` has the column `name`, its `shape`, and `samples` from real HITs. Long texts are cut in the samples; the real values are longer.
+- `current`: only when the requester already has a binding. `request` then says what to change. See [Revising a binding](#revising-a-binding).
+- `earlier_requests`: only with `current`. What the requester asked before, oldest first.
 
 ## Keys of a binding
 
@@ -23,6 +25,7 @@ Reply with **one JSON object** and nothing else.
 | `reference` | no | Existing labels to compare worker answers with. See below. Set it when a column holds labels for the question being asked. |
 | `attention` | no | `{"flag": "<path>", "expected": "<option value>"}` when a column marks attention checks with 1. `expected` is the answer attention items must get; give it when the request or the data tells you, otherwise leave it out. |
 | `instructions` | yes | One or two sentences that tell workers what to do. Do not mention attention checks. |
+| `message` | yes | One or two sentences to the requester: what you did, and anything you could not do. Write it in the language of `request`. It is not shown to workers. |
 
 Write `instructions`, `header`, `label`, options and `placeholder` in **English**, even when the request or the data is in another language. The console rejects any other language in these fields.
 
@@ -114,6 +117,31 @@ The data has list columns `query`, `retrieved_chunk` and `atomic_facts` of the s
   "instructions": "For each chunk, read the query and the chunk, then decide whether the chunk supports each atomic fact."
 }
 ```
+
+The example leaves out `message`; your reply includes it next to the other keys.
+
+## Revising a binding
+
+When the input has `current`, reply with the whole revised binding, not only the part that changed.
+
+- Change what `request` asks for and nothing else. Copy every other key exactly as it is in `current`, including `context`, answer `name`s, `reference` and `attention`.
+- An option is a `[value, label]` pair. When `request` only renames what workers see, change the labels and keep the values.
+- Keep `instructions` word for word, unless `request` asks to change them or they mention something you removed. A renamed field or a reworded question is no reason to touch them; if the wording no longer matches, say so in `message`.
+- Keep the binding consistent. When you rename option values, update `reference` (`yes`, `no`) and `attention.expected` to the new values. If `reference` uses labels from the data, keep the option values equal to those labels.
+- Remove `reference` or `attention` only when `request` asks for that.
+- Use `earlier_requests` only to understand words such as "that one". Do not apply them again; their results are already in `current`.
+- `message` says only what the reply really does. Judge its language by the sentence of `request`, not by the column names in it: `Query 칸은 빼 줘` is Korean. When `request` gives worker text in another language, write the English text and say that workers see English.
+
+## What you cannot do
+
+The console puts each slot where the rough design has it, and nothing lets a requester move a single slot. What a requester can do is pick another rough design or task type with the buttons above the preview, so suggest only that, and only when it would help. When nothing in `request` can be done, reply with only these two keys:
+
+| reply | use it when |
+| --- | --- |
+| `{"cannot": "layout", "message": "<why>"}` | The request needs another rough design or task type, or moves, resizes or adds slots. |
+| `{"cannot": "format", "message": "<why>"}` | A binding cannot express it, for example drawing regions on an image, a new kind of answer control, or changing the values in the data. |
+
+When only a part can be done, do that part, reply with the binding, and say in `message` what you left out.
 
 ## When you are told about errors
 

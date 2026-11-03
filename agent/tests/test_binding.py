@@ -40,6 +40,26 @@ class MessagesTest(unittest.TestCase):
         self.assertEqual(json.loads(messages[2]["content"]), {"design": "x"})
         self.assertIn("- no column", messages[3]["content"])
 
+    def test_revision_sends_the_current_binding_and_earlier_requests(self):
+        current = {"design": "item-list", "slots": {"data": {"from": "chunks[i]"}}}
+        messages = binding_module.build_messages({**REQUEST, "current": current, "earlier_requests": ["Use Yes and No."]})
+        self.assertEqual([m["role"] for m in messages], ["system", "user"])
+        self.assertTrue(messages[1]["content"].startswith("Revise the current binding"))
+        self.assertIn('"current"', messages[1]["content"])
+        self.assertIn("Use Yes and No.", messages[1]["content"])
+
+    def test_first_write_has_no_current_key(self):
+        messages = binding_module.build_messages({**REQUEST, "current": None, "earlier_requests": []})
+        self.assertTrue(messages[1]["content"].startswith("Write the binding"))
+        self.assertNotIn('"current"', messages[1]["content"])
+        self.assertNotIn('"earlier_requests"', messages[1]["content"])
+
+    def test_retry_of_a_revision_keeps_the_current_binding(self):
+        current = {"design": "item-list"}
+        messages = binding_module.build_messages({**REQUEST, "current": current, "previous": {"design": "x"}, "errors": ["no column"]})
+        self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user"])
+        self.assertIn('"current"', messages[1]["content"])
+
     def test_no_errors_means_no_previous(self):
         messages = binding_module.build_messages({**REQUEST, "previous": {"design": "x"}, "errors": []})
         self.assertEqual(len(messages), 2)
@@ -74,6 +94,29 @@ class WriteTest(unittest.TestCase):
         self.assertEqual(result["binding"]["task_type"], "text")
         self.assertEqual(result["binding"]["slots"], reply["slots"])
         self.assertEqual(result["usage"]["cost"], 0.01)
+
+    def reply_of(self, reply):
+        payload = {"choices": [{"message": {"content": json.dumps(reply)}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 5, "completion_tokens": 2, "cost": 0.01}}
+        with mock.patch("agent.planner.openrouter.OpenRouterPlanner._post", return_value=payload):
+            return binding_module.write_binding(config(), "key", True, REQUEST)
+
+    def test_message_is_taken_out_of_the_binding(self):
+        result = self.reply_of({"message": "I renamed the options.", "slots": {}})
+        self.assertEqual(result["message"], "I renamed the options.")
+        self.assertIsNone(result["cannot"])
+        self.assertNotIn("message", result["binding"])
+
+    def test_cannot_has_no_binding(self):
+        result = self.reply_of({"cannot": "layout", "message": "That needs another rough design."})
+        self.assertIsNone(result["binding"])
+        self.assertEqual(result["cannot"], "layout")
+        self.assertEqual(result["message"], "That needs another rough design.")
+        self.assertEqual(result["usage"]["cost"], 0.01)
+
+    def test_unknown_cannot_is_format_and_a_blank_message_is_none(self):
+        result = self.reply_of({"cannot": "something else", "message": "  "})
+        self.assertEqual(result["cannot"], "format")
+        self.assertIsNone(result["message"])
 
 
 if __name__ == "__main__":
