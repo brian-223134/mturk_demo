@@ -318,7 +318,7 @@ def binding_request(body: object) -> dict:
     if task_type not in ("vision", "video", "text"):
         raise invalid('"task_type" must be vision, video or text.')
     if not isinstance(prompt, str) or not prompt.strip():
-        raise invalid('"prompt" must say what workers should judge.')
+        raise invalid('"prompt" must say what workers should judge or what to change.')
     if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
         raise invalid('"data" must be a summary of the HIT data with "columns".')
     errors, previous = data.get("errors"), data.get("previous")
@@ -326,14 +326,19 @@ def binding_request(body: object) -> dict:
         raise invalid('"errors" must be a list of strings.')
     if previous is not None and not isinstance(previous, dict):
         raise invalid('"previous" must be the previous binding.')
+    current, earlier = data.get("current"), data.get("earlier_requests")
+    if current is not None and not isinstance(current, dict):
+        raise invalid('"current" must be the binding to revise.')
+    if earlier is not None and not (isinstance(earlier, list) and all(isinstance(e, str) for e in earlier)):
+        raise invalid('"earlier_requests" must be a list of strings.')
     if len(json.dumps(data, ensure_ascii=False)) > BINDING_REQUEST_LIMIT:
         raise invalid(f"The binding request is too large (at most {BINDING_REQUEST_LIMIT // 1024} KB). Send a summary of the data, not the data.")
-    return {"design": design, "task_type": task_type, "prompt": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous}
+    return {"design": design, "task_type": task_type, "prompt": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous, "current": current, "earlier_requests": earlier or []}
 
 
 @router.post("/bindings")
 async def create_binding(request: Request) -> dict:
-    """가안과 데이터 요약으로 LLM 에 binding 을 묻는다 (유료 호출). 검사와 재요청은 브라우저가 맡는다."""
+    """가안과 데이터 요약으로 LLM 에 binding 을 쓰거나 고치게 한다 (유료 호출). 검사와 재요청은 브라우저가 맡는다."""
     settings = _settings(request)
     body = await read_body(request)
     task = binding_request(body)
@@ -350,7 +355,8 @@ async def create_binding(request: Request) -> dict:
         result = await asyncio.to_thread(write_binding, config, resolve_api_key(None, settings.env_file), True, task, log_dir)
     except PlannerError as error:
         raise invalid(f"The model call failed: {error}") from None
-    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag}}
+    served_by = result.pop("provider", None)  # 설정에 업체가 여럿이면 실제로 답한 업체는 응답을 봐야 안다
+    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
 
 
 @router.post("/job-groups", status_code=202)

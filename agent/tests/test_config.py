@@ -25,8 +25,8 @@ from agent.planner import openrouter
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR = REPO_ROOT / "environment" / "models"
 YAML_AVAILABLE = importlib.util.find_spec("yaml") is not None
-# 업체를 고정한 설정 (이름 → 태그). 나머지는 OpenRouter 가 업체를 고른다
-PINNED_PROVIDERS = {"deepseek-v4.1-flash": "crusoe/fp8"}
+# 업체를 정한 설정 (이름 → 라우팅). 나머지는 OpenRouter 가 업체를 고른다
+ROUTED_PROVIDERS = {"deepseek-v4.1-flash": {"order": ["crusoe", "parasail"], "allow_fallbacks": False, "quantizations": ["fp8"]}}
 COMMITTED_CONFIGS = ("default", "qwen3-235b", "deepseek-v3.2")
 # usage: {include: true} 는 OpenRouter 가 응답 usage 에 실제 청구액 cost 를 넣게 한다 (세 설정 파일 모두)
 USAGE_PARAM = {"include": True}
@@ -358,7 +358,7 @@ class ModelConfigFilesTest(unittest.TestCase):
                 self.assertRegex(text, r"(?m)^api: openrouter\b")
                 self.assertRegex(text, r"(?m)^model: \S+/\S+")
                 self.assertRegex(text, r"(?m)^planner:")
-                if path.stem not in PINNED_PROVIDERS:
+                if path.stem not in ROUTED_PROVIDERS:
                     self.assertNotRegex(text, r"(?m)^provider:")  # provider 는 주석으로만 (기본: OpenRouter 가 고른다)
                 self.assertRegex(text, r"(?m)^  usage:\n    include: true\b")  # 응답 usage 에 실제 청구액 cost
                 # 주석의 예시 두 줄: 태그 한 줄과 매핑 한 줄. 태그는 실제로 풀리는 형식이어야 한다
@@ -428,8 +428,8 @@ class LoadYamlTest(TempDirCase):
             with self.subTest(path=path.name):
                 cfg = load_model_config(path.stem, MODELS_DIR)
                 self.assertEqual(cfg.api, "openrouter")
-                self.assertEqual(cfg.provider_tag, PINNED_PROVIDERS.get(path.stem))
-                self.assertEqual(cfg.provider is None, path.stem not in PINNED_PROVIDERS)
+                self.assertIsNone(cfg.provider_tag)
+                self.assertEqual(cfg.provider, ROUTED_PROVIDERS.get(path.stem))
                 self.assertTrue(cfg.model)
                 self.assertEqual(cfg.params["response_format"], {"type": "json_object"})
                 self.assertEqual(cfg.params["temperature"], 0)
