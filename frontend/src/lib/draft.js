@@ -6,7 +6,7 @@
 
 import { defaultSettings } from './settings.js';
 
-export const STEP_TITLES = ['Upload CSV', 'Preview tasks', 'Review settings', 'Confirm and publish'];
+export const STEP_TITLES = ['Upload JSON', 'Preview tasks', 'Review settings', 'Confirm and publish'];
 export const LAST_STEP = STEP_TITLES.length - 1;
 
 export function emptyDraft() {

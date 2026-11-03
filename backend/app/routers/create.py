@@ -119,7 +119,7 @@ def review_reference(value: Any, input_columns: list[str]) -> dict:
     if not isinstance(column, str) or not column:
         raise invalid('"reference.column" must be a column name.')
     if column not in input_columns:
-        raise invalid(f'Reference column "{column}" is not one of the CSV columns.')
+        raise invalid(f'Reference column "{column}" is not one of the data columns.')
     return {"source": "column", "column": column}
 
 
@@ -143,7 +143,7 @@ def attention_rule(value: Any, input_columns: list[str]) -> dict | None:
         if column is None:
             raise invalid('"attentionRule.column" must be a column name.')
         if column not in input_columns:
-            raise invalid(f'Attention column "{column}" is not one of the CSV columns.')
+            raise invalid(f'Attention column "{column}" is not one of the data columns.')
         return {"column": column, "minCorrectRatio": ratio}
     prefix, expected = value.get("namePrefix"), value.get("expectedValue")
     if not isinstance(prefix, str) or not prefix:
@@ -196,13 +196,13 @@ async def create_batch(request: Request) -> dict:
             raise not_found("Template", js_repr(template_id) if "templateId" in body else "undefined")
         rows = body.get("rows")
         if not isinstance(rows, list) or len(rows) == 0:
-            raise invalid("The CSV has no rows.")
+            raise invalid("The data has no rows.")
         if any(not isinstance(row, (dict, list)) for row in rows):
             raise invalid('"rows" must be an array of objects.')
 
         missing = [p for p in template["placeholders"] if p not in input_columns]
         if missing:
-            raise invalid("The CSV is missing columns used by the template: " + ", ".join(f"${{{m}}}" for m in missing))
+            raise invalid("The data is missing columns used by the template: " + ", ".join(f"${{{m}}}" for m in missing))
         if not trimmed_string(settings.get("Title")):
             raise invalid("Title is required.")
         max_assignments = settings.get("MaxAssignments")

@@ -40,9 +40,9 @@ export function renderQualityStep(ctx) {
   const attentionOff = el('p', { className: 'muted', id: 'attention-off' }, 'Without a rule, Review shows no attention result and nothing can be selected by “attention failed”.');
   const modeSelect = el('select', { id: 's-attentionMode', name: 'attentionMode' }, Object.entries(ATTENTION_MODE_LABELS).map(([value, label]) => el('option', { value }, label)));
   modeSelect.value = s().attentionMode === 'column' ? 'column' : 'prefix';
-  const attentionColumnSelect = el('select', { id: 's-attentionColumn', name: 'attentionColumn' }, el('option', { value: '' }, 'Choose a CSV column'), columns.map((c) => el('option', { value: c }, c)));
+  const attentionColumnSelect = el('select', { id: 's-attentionColumn', name: 'attentionColumn' }, el('option', { value: '' }, 'Choose a data column'), columns.map((c) => el('option', { value: c }, c)));
   const currentAttentionColumn = s().attentionColumn;
-  if (currentAttentionColumn && !columns.includes(currentAttentionColumn)) attentionColumnSelect.append(el('option', { value: currentAttentionColumn }, `${currentAttentionColumn} (not in the CSV)`));
+  if (currentAttentionColumn && !columns.includes(currentAttentionColumn)) attentionColumnSelect.append(el('option', { value: currentAttentionColumn }, `${currentAttentionColumn} (not in the data)`));
   attentionColumnSelect.value = currentAttentionColumn ?? '';
   const attentionColumnNote = el('div', { id: 'attention-column-note' });
   const minRatio = el('input', { type: 'number', id: 's-attentionMinRatio', name: 'attentionMinRatio', min: 0, max: 1, step: 0.05, value: Number.isFinite(s().attentionMinRatio) ? String(s().attentionMinRatio) : '' });
@@ -115,7 +115,7 @@ export function renderQualityStep(ctx) {
   // ── Review reference ──
   const referenceSelect = el('select', { id: 's-referenceColumn', name: 'referenceColumn' }, el('option', { value: '' }, MAJORITY_LABEL), columns.map((c) => el('option', { value: c }, `Input column: ${c}`)));
   const current = s().referenceColumn;
-  if (current && !columns.includes(current)) referenceSelect.append(el('option', { value: current }, `Input column: ${current} (not in the CSV)`));
+  if (current && !columns.includes(current)) referenceSelect.append(el('option', { value: current }, `Input column: ${current} (not in the data)`));
   referenceSelect.value = current ?? '';
   const referenceNote = el('div', { id: 'reference-note' });
   const syncReference = () => {
@@ -131,7 +131,7 @@ export function renderQualityStep(ctx) {
     syncReference();
   });
   syncReference();
-  fields.referenceColumn = field({ id: 's-referenceColumn', label: 'Compare answers with', control: referenceSelect, hint: "Review shows this next to each worker's answers. Choose a CSV column that holds ground truth or LLM labels; keep the default when the CSV has no such column.", className: 'field-wide' });
+  fields.referenceColumn = field({ id: 's-referenceColumn', label: 'Compare answers with', control: referenceSelect, hint: "Review shows this next to each worker's answers. Choose a data column that holds ground truth or LLM labels; keep the default when the data has no such column.", className: 'field-wide' });
 
   const clearFieldError = (event) => {
     const owner = event.target.closest('.field');

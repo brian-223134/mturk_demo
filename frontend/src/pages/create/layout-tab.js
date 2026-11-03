@@ -101,11 +101,11 @@ export function renderLayoutTab({ draft, change, signal, footer }) {
 
   function renderVariables(names) {
     if (names.length === 0) {
-      variablesBody.replaceChildren(muted('The layout reads no ${column} variables. Values from the CSV can also be read from window.TASK_DATA.'));
+      variablesBody.replaceChildren(muted('The layout reads no ${column} variables. Values from the HIT data can also be read from window.TASK_DATA.'));
       return;
     }
     variablesBody.replaceChildren(
-      muted('Sample values for the preview only. When you publish a batch, each CSV row fills these variables.'),
+      muted('Sample values for the preview only. When you publish a batch, each object in the JSON file fills these variables.'),
       ...names.map((name) => {
         const input = el('textarea', { className: 'variable-value', id: `var-${name}`, rows: 2, spellcheck: 'false', 'aria-label': `Sample value of ${name}`, dataset: { variable: name } });
         input.value = draft().sampleRow[name] ?? '';

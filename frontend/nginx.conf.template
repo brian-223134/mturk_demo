@@ -36,6 +36,7 @@ server {
         # 기본 mime.types 에는 csv 가 없어 application/octet-stream 으로 내려간다
         types {
             text/csv csv;
+            application/json json;
             text/html html;
             text/markdown md;
         }

@@ -24,7 +24,7 @@ const SAMPLE_ROW_LIMIT = 60 * 1024; // backend 의 sampleRow 상한(64KB)보다 
 
 const OTHER_STARTS = [
   { id: 'upload', title: 'Upload or paste HTML', summary: 'Start from an empty layout and upload or paste your own template HTML.' },
-  { id: 'generate', title: 'Generate from raw data', summary: 'Give raw JSON and a prompt. The agent writes the layout and the CSV for you.' },
+  { id: 'generate', title: 'Generate from raw data', summary: 'Give raw JSON and a prompt. The agent writes the layout and the HIT data for you.' },
 ];
 
 function readChoice() {
@@ -92,7 +92,7 @@ export async function renderNewProject(root, signal) {
       { className: 'panel', id: 'new-project' },
       el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a template to start a new project')),
       muted(
-        'A new project starts from a template, your own HTML, or a layout generated from raw data. You set its properties and layout here, then publish batches from it in New Batch with an Existing Project. The preview shows sample data; your CSV replaces it when you publish a batch.',
+        'A new project starts from a template, your own HTML, or a layout generated from raw data. You set its properties and layout here, then publish batches from it in New Batch with an Existing Project. The preview shows sample data; your JSON file replaces it when you publish a batch.',
       ),
       el('div', { className: 'gallery' }, list, detail),
     ),
@@ -145,7 +145,7 @@ export async function renderNewProject(root, signal) {
       create.addEventListener('click', () => void startProject(projectDraftFromStarter(starter, html), 'properties', signal));
       detail.replaceChildren(
         el('div', { className: 'gallery-head' }, el('div', {}, el('h3', { className: 'gallery-title' }, starter.title), el('p', { className: 'gallery-summary' }, starter.summary)), create),
-        el('div', { className: 'gallery-meta' }, el('span', { className: 'muted' }, 'CSV columns: '), placeholderTags(extractPlaceholders(html))),
+        el('div', { className: 'gallery-meta' }, el('span', { className: 'muted' }, 'Data columns: '), placeholderTags(extractPlaceholders(html))),
         frame.node,
       );
       return;
@@ -158,7 +158,7 @@ export async function renderNewProject(root, signal) {
         el(
           'ul',
           { className: 'gallery-notes' },
-          el('li', {}, 'Use ', el('code', {}, '${column}'), ' placeholders for the CSV values, or read ', el('code', {}, 'window.TASK_DATA'), '.'),
+          el('li', {}, 'Use ', el('code', {}, '${column}'), ' placeholders for the data values, or read ', el('code', {}, 'window.TASK_DATA'), '.'),
           el('li', {}, 'Layouts written with ', el('code', {}, '<ann-*>'), ' elements get answer checks, the Submit button and the answer list for Review for free. Insert them from the Design Layout toolbar.'),
           el('li', {}, 'Older MTurk templates with ', el('code', {}, '<crowd-form>'), ' also work. They load crowd-html-elements from assets.crowd.aws.'),
         ),
