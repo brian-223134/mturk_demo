@@ -37,6 +37,9 @@ const fieldsText = (spec) => (Array.isArray(spec) ? spec : spec ? [spec] : []).m
 const optionsText = (options) => (Array.isArray(options) ? options : []).map((option) => (Array.isArray(option) ? option[1] ?? option[0] : option)).join(', ');
 const plainText = (value) => (value === undefined || value === null ? '' : typeof value === 'string' ? value : stableText(value));
 const repeatText = (repeat) => (repeat ? `${repeat.over}${repeat.label ? ` (${repeat.label})` : ''}` : '');
+const cellText = (cell) => (Array.isArray(cell) ? cell : [cell]).map((slot) => SLOT_LABELS[slot] ?? String(slot)).join(' + ');
+// 한 줄의 칸은 |, 줄 사이는 / 로 나눈다. 없으면 가안의 배치다
+const layoutText = (layout) => (Array.isArray(layout?.rows) ? layout.rows.map((row) => `${(Array.isArray(row?.slots) ? row.slots : []).map(cellText).join(' | ')}${row?.columns ? ` (${row.columns})` : ''}`).join(' / ') : '');
 const referenceText = (reference) => (reference ? [reference.value ?? reference.map ?? reference.selected, reference.key, reference.item, reference.yes, reference.no].filter((part) => part !== undefined).join(', ') : '');
 
 const ANSWER_PARTS = [
@@ -57,6 +60,7 @@ export function describeChanges(before, after) {
     if (from !== to) changes.push({ what, before: from, after: to, alert });
   };
   push('Instructions', plainText(before.instructions), plainText(after.instructions));
+  push('Layout', layoutText(before.layout), layoutText(after.layout));
   push('Tabs', repeatText(before.repeat), repeatText(after.repeat));
   const slotNames = [...new Set([...Object.keys(before.slots ?? {}), ...Object.keys(after.slots ?? {})])];
   for (const slot of slotNames) {

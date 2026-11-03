@@ -70,6 +70,27 @@ describe('describeChanges', () => {
   });
 });
 
+describe('배치의 변경 표시', () => {
+  const layout = { rows: [{ columns: '2fr 3fr', slots: ['item-choice', ['data', 'free-text']] }, { slots: ['choice'] }] };
+
+  it('고친 배치를 칸 이름과 폭으로 보이고, 빨갛게 표시하지 않는다', () => {
+    const found = describeChanges(binding, change((b) => { b.layout = layout; })).find((item) => item.what === 'Layout');
+    assert.deepEqual(found, { what: 'Layout', before: '', after: 'HIT: judge each item | Data + Short answer (2fr 3fr) / HIT: multiple choice', alert: false });
+  });
+
+  it('가안의 배치로 돌아가도 알린다', () => {
+    const found = describeChanges(change((b) => { b.layout = layout; }), binding).find((item) => item.what === 'Layout');
+    assert.equal(found.after, '');
+    assert.equal(found.alert, false);
+  });
+
+  it('배치가 같으면 줄이 없고, 틀린 배치에도 예외를 내지 않는다', () => {
+    assert.deepEqual(whatChanged(binding), []);
+    assert.equal(describeChanges(binding, change((b) => { b.layout = { rows: 'nope' }; })).some((item) => item.what === 'Layout'), false);
+    assert.ok(describeChanges(binding, change((b) => { b.layout = { rows: [null, { slots: 'x' }] }; })));
+  });
+});
+
 describe('대화 기록', () => {
   const draft = { design: 'item-list', task_type: 'text', slots: {} };
   const first = addAnswer([], { before: draft, authored: false, result: { binding, message: 'Written.', errors: [] }, request: 'Check the facts', meta: 'm' });

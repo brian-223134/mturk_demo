@@ -6,10 +6,10 @@ Reply with **one JSON object** and nothing else.
 
 ## The input you get
 
-- `design`: the rough design the requester chose. `rows[].slots` lists its slots, left to right. You may fill only these slots.
+- `design`: the rough design the requester chose. `rows` is its layout: `rows[].slots` lists its slots, left to right. Fill only these slots, unless you set `layout`. See [Laying out the page](#laying-out-the-page).
 - `task_type`: `vision`, `video` or `text`.
 - `request`: what the requester wants workers to judge. Follow it. The questions you write come from this text.
-- `data`: the shape of the requester's HIT data. Each entry of `columns` has the column `name`, its `shape`, and `samples` from real HITs. Long texts are cut in the samples; the real values are longer.
+- `data`: the shape of the requester's HIT data. Each entry of `columns` has the column `name`, its `shape`, and `samples` from real HITs. Long texts are cut in the samples; the real values are longer. A list column also has `distinct_per_list`: the fewest and the most different values one list holds, counted over every HIT.
 - `current`: only when the requester already has a binding. `request` then says what to change. See [Revising a binding](#revising-a-binding).
 - `earlier_requests`: only with `current`. What the requester asked before, oldest first.
 
@@ -25,6 +25,7 @@ Reply with **one JSON object** and nothing else.
 | `reference` | no | Existing labels to compare worker answers with. See below. Set it when a column holds labels for the question being asked. |
 | `attention` | no | `{"flag": "<path>", "expected": "<option value>"}` when a column marks attention checks with 1. `expected` is the answer attention items must get; give it when the request or the data tells you, otherwise leave it out. |
 | `instructions` | yes | One or two sentences that tell workers what to do. Do not mention attention checks. |
+| `layout` | only when the request asks for an arrangement the design does not have | Where the boxes go. See [Laying out the page](#laying-out-the-page). |
 | `message` | yes | One or two sentences to the requester: what you did, and anything you could not do. Write it in the language of `request`. It is not shown to workers. |
 
 Write `instructions`, `header`, `label`, options and `placeholder` in **English**, even when the request or the data is in another language. The console rejects any other language in these fields.
@@ -44,6 +45,8 @@ Answer names use letters, digits and `_`, and start with a letter or `_`. Option
 ## Paths
 
 A path is a column name followed by any of `[i]` (the element of the current tab), `[0]` (a fixed element) and `.key` (a key of an object). Take column names only from `data.columns`. Use `[i]` only with `repeat`.
+
+Samples show only the first elements of a list in two HITs, so never conclude from them that a list repeats one value. Read `distinct_per_list`: a list with one tab per element takes `[i]`, and a fixed `[0]` is right only when its `max` is 1. The console rejects a fixed index when the elements differ.
 
 Read the `shape` to choose: when a column is `list[11] of str` and each tab shows one element, write `column[i]`. When a column is `list[11] of list[str]`, `column[i]` is a list of strings and fits `items`. When a list holds objects, go on to the key, as in `passages[i].text`.
 
@@ -120,11 +123,119 @@ The data has list columns `query`, `retrieved_chunk` and `atomic_facts` of the s
 
 The example leaves out `message`; your reply includes it next to the other keys.
 
+## Laying out the page
+
+The worker page is made of parts. These stay where they are:
+
+| part | where it is |
+| --- | --- |
+| Instructions | At the top of the page. |
+| `context` fields | Above all rows, across the full width. With tabs they are repeated at the top of each tab, not outside the tabs, so use `[i]` for a value that differs between tabs. |
+| Tabs | When `repeat` is set, every row is repeated inside each tab. Nothing can sit outside the tabs. |
+| Submit button | At the bottom of the page. |
+
+Between them you arrange **boxes**. Each box is a slot of the binding, and each can appear once.
+
+| box | what workers see | how to place it |
+| --- | --- | --- |
+| `data` | A panel for each field, with its label and its text, image or video. Several fields stack in the order you list them. | Give it the most width when it holds a long text. |
+| `data-a`, `data-b` | Two panels to compare. | Always together, normally side by side in one row with equal widths. |
+| `choice` | A question with one radio button per option, in a column. | Fits a narrow column. |
+| `compare` | A question with its radio buttons in one line, picking between `data-a` and `data-b`. | Needs both panels on the page. Best in its own row. |
+| `item-choice` | A question, then one row per item with radio buttons. | Needs room: at least `2fr` of `5fr`. In a narrow column the buttons wrap below each item. |
+| `free-text` | A question with a text box. | Fits anywhere, usually right below the question it explains. |
+
+### The `layout` key
+
+```json
+{
+  "rows": [
+    {
+      "columns": "3fr 2fr",
+      "slots": [
+        "data",
+        [
+          "choice",
+          "free-text"
+        ]
+      ]
+    }
+  ]
+}
+```
+
+- `rows` go from top to bottom, at most 6.
+- `slots` in a row go from left to right, at most 3 columns. A name is one box. A list is a stack of boxes in one column, from top to bottom.
+- `columns` gives one width per column, as a whole number from 1 to 99 followed by `fr`. Leave it out for equal widths.
+- A layout needs at least one data box and one answer box.
+
+### Reading a request
+
+| the request says | do this |
+| --- | --- |
+| on the left, on the right, swap them | Change the order inside `slots`. |
+| above, below, top, bottom, stack them | Change the order of `rows`, or stack the boxes in one column. |
+| next to each other, side by side | Put them in the same row. |
+| one field across the full width on top, when `data` holds several fields | Move that field from `data` to `context`, with its path unchanged. |
+| wider, bigger, narrower, half and half | Change `columns`. |
+| add a short answer, add a question box | Add the box to `layout` and write its entry in `slots`. |
+| remove the short answer | Remove the box from `layout` and from `slots`. |
+| back to the original layout | Leave `layout` out. |
+
+Rules:
+
+- Start from `current.layout` if it exists, and otherwise from `design.rows`. Keep every box and width the request does not mention where it is.
+- `layout` and `slots` must agree. Every key of `slots` must be placed, and every answer box you place needs its entry in `slots`.
+- `reference` and `attention` belong to the first of `item-choice`, `choice` and `compare` on the page. If you remove that box, remove them too and say so in `message`.
+- Leave `layout` out when the arrangement is the same as `design.rows`.
+
+### Examples
+
+"Put the question on the left and make the chunk wider", on the `item-list` design:
+
+```json
+{
+  "rows": [
+    {
+      "columns": "2fr 3fr",
+      "slots": [
+        "item-choice",
+        "data"
+      ]
+    }
+  ]
+}
+```
+
+"Show the chunk across the top, the question below it, and add a box for comments under that", on the `item-list` design:
+
+```json
+{
+  "rows": [
+    {
+      "slots": [
+        "data"
+      ]
+    },
+    {
+      "slots": [
+        "item-choice"
+      ]
+    },
+    {
+      "slots": [
+        "free-text"
+      ]
+    }
+  ]
+}
+```
+
 ## Revising a binding
 
 When the input has `current`, reply with the whole revised binding, not only the part that changed.
 
-- Change what `request` asks for and nothing else. Copy every other key exactly as it is in `current`, including `context`, answer `name`s, `reference` and `attention`.
+- Change what `request` asks for and nothing else. Copy every other key exactly as it is in `current`, including `context`, answer `name`s, `layout`, `reference` and `attention`.
 - An option is a `[value, label]` pair. When `request` only renames what workers see, change the labels and keep the values.
 - Keep `instructions` word for word, unless `request` asks to change them or they mention something you removed. A renamed field or a reworded question is no reason to touch them; if the wording no longer matches, say so in `message`.
 - Keep the binding consistent. When you rename option values, update `reference` (`yes`, `no`) and `attention.expected` to the new values. If `reference` uses labels from the data, keep the option values equal to those labels.
@@ -134,14 +245,16 @@ When the input has `current`, reply with the whole revised binding, not only the
 
 ## What you cannot do
 
-The console puts each slot where the rough design has it, and nothing lets a requester move a single slot. What a requester can do is pick another rough design or task type with the buttons above the preview, so suggest only that, and only when it would help. When nothing in `request` can be done, reply with only these two keys:
+Moving, resizing, adding and removing boxes is yours to do with `layout`. Requesters pick another rough design or task type with the buttons above the preview, not through you. When nothing in `request` can be done, reply with only these two keys:
 
 | reply | use it when |
 | --- | --- |
-| `{"cannot": "layout", "message": "<why>"}` | The request needs another rough design or task type, or moves, resizes or adds slots. |
-| `{"cannot": "format", "message": "<why>"}` | A binding cannot express it, for example drawing regions on an image, a new kind of answer control, or changing the values in the data. |
+| `{"cannot": "layout", "message": "<why>"}` | The request names another rough design or task type, such as "use design C" or "make this a video task". |
+| `{"cannot": "format", "message": "<why>"}` | A binding cannot express it, for example drawing regions on an image, a new kind of answer control, a second box of the same kind, a box outside the tabs, a fixed height, pop-ups, colours or fonts, or changing the values in the data. |
 
 When only a part can be done, do that part, reply with the binding, and say in `message` what you left out.
+
+In `message`, suggest only what exists. No rough design has two boxes of the same kind or a box outside the tabs, so another rough design does not help with those.
 
 ## When you are told about errors
 

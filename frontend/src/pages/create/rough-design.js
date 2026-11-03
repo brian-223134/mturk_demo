@@ -13,7 +13,7 @@ import { el } from '../../components/dom.js';
 import { muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
 import { addAnswer, earlierRequests, isCurrentVersion, withoutUnused } from '../../lib/binding-revision.js';
-import { adaptBinding, attentionItems, bindingSettings, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, judgedCounts, requestBinding, summarizeData } from '../../lib/design-binding.js';
+import { adaptBinding, attentionItems, bindingSettings, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, dropLayout, judgedCounts, requestBinding, summarizeData } from '../../lib/design-binding.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
 import { readJsonDataFile } from '../../lib/json-data.js';
 import { sampleFor, toSaveRequest } from '../../lib/project-draft.js';
@@ -32,7 +32,7 @@ const PREVIEW_HEIGHT = 880;
 const CHECK_DEBOUNCE_MS = 400;
 const SAMPLE_ROW_LIMIT = 60 * 1024; // backend 의 sampleRow 상한(64KB)보다 조금 작게
 const CHANGE_TEXT_LIMIT = 120;
-const LAYOUT_GUIDE = 'The layout is not changed here. Choose another layout with the Rough design and Task type buttons above; your questions and data move with it.';
+const LAYOUT_GUIDE = 'Choose another rough design or task type with the Rough design and Task type buttons above; your questions and data move with it.';
 
 // 올린 HIT 데이터와 고치던 binding. 같은 탭에서 앞 단계에 다녀와도 남는다
 let session = null;
@@ -389,7 +389,7 @@ export function renderDesignData(root, params, signal) {
       el(
         'div',
         { className: 'panel-head' },
-        el('h4', { className: 'section-title' }, `Preview: ${currentDesign.title} with your data`),
+        el('h4', { className: 'section-title' }, `Preview: ${currentDesign.title}${currentDesign.customLayout ? ', custom layout,' : ''} with your data`),
         el('span', { className: 'panel-actions' }, hitSelect, el('span', { className: 'muted small', id: 'bound-hit-count' }, `of ${state.reader.rowCount.toLocaleString('en-US')} HITs`)),
       ),
       ...(checks.length > 0 ? [muted(checks.join(' '))] : []),
@@ -466,6 +466,16 @@ export function renderDesignData(root, params, signal) {
     applyText();
   }
 
+  /** 고친 배치를 버린다. 대화의 Restore 로 다시 돌아갈 수 있다. */
+  function useDesignLayout() {
+    if (state.writing || !state.binding) return;
+    clearTimeout(state.timer);
+    state.binding = dropLayout(state.binding);
+    state.authored = true;
+    editor.value = JSON.stringify(state.binding, null, 2);
+    applyText();
+  }
+
   const controlsSlot = el('div', { className: 'bound-controls', id: 'bound-controls' });
   function renderControls() {
     const current = state.binding ?? {};
@@ -474,12 +484,22 @@ export function renderDesignData(root, params, signal) {
       segmented({ id: 'bound-design', options: ROUGH_DESIGNS.map((d) => ({ value: d.id, label: `${d.letter}. ${d.title}` })), value: current.design, onChange: (value) => switchTo(value, current.task_type) }),
       el('span', { className: 'muted' }, 'Task type'),
       segmented({ id: 'bound-type', options: TASK_TYPES.map((t) => ({ value: t.id, label: t.title })), value: current.task_type, onChange: (value) => switchTo(current.design, value) }),
+      ...(current.layout === undefined
+        ? []
+        : [
+            el(
+              'p',
+              { className: 'muted small bound-layout-note', id: 'bound-layout-note' },
+              'This binding has its own layout, so the slots are not where the rough design puts them. ',
+              el('button', { type: 'button', className: 'btn btn-small btn-link', id: 'bound-drop-layout', onClick: useDesignLayout }, 'Use the rough design layout'),
+            ),
+          ]),
     );
   }
 
   // ── LLM 에 binding 쓰게 하고 고치게 하기 ──
   const WRITE_PLACEHOLDER = 'For example: for each chunk, check every atomic fact the chunk supports.';
-  const REVISE_PLACEHOLDER = 'For example: rename the options to Yes and No, and shorten the instructions.';
+  const REVISE_PLACEHOLDER = 'For example: rename the options to Yes and No, or put the question on the left.';
   const promptLabel = el('label', { for: 'binding-prompt' });
   const promptInput = el('textarea', { id: 'binding-prompt', rows: 3, 'aria-labelledby': 'binding-prompt-label' });
   promptLabel.id = 'binding-prompt-label';
