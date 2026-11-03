@@ -1,4 +1,4 @@
-"""출력 묶음(task_spec.json, template.html, hits.csv) 검증 → validation.json.
+"""출력 묶음(task_spec.json, template.html, hits.json) 검증 → validation.json.
 
     extract_placeholders(html)   템플릿의 `${이름}` 목록 (콘솔과 같은 정규식, 등장 순서, 중복 없음)
     substitute_row(html, row)    콘솔·MTurk와 같은 치환 (escape 없이, 행에 없는 이름은 그대로)
@@ -7,33 +7,29 @@
 
 errors는 게시할 수 없는 문제(placeholder와 컬럼 불일치, JSON이 아닌 셀, 항목 수 불일치, reference·attention 값 오류 …),
 warnings는 참고(64KB를 넘는 행, preprocess가 건너뛴 레코드(summary.json의 skipped_records) …)다. 답 이름 시뮬레이션은
-spec.answer_slots와 preprocess.answer_name을 그대로 써서 템플릿의 이름 규칙, CSV의 reference 키, attention 컬럼의 키가
+spec.answer_slots와 preprocess.answer_name을 그대로 써서 템플릿의 이름 규칙, HIT 데이터의 reference 키, attention 컬럼의 키가
 서로 맞는지 확인한다.
 
-placeholder는 정확히 hit_id와 spec의 필드들이다 (attention 표시는 CSV에만 있다). reference 컬럼에는 일반 항목의 답만,
+placeholder는 정확히 hit_id와 spec의 필드들이다 (attention 표시는 HIT 데이터에만 있다). reference 컬럼에는 일반 항목의 답만,
 attention 컬럼에는 기대 값이 있는 attention 항목의 답만 있어야 하고, 자유 서술(text) 답은 reference에 들어가지 않는다.
 자유 서술 답의 접미어로 끝나는 다른 답 이름이 있으면 콘솔이 둘을 가르지 못하므로 오류다.
 """
 
 from __future__ import annotations
 
-import csv
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
-csv.field_size_limit(sys.maxsize)
-
-from agent.preprocess import (ATTENTION_ID, GENERAL_PREFIX, ROW_BYTES_LIMIT, answer_name, csv_columns, has_attention_column,
+from agent.preprocess import (ATTENTION_ID, GENERAL_PREFIX, ROW_BYTES_LIMIT, answer_name, hit_columns, has_attention_column,
                               row_bytes)
 from agent.spec import QuestionSpec, SpecError, TaskSpec, answer_slots, load_spec
 
 PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 SPEC_FILE = "task_spec.json"
 TEMPLATE_FILE = "template.html"
-HITS_FILE = "hits.csv"
+HITS_FILE = "hits.json"
 SUMMARY_FILE = "summary.json"
 VALIDATION_FILE = "validation.json"
 REQUIRED_MARKERS = ("crowd-form", "input_answers", "summary-tabs", "TASK_ANSWER_SCHEMA")
@@ -124,7 +120,7 @@ def _validate(out_dir: Path, report: _Report) -> dict:
     if OLD_ATTENTION_PREFIX in template:
         report.error(f"{TEMPLATE_FILE}: contains {OLD_ATTENTION_PREFIX!r}; attention tabs must not be recognisable in the page")
 
-    columns, rows = _read_csv(hits_path, report)
+    columns, rows = _read_hits(hits_path, report)
     if columns is None:
         return report.result()
     report.stats["columns"] = columns
@@ -133,7 +129,7 @@ def _validate(out_dir: Path, report: _Report) -> dict:
     if missing:
         report.error(f"{HITS_FILE}: placeholder column(s) missing: {', '.join(missing)}")
     report.stats["unused_columns"] = [column for column in columns if column not in placeholders]
-    expected_columns = csv_columns(spec)
+    expected_columns = hit_columns(spec)
     if columns != expected_columns:
         absent = [column for column in expected_columns if column not in columns]
         if absent:
@@ -166,26 +162,30 @@ def _check_summary(path: Path, report: _Report) -> None:
     report.warning(f"{SUMMARY_FILE}: {count} record(s) were skipped because their data does not fit the spec{example}")
 
 
-def _read_csv(path: Path, report: _Report) -> tuple[list[str] | None, list[dict[str, str]]]:
+def _read_hits(path: Path, report: _Report) -> tuple[list[str] | None, list[dict[str, str]]]:
+    """hits.json을 읽는다. 객체마다 키가 같고 값이 모두 문자열이어야 한다. 컬럼 순서는 첫 객체의 키 순서다."""
     with path.open("rb") as handle:
         head = handle.read(3)
     if head == b"\xef\xbb\xbf":
-        report.warning(f"{HITS_FILE}: starts with a UTF-8 BOM; MTurk and the console strip it, but write the file without one")
-    with path.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.reader(handle)
-        try:
-            columns = next(reader)
-        except StopIteration:
-            report.error(f"{HITS_FILE}: empty file")
-            return None, []
-        rows: list[dict[str, str]] = []
-        for number, values in enumerate(reader, start=2):
-            if len(values) != len(columns):
-                report.error(f"{HITS_FILE} line {number}: {len(values)} cells for {len(columns)} columns", key="cell count")
-                continue
-            rows.append(dict(zip(columns, values)))
-    if len(set(columns)) != len(columns):
-        report.error(f"{HITS_FILE}: duplicate column names")
+        report.warning(f"{HITS_FILE}: starts with a UTF-8 BOM; the console strips it, but write the file without one")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except ValueError as error:
+        report.error(f"{HITS_FILE}: invalid JSON: {error}")
+        return None, []
+    if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
+        report.error(f"{HITS_FILE}: must be a JSON array of objects")
+        return None, []
+    columns = list(data[0]) if data else []
+    rows: list[dict[str, str]] = []
+    for number, row in enumerate(data, start=1):
+        if set(row) != set(columns):
+            report.error(f"{HITS_FILE} row {number}: keys differ from the first row", key="row keys")
+            continue
+        if not all(isinstance(value, str) for value in row.values()):
+            report.error(f"{HITS_FILE} row {number}: values must be strings", key="row values")
+            continue
+        rows.append(row)
     return columns, rows
 
 
@@ -219,8 +219,8 @@ def _check_rows(spec: TaskSpec, columns: list[str], rows: list[dict[str, str]], 
     hints_missing = 0
     row_ok = 0
 
-    for number, row in enumerate(rows, start=2):
-        where = f"{HITS_FILE} line {number}"
+    for number, row in enumerate(rows, start=1):
+        where = f"{HITS_FILE} row {number}"
         size = row_bytes(columns, row)
         sizes.append(size)
         cells: dict[str, Any] = {}

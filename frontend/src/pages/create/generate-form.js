@@ -19,7 +19,7 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
   let busy = false;
   let importedRaw = null;
   const name = el('input', { id: 'gen-name', name: 'name', type: 'text', value: draft.name });
-  const raw = el('input', { id: 'gen-raw', name: 'raw', type: 'file', accept: '.json,.jsonl,.csv' });
+  const raw = el('input', { id: 'gen-raw', name: 'raw', type: 'file', accept: '.json,application/json' });
   const prompt = el('textarea', { id: 'gen-prompt-text', name: 'prompt_text', rows: 12, value: draft.prompt_text });
   const spec = el('input', { id: 'gen-spec', name: 'spec', type: 'file', accept: '.json' });
   const modelOptions = () => models.models.map((m) => el('option', { value: m.name }, `${m.name} — ${m.model}`));
@@ -45,7 +45,7 @@ export function mountGenerateForm(root, models, { onCreated, gone }) {
   const reset = el('button', { type: 'button', className: 'btn', id: 'gen-clear' }, 'Clear inputs');
   const fields = el('fieldset', { className: 'generate-fields' },
     field('Name', name, 'The candidates share this name. The project you create from the chosen candidate gets it too, replacing a project with the same name.'),
-    field('Raw data', raw, 'JSON, JSONL or CSV. A selected file replaces any reused raw data.'), rawStatus,
+    field('Raw data', raw, 'A JSON file. A selected file replaces any reused raw data.'), rawStatus,
     field('Prompt text', prompt),
     modelField,
     el('label', { className: 'checkbox' }, allow, ' Allow API calls (uses credits)'),

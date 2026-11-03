@@ -3,7 +3,7 @@
 스레드끼리 나누는 것은 self._jobs 와 job 상태뿐이고, 둘 다 self._lock 안에서만 바꾼다.
 
 job 폴더는 <OUTPUT_DIR>/jobs/<job id>/ 다. 업로드는 그 안의 input/ 에, 파이프라인 결과(profile.json, task_spec.json,
-hits.csv, template.html, validation.json …)는 폴더에 바로 쓴다. agent 의 각 단계에는 이 절대 경로를 out_dir 로 넘기므로
+hits.json, template.html, validation.json …)는 폴더에 바로 쓴다. agent 의 각 단계에는 이 절대 경로를 out_dir 로 넘기므로
 agent 의 현재 폴더 기준 기본값(output/<원본 이름>/)은 쓰이지 않는다.
 
 상태가 바뀔 때마다 DB 의 agent_jobs 에 저장해서 서버를 다시 켜도 목록에 남는다. 다시 켤 때 running 이던 job 은 이어서 돌 수
@@ -350,7 +350,7 @@ class JobRunner:
             summary = self._step(job, "preprocess", lambda: self._preprocess(job, spec, raw_path, records, directory))
             with self._lock:
                 job.summary = summary
-            self._log(job, f"preprocess: {summary.get('hits')} HITs, {summary.get('items')} items -> hits.csv, settings.json")
+            self._log(job, f"preprocess: {summary.get('hits')} HITs, {summary.get('items')} items -> hits.json, settings.json")
 
             self._step(job, "render", lambda: self._render(spec, directory))
             self._log(job, "render: template.html")

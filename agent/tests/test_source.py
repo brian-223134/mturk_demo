@@ -49,59 +49,25 @@ class SourceTest(unittest.TestCase):
         with self.assertRaises(SourceError):
             source.load_records(path, "unknown")
 
-    def test_jsonl(self):
-        path = self.write("l.jsonl", '{"id": 1}\n\n{"id": 2}\n[1, 2]\n')
-        self.assertEqual(source.detect_format(path), "jsonl")
-        fmt, records = source.load_records(path)
-        self.assertEqual(fmt, "jsonl")
-        self.assertEqual(records, [{"id": 1}, {"id": 2}, {"_value": [1, 2]}])
-        bad = self.write("bad.jsonl", '{"id": 1}\nnot json\n')
-        with self.assertRaisesRegex(SourceError, "line 2"):
-            source.load_records(bad)
+    def test_jsonl_and_csv_are_refused(self):
+        for name in ("l.jsonl", "n.ndjson", "c.csv", "t.tsv"):
+            path = self.write(name, '{"id": 1}\n')
+            with self.assertRaisesRegex(SourceError, "must be a JSON file"):
+                source.load_records(path)
+            with self.assertRaisesRegex(SourceError, "must be a JSON file"):
+                source.detect_format(path)
+        path = self.write("ok.json", '[{"id": 1}]')
+        for format in ("jsonl", "csv"):
+            with self.assertRaisesRegex(SourceError, "unknown source format"):
+                source.load_records(path, format)
 
-    def test_csv(self):
-        text = (
-            "idx,question,chunks,labels,flag,plain,empty\n"
-            "﻿" if False else ""
-        )
-        text = (
-            "idx,question,chunks,labels,flag,plain,empty\n"
-            "1,\"What is it?\",\"['Chunk 0', 'Chunk 1']\",\"{\"\"a\"\": [1, 2]}\",True,Yes,\n"
-            "2,\"Second, with comma\",\"[\"\"x\"\"]\",\"{'k': 'v'}\",false,No,\n"
-        )
-        path = self.write("c.csv", "﻿" + text)
-        self.assertEqual(source.detect_format(path), "csv")
-        fmt, records = source.load_records(path)
-        self.assertEqual(fmt, "csv")
-        self.assertEqual(len(records), 2)
-        first, second = records
-        self.assertEqual(first["idx"], 1)
-        self.assertEqual(first["question"], "What is it?")
-        self.assertEqual(first["chunks"], ["Chunk 0", "Chunk 1"])
-        self.assertEqual(first["labels"], {"a": [1, 2]})
-        self.assertIs(first["flag"], True)
-        self.assertEqual(first["plain"], "Yes")
-        self.assertEqual(first["empty"], "")
-        self.assertEqual(second["chunks"], ["x"])
-        self.assertEqual(second["labels"], {"k": "v"})
-        self.assertIs(second["flag"], False)
-        self.assertEqual(second["question"], "Second, with comma")
-
-    def test_decode_cell(self):
-        self.assertEqual(source.decode_cell("007"), "007")
-        self.assertEqual(source.decode_cell("12"), 12)
-        self.assertIsNone(source.decode_cell("None"))
-        self.assertEqual(source.decode_cell("2025-01-01"), "2025-01-01")
-        self.assertEqual(source.decode_cell("  "), "  ")
-        self.assertEqual(source.decode_cell(None), "")
-
-    def test_sniff_unknown_extension(self):
+    def test_other_extension_is_read_as_json(self):
         array = self.write("data.txt", json.dumps([{"a": 1}]))
         self.assertEqual(source.detect_format(array), "json_array")
-        lines = self.write("data.dat", '{"a": 1}\n{"a": 2}\n')
-        self.assertEqual(source.detect_format(lines), "jsonl")
+        self.assertEqual(source.load_records(array), ("json_array", [{"a": 1}]))
         table = self.write("data.tbl", "a,b\n1,2\n")
-        self.assertEqual(source.detect_format(table), "csv")
+        with self.assertRaisesRegex(SourceError, "invalid JSON"):
+            source.detect_format(table)
 
     def test_errors(self):
         with self.assertRaises(SourceError):

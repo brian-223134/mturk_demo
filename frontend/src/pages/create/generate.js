@@ -2,7 +2,7 @@
 // job API 는 backend 에만 있다. prototype 의 mock API 는 /api/agent/models 에 404 로 답하므로 그때는 안내를 보이고 폼을 잠근다.
 // prompt 로 만들면 후보 3개가 한 묶음(job group)으로 동시에 돌고, Templates 에는 묶음 카드 하나로 보인다. 모두 끝나면
 // `Compare and choose` 로 후보를 나란히 비교하고 하나를 고른다. 고른 후보는 template.html 과 settings.json 을 Project 로 저장하고
-// hits.csv 를 그 Project 의 Publish Batch 에 올린다 (onUseResult, pages/create/new-project.js). task spec 으로 돌린 job 과
+// hits.json 을 그 Project 의 Publish Batch 에 올린다 (onUseResult, pages/create/new-project.js). task spec 으로 돌린 job 과
 // 묶음이 생기기 전의 job 은 예전처럼 job 카드 하나로 보이고 `Use this result` 가 있다.
 // queued / running 인 job 은 2초마다 getJob 으로 다시 받아 카드를 갱신한다. 패널을 떠나면(stop) 타이머를 멈춘다.
 
@@ -12,7 +12,7 @@ import { el } from '../../components/dom.js';
 import { EMPTY, formatDateTime, formatElapsed, formatNumber } from '../../components/format.js';
 import { errorNotice, loading, muted, notice } from '../../components/notice.js';
 import { toast } from '../../components/toast.js';
-import { candidateLabel, candidateLetter, entryKey, groupJobs, groupMessage, groupState } from '../../lib/job-groups.js';
+import { candidateLabel, candidateLetter, entryKey, groupJobs, groupMessage, groupState, hitsFileOf } from '../../lib/job-groups.js';
 import { failureNotice } from './common.js';
 import { mountGenerateForm } from './generate-form.js';
 import { openJobResults } from './job-results.js';
@@ -20,13 +20,13 @@ import { openJobResults } from './job-results.js';
 const POLL_MS = 2000;
 const LOG_TAIL = 8;
 const STEP_NAMES = ['profile', 'plan', 'preprocess', 'render', 'validate'];
-export const RESULT_FILES = ['template.html', 'hits.csv', 'settings.json'];
+export const RESULT_FILES = ['template.html', 'settings.json'];
 
 const isActive = (job) => job.status === 'queued' || job.status === 'running';
 
 /** 결과 세 파일이 모두 있는 성공한 job 인지 */
 export function hasResult(job) {
-  return job.status === 'succeeded' && Array.isArray(job.files) && RESULT_FILES.every((name) => job.files.includes(name));
+  return job.status === 'succeeded' && Array.isArray(job.files) && [...RESULT_FILES, hitsFileOf(job)].every((name) => job.files.includes(name));
 }
 
 /**
@@ -56,7 +56,7 @@ export function mountGenerate(root, { signal, onUseResult }) {
     el(
       'div',
       { className: 'generate-panel', id: 'generate-panel' },
-      muted('Upload the raw annotation data and a prompt that says what to judge. Generate runs three candidates at once: each asks a different model to plan a task spec, and the pipeline turns every spec into hits.csv and template.html. When they finish, compare the candidates and choose one. The chosen layout is saved as a project and Publish Batch opens with its hits.csv.'),
+      muted('Upload the raw annotation data and a prompt that says what to judge. Generate runs three candidates at once: each asks a different model to plan a task spec, and the pipeline turns every spec into hits.json and template.html. When they finish, compare the candidates and choose one. The chosen layout is saved as a project and Publish Batch opens with its hits.json.'),
       generateBody,
     ),
     el(
@@ -428,7 +428,7 @@ function useResultBlock(job, onUseResult) {
   return el(
     'div',
     { className: 'job-section use-result-section' },
-    el('div', { className: 'use-result-row' }, button, el('span', { className: 'muted small' }, 'Saves template.html and settings.json as a project named after the job (replacing a project with the same name), then opens Publish Batch with hits.csv.')),
+    el('div', { className: 'use-result-row' }, button, el('span', { className: 'muted small' }, 'Saves template.html and settings.json as a project named after the job (replacing a project with the same name), then opens Publish Batch with the HIT data.')),
     errorSlot,
   );
 }

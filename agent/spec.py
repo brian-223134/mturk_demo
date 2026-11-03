@@ -54,7 +54,7 @@ QUESTION_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 RESERVED_COLUMNS = ("hit_id", "record_ids", "item_ids", "attention")
 RESERVED_VARIABLES = ("record_index", "record_no", "record_id", "target", "target_index", "target_no", "target_key")
-SOURCE_FORMATS = ("json_array", "json_object_values", "jsonl", "csv")
+SOURCE_FORMATS = ("json_array", "json_object_values")
 FIELD_ROLES = ("context", "target")
 FIELD_STYLES = ("text", "passage", "list")
 QUESTION_TYPES = ("choice", "multi_select", "likert", "text")

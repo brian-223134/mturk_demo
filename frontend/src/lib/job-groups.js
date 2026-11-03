@@ -2,7 +2,22 @@
 // 각 job 의 group 에 { id, index, size, chosen_job_id } 를 적는다. 여기서는 job 목록을 화면의 항목(후보 묶음 또는 단독 job)으로
 // 나누고, 묶음의 진행 상태와 후보 이름, 후보마다 기본으로 고를 모델을 정한다. DOM 은 쓰지 않는다.
 
+import { decodeUtf8, parseCsv } from './csv.js';
+import { parseJsonData } from './json-data.js';
+
 export const CANDIDATE_COUNT = 3;
+
+/** job 의 HIT 데이터 파일 이름. JSON 으로 통일하기 전에 만든 job 에는 hits.csv 만 있다. */
+export function hitsFileOf(job) {
+  const files = job.files ?? [];
+  return !files.includes('hits.json') && files.includes('hits.csv') ? 'hits.csv' : 'hits.json';
+}
+
+/** hitsFileOf 의 파일을 Publish Batch 가 쓰는 데이터 모양으로 읽는다. */
+export function parseHits(name, bytes) {
+  const text = decodeUtf8(bytes);
+  return name.endsWith('.csv') ? parseCsv(text, name) : parseJsonData(text, name);
+}
 
 const isActive = (job) => job.status === 'queued' || job.status === 'running';
 

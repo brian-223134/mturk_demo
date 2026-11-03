@@ -8,9 +8,9 @@ import { el } from '../../components/dom.js';
 import { confirmModal } from '../../components/modal.js';
 import { loading, muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
-import { decodeUtf8, parseCsv } from '../../lib/csv.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
 import { NEW_PROJECT, emptyProjectDraft, projectDraftFromStarter, projectDraftStorage, sampleFor } from '../../lib/project-draft.js';
+import { hitsFileOf, parseHits } from '../../lib/job-groups.js';
 import { applyJobSettings, settingsFromProperties } from '../../lib/settings.js';
 import { STARTERS, STARTER_CATEGORIES, starterById, starterUrl } from '../../lib/starters.js';
 import { extractPlaceholders } from '../../lib/template.js';
@@ -203,17 +203,18 @@ async function fetchJobFile(job, name, as) {
 
 /**
  * template.html 은 job 이름의 Project 로 저장하고(같은 이름이 있으면 덮어쓴다), settings.json 은 그 속성과 검수 설정으로,
- * hits.csv 의 첫 행은 표본 행으로 둔다. hits.csv 전체는 그 Project 의 Publish Batch 에 올린 상태로 넘긴다.
+ * HIT 데이터의 첫 행은 표본 행으로 둔다. HIT 데이터 전체는 그 Project 의 Publish Batch 에 올린 상태로 넘긴다.
  */
 async function useJobResult(job, signal) {
-  const [html, csvBytes, settingsJson, templates] = await Promise.all([
+  const hitsFile = hitsFileOf(job);
+  const [html, hitsBytes, settingsJson, templates] = await Promise.all([
     fetchJobFile(job, 'template.html', 'text'),
-    fetchJobFile(job, 'hits.csv', 'bytes'),
+    fetchJobFile(job, hitsFile, 'bytes'),
     fetchJobFile(job, 'settings.json', 'json'),
     api.listTemplates(),
   ]);
   if (signal.aborted) return;
-  const data = parseCsv(decodeUtf8(csvBytes), 'hits.csv');
+  const data = parseHits(hitsFile, hitsBytes);
   const name = (job.name || job.id).trim();
   const existing = templates.find((t) => t.name === name);
   const settings = applyJobSettings(settingsFromProperties(existing?.properties), settingsJson, data.columns);

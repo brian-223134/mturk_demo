@@ -7,7 +7,6 @@ AGENT_LOCAL_SAMPLE_DIR에 raw.json과 task_spec.json이 있으면 (익명화하�
 그 폴더로도 돌린다. 없으면 건너뛴다.
 """
 
-import csv
 import json
 import os
 import re
@@ -70,8 +69,7 @@ class SamplePipelineTest(unittest.TestCase):
             self.assertEqual(set(values), set(parsed.option_values))
             self.assertTrue(all(count > 0 for count in values.values()), values)
 
-            with (out / "hits.csv").open(encoding="utf-8", newline="") as handle:
-                rows = list(csv.DictReader(handle))
+            rows = json.loads((out / "hits.json").read_text(encoding="utf-8"))
             self.assertEqual(len(rows), 6)
             for row in rows:
                 flags = json.loads(row["attention"])

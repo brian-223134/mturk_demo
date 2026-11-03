@@ -177,7 +177,7 @@ export function renderTutorial(root) {
       'tutorial-generate',
       3,
       '원본 데이터에서 자동으로 만들기',
-      el('p', {}, '원본 데이터(JSON, JSONL, CSV)와 "무엇을 판정하게 할지" 적은 prompt만 주면 agent가 화면과 HIT CSV를 만듭니다. LLM은 작업 명세(', code('task_spec.json'), ') 하나만 쓰고, 데이터를 HIT로 자르고 HTML을 그리는 일은 코드가 합니다.'),
+      el('p', {}, '원본 데이터(JSON)와 "무엇을 판정하게 할지" 적은 prompt만 주면 agent가 화면과 HIT 데이터를 만듭니다. LLM은 작업 명세(', code('task_spec.json'), ') 하나만 쓰고, 데이터를 HIT로 자르고 HTML을 그리는 일은 코드가 합니다.'),
       flow([
         { title: '원본 + prompt', text: '한 문장이어도 됩니다' },
         { title: '후보 3개', text: '모델만 바꿔 동시에 profile → plan → preprocess → render → validate', accent: true },

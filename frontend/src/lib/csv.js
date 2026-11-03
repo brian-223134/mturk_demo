@@ -1,4 +1,4 @@
-// Create (2) Data: CSV 읽기. prototype/src/features/create/csv.ts 를 옮긴 것인데, papaparse 대신 작은 RFC 4180 파서를 직접 쓴다.
+// JSON 으로 통일하기 전에 만든 agent job 의 hits.csv 읽기 (화면에서 올리는 데이터는 lib/json-data.js). prototype/src/features/create/csv.ts 를 옮긴 것인데, papaparse 대신 작은 RFC 4180 파서를 직접 쓴다.
 // 셀은 전부 문자열로 둔다 (`${}` 치환은 셀 문자열을 그대로 끼워 넣는다). 따옴표 안의 쉼표, 줄바꿈, 겹따옴표("")와 CRLF, BOM 을 다룬다.
 
 /** 파일을 쓸 수 없을 때. message 를 화면에 그대로 보여 준다. */

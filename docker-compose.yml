@@ -8,7 +8,7 @@
 #   docker compose --profile mock up web-mock          → http://localhost:8081   (서버 없이 브라우저만으로. 비상용)
 #   docker compose run --rm test                         Vitest 단위 테스트
 #   docker compose run --rm agent run var/<task>/raw.json --prompt @var/<task>/prompt.md --spec var/<task>/task_spec.json --out output/<task>
-#                                                        원본 + prompt → hits.csv + template.html (agent/README.md). 입력은 var/ 아래,
+#                                                        원본 + prompt → hits.json + template.html (agent/README.md). 입력은 var/ 아래,
 #                                                        출력은 output/<task>/ 아래 (--out 을 빼면 output/<원본 파일 이름>/)
 #   docker compose run --rm agent test                   agent 단위 테스트 (unittest)
 #   docker compose exec api npm run sql -- "SELECT status, COUNT(*) FROM assignments GROUP BY 1"

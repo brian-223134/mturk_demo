@@ -10,6 +10,8 @@ import {
   groupJobs,
   groupMessage,
   groupState,
+  hitsFileOf,
+  parseHits,
   repeatedModels,
   restoreCandidateModels,
 } from '../src/lib/job-groups.js';
@@ -92,5 +94,28 @@ describe('candidateLabel', () => {
     assert.equal(candidateLabel(member('c', 2)), 'Candidate C · deepseek-v3.2');
     assert.equal(candidateLabel({ id: 'j1', name: 'single run' }), 'single run');
     assert.equal(candidateLabel({ id: 'j1' }), 'j1');
+  });
+});
+
+describe('job 의 HIT 데이터 파일', () => {
+  const bytes = (text) => new TextEncoder().encode(text).buffer;
+
+  it('새 job 은 hits.json, 옛 job 은 hits.csv 를 읽는다', () => {
+    assert.equal(hitsFileOf({ files: ['template.html', 'hits.json'] }), 'hits.json');
+    assert.equal(hitsFileOf({ files: ['template.html', 'hits.csv'] }), 'hits.csv');
+    assert.equal(hitsFileOf({ files: ['hits.csv', 'hits.json'] }), 'hits.json');
+    assert.equal(hitsFileOf({ files: [] }), 'hits.json');
+    assert.equal(hitsFileOf({}), 'hits.json');
+  });
+
+  it('두 파일 모두 같은 데이터 모양이 되고, JSON 글 값은 그대로 남는다', () => {
+    const cell = '["a\\u003cb"]';
+    const json = parseHits('hits.json', bytes(JSON.stringify([{ hit_id: '"hit-0001"', passage: cell }])));
+    const csv = parseHits('hits.csv', bytes('hit_id,passage\n"""hit-0001""","[""a\\u003cb""]"\n'));
+    assert.deepEqual(json.columns, ['hit_id', 'passage']);
+    assert.equal(json.rows[0].passage, cell);
+    assert.deepEqual(csv.rows, json.rows);
+    assert.equal(json.fileName, 'hits.json');
+    assert.equal(csv.fileName, 'hits.csv');
   });
 });

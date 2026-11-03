@@ -4,7 +4,7 @@
     run_render(spec, out_dir) template.html 저장, 경로 반환
 
 데이터 주입은 `${컬럼}` 치환만 쓴다 (MTurk Requester 웹사이트와 콘솔이 같은 방식으로 치환한다). HTML 안의
-`${identifier}`는 정확히 hit_id와 spec의 필드 이름들뿐이다 (attention 표시는 CSV에만 있고 템플릿에는 없다). 그래서
+`${identifier}`는 정확히 hit_id와 spec의 필드 이름들뿐이다 (attention 표시는 HIT 데이터에만 있고 템플릿에는 없다). 그래서
 JS 템플릿 리터럴은 쓰지 않고, spec의 어떤 문자열에도 `${`가 들어 있으면 ValueError를 낸다.
 
 화면 구성과 CSS는 연구실의 이전 템플릿을 따른다: Instructions 패널 → 진행률 바 → 탭(항목마다 하나) → Submit.
