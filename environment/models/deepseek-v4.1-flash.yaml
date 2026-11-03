@@ -3,17 +3,17 @@
 #
 # 모델: deepseek/deepseek-v4.1-flash-1017 (2026-11 기준, OpenRouter 공개 모델 목록에서 확인한 값)
 #   - 2026-10-17 의 snapshot 이다. 이름에 날짜가 있어 나중에 내용이 바뀌지 않으므로 결과를 비교하기 좋다. context 1M.
-#   - 업체: crusoe/fp8. 값: 입력 $0.29 / 출력 $1.20 (백만 토큰당). 같은 모델의 다른 fp8 업체 가운데 싼 쪽은 deepinfra/fp8($0.098 / $0.294)이다.
+#   - 업체: crusoe/fp8 를 먼저 쓰고, 안 되면 parasail/fp8 로 넘어간다. 값: 입력 $0.29, $0.30 / 출력 둘 다 $1.20 (백만 토큰당). 같은 모델의 다른 fp8 업체 가운데 싼 쪽은 deepinfra/fp8($0.098 / $0.294)이다.
 #   - response_format(JSON 출력 강제), structured_outputs, reasoning(effort 조절), seed 를 지원한다.
-#   - 업체를 태그로 고정하므로 fallback 이 없다. Crusoe 가 멈추면 호출이 실패한다.
+#   - 두 업체가 모두 안 되면 호출이 실패한다. 어느 업체가 답했는지는 콘솔의 답 아래에 나온다.
 
 api: openrouter                 # 호출하는 API. 지금은 openrouter 만 지원한다
 model: deepseek/deepseek-v4.1-flash-1017   # OpenRouter 의 모델 id
-# provider 는 OpenRouter 의 라우팅 설정이다. 이 설정은 결과를 비교할 수 있게 업체와 양자화를 고정한다. 태그를 적으면 그 업체로만 보내고 fallback 은 없다.
-# 태그는 python3 -m agent providers <모델 id> 로 본다 (키·크레딧 불필요). 다른 업체를 쓰려면 아래 줄을 바꾼다. 예:
-# provider: deepinfra/fp8
+# provider 는 OpenRouter 의 라우팅 설정이다. order 의 업체를 차례로 시도한다. allow_fallbacks: false 면 목록 밖으로 나가지 않고, true 면 목록이 모두 실패했을 때 다른 업체로도 넘어간다.
+# 태그는 python3 -m agent providers <모델 id> 로 본다 (키·크레딧 불필요). 태그를 적으면 그 업체로만 보낸다. 예:
+# provider: crusoe/fp8
 # provider: {order: [crusoe, deepinfra], allow_fallbacks: true, quantizations: [fp8]}
-provider: crusoe/fp8
+provider: {order: [crusoe, parasail], allow_fallbacks: false, quantizations: [fp8]}
 params:                         # chat completions 요청 본문에 그대로 들어가는 파라미터 (model, messages, provider 는 못 쓴다)
   temperature: 0
   seed: 7                       # 같은 요청의 결과를 되도록 같게 한다

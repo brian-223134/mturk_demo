@@ -427,6 +427,7 @@ class OpenRouterPlanner:
         self.calls = 0                          # complete() 를 부른 횟수. 로그 파일 번호로 쓴다
         self.last_usage: dict | None = None     # 마지막 성공 응답의 usage
         self.total_usage: dict | None = None    # 성공 호출들의 usage 합계 ({"calls": n, "prompt_tokens": …, "cost": …})
+        self.last_provider: str | None = None   # 마지막 응답을 실제로 만든 업체 (OpenRouter 응답의 provider)
         self._logs_cleared = False              # 이 planner 가 log_dir 의 옛 로그를 이미 지웠는지
         self.retry_backoff = RETRY_BACKOFF_SECONDS if retry_backoff is None else tuple(retry_backoff)
         self.reply_retries = max(0, int(reply_retries))
@@ -520,6 +521,7 @@ class OpenRouterPlanner:
                 raise PlannerError(NO_KEY)
             payload = self._post(body, call)
             self._record_usage(payload)
+            self.last_provider = payload.get("provider") if isinstance(payload, dict) else None
             try:
                 content = extract_reply(payload)
             except ReplyError as error:

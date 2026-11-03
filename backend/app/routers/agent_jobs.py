@@ -355,7 +355,8 @@ async def create_binding(request: Request) -> dict:
         result = await asyncio.to_thread(write_binding, config, resolve_api_key(None, settings.env_file), True, task, log_dir)
     except PlannerError as error:
         raise invalid(f"The model call failed: {error}") from None
-    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag}}
+    served_by = result.pop("provider", None)  # 설정에 업체가 여럿이면 실제로 답한 업체는 응답을 봐야 안다
+    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
 
 
 @router.post("/job-groups", status_code=202)

@@ -66,11 +66,11 @@ class MessagesTest(unittest.TestCase):
 
 
 class ConfigTest(unittest.TestCase):
-    def test_model_and_provider_are_pinned(self):
+    def test_crusoe_falls_back_to_parasail_and_no_further(self):
         cfg = config()
         self.assertEqual(cfg.model, "deepseek/deepseek-v4.1-flash-1017")
-        self.assertEqual(cfg.provider_tag, "crusoe/fp8")
-        self.assertEqual(cfg.provider, {"order": ["crusoe"], "allow_fallbacks": False, "quantizations": ["fp8"]})
+        self.assertIsNone(cfg.provider_tag)
+        self.assertEqual(cfg.provider, {"order": ["crusoe", "parasail"], "allow_fallbacks": False, "quantizations": ["fp8"]})
         self.assertEqual(cfg.params["temperature"], 0)
         self.assertEqual(cfg.params["response_format"], {"type": "json_object"})
 
@@ -89,11 +89,17 @@ class WriteTest(unittest.TestCase):
             result = binding_module.write_binding(config(), "key", True, REQUEST)
         body = post.call_args.args[0]
         self.assertEqual(body["model"], "deepseek/deepseek-v4.1-flash-1017")
-        self.assertEqual(body["provider"]["order"], ["crusoe"])
+        self.assertEqual(body["provider"]["order"], ["crusoe", "parasail"])
         self.assertEqual(result["binding"]["design"], "item-list")
         self.assertEqual(result["binding"]["task_type"], "text")
         self.assertEqual(result["binding"]["slots"], reply["slots"])
         self.assertEqual(result["usage"]["cost"], 0.01)
+
+    def test_the_provider_that_answered_comes_back(self):
+        payload = {"provider": "Parasail", "choices": [{"message": {"content": json.dumps({"slots": {}})}, "finish_reason": "stop"}], "usage": {"cost": 0.01}}
+        with mock.patch("agent.planner.openrouter.OpenRouterPlanner._post", return_value=payload):
+            result = binding_module.write_binding(config(), "key", True, REQUEST)
+        self.assertEqual(result["provider"], "Parasail")
 
     def reply_of(self, reply):
         payload = {"choices": [{"message": {"content": json.dumps(reply)}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 5, "completion_tokens": 2, "cost": 0.01}}

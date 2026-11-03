@@ -324,7 +324,7 @@ def test_binding_returns_the_model_reply(make_client, monkeypatch) -> None:
 
     def fake_write(config, api_key, allow_api, request, log_dir):
         seen.update(model=config.model, allow_api=allow_api, request=request, log_dir=log_dir)
-        return {"binding": {"design": "item-list", "task_type": "text", "slots": {}}, "usage": {"calls": 1, "cost": 0.002}}
+        return {"binding": {"design": "item-list", "task_type": "text", "slots": {}}, "usage": {"calls": 1, "cost": 0.002}, "provider": "Parasail"}
 
     monkeypatch.setattr("app.routers.agent_jobs.write_binding", fake_write)
     with make_client(api_allowed=True) as client:
@@ -333,7 +333,8 @@ def test_binding_returns_the_model_reply(make_client, monkeypatch) -> None:
     body = response.json()
     assert body["binding"]["design"] == "item-list"
     assert body["usage"]["cost"] == 0.002
-    assert body["model"] == {"name": "deepseek-v4.1-flash", "model": "deepseek/deepseek-v4.1-flash-1017", "provider_tag": "crusoe/fp8"}
+    assert body["model"] == {"name": "deepseek-v4.1-flash", "model": "deepseek/deepseek-v4.1-flash-1017", "provider_tag": None, "served_by": "Parasail"}
+    assert "provider" not in body
     assert seen["allow_api"] is True
     assert seen["request"]["errors"] == ["bad path"] and seen["request"]["previous"] == {"design": "x"}
     assert "allow_api" not in seen["request"], "허용 여부는 모델에 보내지 않는다"

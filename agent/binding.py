@@ -1,7 +1,7 @@
 """LLM 이 binding 을 쓰는 단계. binding 은 HIT 데이터의 어떤 값이 rough design 의 어느 칸에 들어갈지 적은 JSON 이다.
 
     build_messages(request)                        요청 → chat completions 의 messages
-    write_binding(config, api_key, allow_api, request, log_dir)  OpenRouter 호출 → {"binding", "message", "cannot", "usage"}
+    write_binding(config, api_key, allow_api, request, log_dir)  OpenRouter 호출 → {"binding", "message", "cannot", "usage", "provider"}
 
 브라우저가 가안 정의와 데이터 요약(구조와 표본)을 보내므로 원본 파일 전체는 여기로 오지 않는다. binding 의 검사와 템플릿 조립은
 브라우저(frontend/src/lib/design-binding.js)에 있고, 검사에 실패하면 브라우저가 오류를 errors 에 담아 다시 부른다.
@@ -60,6 +60,6 @@ def write_binding(config: ModelConfig, api_key: str | None, allow_api: bool, req
     cannot = reply.pop("cannot", None)
     if cannot:
         # 모르는 값은 format 으로 본다. 가안 전환 안내는 layout 일 때만 보인다
-        return {"binding": None, "cannot": cannot if cannot in CANNOT_KINDS else "format", "message": message, "usage": planner.total_usage}
+        return {"binding": None, "cannot": cannot if cannot in CANNOT_KINDS else "format", "message": message, "usage": planner.total_usage, "provider": planner.last_provider}
     binding = {**reply, "design": request["design"]["id"], "task_type": request["task_type"]}
-    return {"binding": binding, "cannot": None, "message": message, "usage": planner.total_usage}
+    return {"binding": binding, "cannot": None, "message": message, "usage": planner.total_usage, "provider": planner.last_provider}

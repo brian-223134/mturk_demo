@@ -623,7 +623,7 @@ export function renderDesignData(root, params, signal) {
       });
       if (signal.aborted) return;
       const cost = typeof result.usage.cost === 'number' ? `, $${result.usage.cost.toFixed(4)}` : '';
-      const meta = `${result.model?.model ?? 'the model'} (${result.model?.provider_tag ?? 'any provider'}): ${result.attempts} attempt(s)${cost}`;
+      const meta = `${result.model?.model ?? 'the model'} (${result.model?.served_by ?? result.model?.provider_tag ?? 'any provider'}): ${result.attempts} attempt(s)${cost}`;
       // 가안을 바꿀 때 보관한 값은 LLM 을 거치지 않고 그대로 이어 간다
       const answer = result.binding && revising && before.unused ? { ...result, binding: { ...result.binding, unused: before.unused } } : result;
       state.versions = addAnswer(state.versions, { before, authored: state.authored, result: answer, request, meta });

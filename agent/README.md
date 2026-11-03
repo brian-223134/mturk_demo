@@ -228,7 +228,7 @@ LLM에 관한 설정은 모델마다 하나의 YAML 파일로 `environment/model
 | `default` | `openai/gpt-oss-120b` | 기본 설정입니다. 값이 싸고 JSON 출력을 강제할 수 있으며, 추론량(`reasoning.effort`)을 조절할 수 있습니다. |
 | `qwen3-235b` | `qwen/qwen3-235b-a22b-2507` | 이 가운데 입력과 출력 값이 낮은 편입니다. 추론 단계 없이 바로 답하는 버전이라 `reasoning` 파라미터가 없습니다. |
 | `deepseek-v3.2` | `deepseek/deepseek-v3.2` | 다른 계열의 모델로 결과를 비교할 때 씁니다. 추론량은 `low`로 둡니다. |
-| `deepseek-v4.1-flash` | `deepseek/deepseek-v4.1-flash-1017` | 콘솔에서 LLM이 binding을 쓸 때의 기본 설정입니다(`AGENT_BINDING_MODEL`로 바꿉니다). 날짜가 붙은 snapshot이고 업체를 `crusoe/fp8`로 고정해 결과를 비교하기 좋습니다. fallback은 없습니다. |
+| `deepseek-v4.1-flash` | `deepseek/deepseek-v4.1-flash-1017` | 콘솔에서 LLM이 binding을 쓸 때의 기본 설정입니다(`AGENT_BINDING_MODEL`로 바꿉니다). 날짜가 붙은 snapshot입니다. `crusoe/fp8`를 먼저 쓰고, 안 되면 `parasail/fp8`로 넘어갑니다. 그 밖의 업체로는 가지 않습니다. |
 
 콘솔의 Generate from raw data는 이 폴더의 설정을 후보마다 하나씩 고르게 합니다. 새 모델을 쓰려면 `default.yaml`을 복사해 `<이름>.yaml`로 저장하고 고칩니다. 파일을 더하면 콘솔의 모델 목록에도 나타나며, `environment/.env.example`의 설정 목록과 위의 표도 함께 고쳐 둡니다. API 키 같은 비밀은 설정 파일에 적지 않고 `environment/.env`에만 둡니다. `.env`는 저장소에 들어가지 않으며, 형식은 `environment/.env.example`에 있습니다.
 
