@@ -10,7 +10,7 @@ import { checkData } from '../src/lib/data-check.js';
 import { formatJsonTemplate, parseJsonData } from '../src/lib/json-data.js';
 import { hasLayoutErrors, lintLayout } from '../src/lib/layout-lint.js';
 import { toSaveRequest } from '../src/lib/project-draft.js';
-import { ROUGH_DESIGNS, SLOT_LABELS, TASK_TYPES, buildDesignTemplate, designPath, findSameProject, roughDesignById, taskTypeById } from '../src/lib/rough-designs.js';
+import { ROUGH_DESIGNS, SLOT_LABELS, TASK_TYPES, buildDesignTemplate, designDataPath, designPath, findSameProject, roughDesignById, taskTypeById } from '../src/lib/rough-designs.js';
 import { DEFAULT_SETTINGS, validateProperties } from '../src/lib/settings.js';
 import { extractPlaceholders, renderTemplate } from '../src/lib/template.js';
 
@@ -49,6 +49,7 @@ describe('rough design 목록', () => {
   it('주소: 종류를 고르기 전과 뒤', () => {
     assert.equal(designPath('tabs'), '/create/new/design/tabs');
     assert.equal(designPath('tabs', 'video'), '/create/new/design/tabs/video');
+    assert.equal(designDataPath('tabs', 'video'), '/create/new/design/tabs/video/data');
   });
 });
 

@@ -5,6 +5,7 @@
 //   rows[].weight  도형 그림에서 이 줄의 높이 비율
 //   tabs           있으면 rows 전체를 탭 수만큼 되풀이한다
 // 표본 글과 그림은 모두 직접 만든 합성 자료다. Video 의 표본은 영상 파일 없이 Vision 의 그림을 쓴다 (ann-video 가 정지 화면으로 그린다).
+// 실제 HIT 데이터를 칸에 넣는 것은 lib/design-binding.js 가 맡는다.
 // tests/rough-designs.test.js 가 가안과 task 종류의 모든 조합이 바로 쓸 수 있는 상태인지 본다.
 
 import { settingsFromProperties } from './settings.js';
@@ -169,83 +170,134 @@ export function designPath(designId, taskTypeId) {
   return taskTypeId ? `${base}/${encodeURIComponent(taskTypeId)}` : base;
 }
 
+/** HIT 데이터를 올려 가안에 넣어 보는 화면의 주소. */
+export function designDataPath(designId, taskTypeId) {
+  return `${designPath(designId, taskTypeId)}/data`;
+}
+
 function indented(lines, depth = 1) {
   return lines.map((line) => `${'  '.repeat(depth)}${line}`);
 }
 
-/** 칸 하나를 템플릿 줄들로 바꾼다. suffix 는 탭 번호처럼 컬럼과 답 이름에 붙일 글이고, sampleIndex 는 쓸 표본의 번호다. */
-function slotLines(slot, content, suffix, sampleIndex, sampleRow) {
-  const dataLines = (columnSuffix, label, index) => {
-    const column = `${content.column}${columnSuffix}`;
-    sampleRow[column] = content.samples[index];
-    return content.tag === 'ann-text' ? [`<ann-text label="${label}">\${${column}}</ann-text>`] : [`<${content.tag} label="${label}" src="\${${column}}"></${content.tag}>`];
-  };
-  const optionLines = (options) => options.map(([value, label]) => `  <ann-option value="${value}">${label}</ann-option>`);
-  switch (slot) {
-    case 'data':
-      return dataLines(suffix, content.label, sampleIndex);
-    case 'data-a':
-      return dataLines('_a', `${content.label} 1`, 0);
-    case 'data-b':
-      return dataLines('_b', `${content.label} 2`, 1);
-    case 'choice':
-      return [`<ann-choice name="${content.choice.name}${suffix}" header="${content.choice.header}" required>`, ...optionLines(content.choice.options), '</ann-choice>'];
-    case 'compare':
-      return [
-        `<ann-choice name="${content.compare.name}" header="${content.compare.header}" required layout="horizontal">`,
-        ...optionLines([
-          ['first', `${content.label} 1`],
-          ['second', `${content.label} 2`],
-          ['same', 'About the same'],
-        ]),
-        '</ann-choice>',
-      ];
-    case 'checklist':
-      sampleRow.items = JSON.stringify(content.checklist.items);
-      return [`<ann-checklist name="${content.checklist.name}" header="${content.checklist.header}" required>`, '  <script type="application/json">${items}</script>', '</ann-checklist>'];
-    case 'free-text':
-      return [`<ann-textarea name="${content.freeText.name}${suffix}" header="${content.freeText.header}" rows="2" placeholder="${content.freeText.placeholder}"></ann-textarea>`];
-    default:
-      throw new Error(`Unknown slot: ${slot}`);
-  }
+/** 템플릿의 속성과 본문에 넣는 글. `${` 가 placeholder 로 읽히지 않게 $ 도 바꾼다. */
+export function templateText(text) {
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\$/g, '&#36;');
 }
 
-function rowLines(row, content, suffix, sampleIndex, sampleRow) {
-  const cells = row.slots.map((slot) => slotLines(slot, content, suffix, sampleIndex, sampleRow));
-  if (cells.length === 1) return cells[0];
-  return [`<ann-columns columns="${row.columns}">`, ...cells.flatMap((cell) => indented(['<ann-column>', ...indented(cell), '</ann-column>'])), '</ann-columns>'];
+/** 데이터 칸의 줄. 값은 컬럼에서 온다. */
+export function dataLines(taskType, column, label) {
+  const { tag } = CONTENT[taskType.id];
+  return tag === 'ann-text' ? [`<ann-text label="${templateText(label)}">\${${column}}</ann-text>`] : [`<${tag} label="${templateText(label)}" src="\${${column}}"></${tag}>`];
+}
+
+/** 하나 고르기 문항의 줄. options 는 [값, 글] 의 목록이다. */
+export function choiceLines({ name, header, options, horizontal = false }) {
+  return [
+    `<ann-choice name="${name}" header="${templateText(header)}" required${horizontal ? ' layout="horizontal"' : ''}>`,
+    ...options.map(([value, label]) => `  <ann-option value="${templateText(value)}">${templateText(label)}</ann-option>`),
+    '</ann-choice>',
+  ];
+}
+
+/** 항목별 체크 문항의 줄. 항목은 JSON 컬럼에서 읽는다. */
+export function checklistLines({ name, header, column }) {
+  return [`<ann-checklist name="${name}" header="${templateText(header)}" required>`, `  <script type="application/json">\${${column}}</script>`, '</ann-checklist>'];
+}
+
+/** 약술형 문항의 줄. */
+export function freeTextLines({ name, header, placeholder = '' }) {
+  return [`<ann-textarea name="${name}" header="${templateText(header)}" rows="2"${placeholder ? ` placeholder="${templateText(placeholder)}"` : ''}></ann-textarea>`];
 }
 
 /**
- * 고른 가안과 task 종류로 새 Project 의 내용을 만든다 → { name, html, sampleRow, properties }.
- * html 은 <ann-*> 요소로 쓴 템플릿이고, sampleRow 는 그 컬럼을 모두 채우는 표본 행이다.
+ * 가안의 배치대로 템플릿 HTML 을 만든다. slotLines(칸 이름, 탭 번호 또는 null) 이 칸의 줄을 돌려준다.
+ * tabs 가 1 이상이면 rows 전체를 탭 수만큼 되풀이한다.
  */
-export function buildDesignTemplate(design, taskType) {
-  const content = CONTENT[taskType.id];
-  const sampleRow = {};
-  const body = design.tabs
-    ? [
-        '<ann-tabs>',
-        ...Array.from({ length: design.tabs }, (_, index) =>
-          indented([`<ann-tab header="${content.label} ${index + 1}">`, ...indented(design.rows.flatMap((row) => rowLines(row, content, `_${index + 1}`, index, sampleRow))), '</ann-tab>']),
-        ).flat(),
-        '</ann-tabs>',
-      ]
-    : design.rows.flatMap((row) => rowLines(row, content, '', 0, sampleRow));
-  const usesCompare = design.rows.some((row) => row.slots.includes('compare'));
-  const instructions = usesCompare ? content.compare.instructions : design.tabs ? `${content.instructions} Do this in every tab.` : content.instructions;
-  const html = [
+export function assembleTemplate({ design, instructions, tabs = 0, tabLabel, slotLines }) {
+  const rowLines = (row, tabIndex) => {
+    const cells = row.slots.map((slot) => slotLines(slot, tabIndex));
+    if (cells.length === 1) return cells[0];
+    return [`<ann-columns columns="${row.columns}">`, ...cells.flatMap((cell) => indented(['<ann-column>', ...indented(cell), '</ann-column>'])), '</ann-columns>'];
+  };
+  const body =
+    tabs > 0
+      ? [
+          '<ann-tabs>',
+          ...Array.from({ length: tabs }, (_, index) =>
+            indented([`<ann-tab header="${templateText(tabLabel)} ${index + 1}">`, ...indented(design.rows.flatMap((row) => rowLines(row, index))), '</ann-tab>']),
+          ).flat(),
+          '</ann-tabs>',
+        ]
+      : design.rows.flatMap((row) => rowLines(row, null));
+  return [
     '<script src="/elements/ann-elements.js"></script>',
     '',
     '<ann-form>',
     '  <ann-instructions>',
-    `    <p>${instructions}</p>`,
+    `    <p>${templateText(instructions)}</p>`,
     '  </ann-instructions>',
     '',
     ...indented(body),
     '</ann-form>',
     '',
   ].join('\n');
+}
+
+/** task 종류의 예시 내용 (안내문, 문항, 속성). binding 이 채우지 않은 칸에도 쓴다. */
+export function taskContent(taskType) {
+  return CONTENT[taskType.id];
+}
+
+/** 가안에 맞는 안내문. */
+export function instructionsFor(design, taskType) {
+  const content = CONTENT[taskType.id];
+  if (design.rows.some((row) => row.slots.includes('compare'))) return content.compare.instructions;
+  return design.tabs ? `${content.instructions} Do this in every tab.` : content.instructions;
+}
+
+/** 비교 문항의 기본 선택지. */
+export function compareOptions(label) {
+  return [
+    ['first', `${label} 1`],
+    ['second', `${label} 2`],
+    ['same', 'About the same'],
+  ];
+}
+
+/**
+ * 고른 가안과 task 종류로 예시 자료를 넣은 Project 내용을 만든다 → { name, html, sampleRow, properties }.
+ * html 은 <ann-*> 요소로 쓴 템플릿이고, sampleRow 는 그 컬럼을 모두 채우는 표본 행이다.
+ */
+export function buildDesignTemplate(design, taskType) {
+  const content = CONTENT[taskType.id];
+  const sampleRow = {};
+  const dataSlot = (column, label, index) => {
+    sampleRow[column] = content.samples[index];
+    return dataLines(taskType, column, label);
+  };
+  const slotLines = (slot, tabIndex) => {
+    const suffix = tabIndex === null ? '' : `_${tabIndex + 1}`;
+    switch (slot) {
+      case 'data':
+        return dataSlot(`${content.column}${suffix}`, content.label, tabIndex ?? 0);
+      case 'data-a':
+        return dataSlot(`${content.column}_a`, `${content.label} 1`, 0);
+      case 'data-b':
+        return dataSlot(`${content.column}_b`, `${content.label} 2`, 1);
+      case 'choice':
+        return choiceLines({ name: `${content.choice.name}${suffix}`, header: content.choice.header, options: content.choice.options });
+      case 'compare':
+        return choiceLines({ name: content.compare.name, header: content.compare.header, options: compareOptions(content.label), horizontal: true });
+      case 'checklist':
+        sampleRow.items = JSON.stringify(content.checklist.items);
+        return checklistLines({ name: content.checklist.name, header: content.checklist.header, column: 'items' });
+      case 'free-text':
+        return freeTextLines({ name: `${content.freeText.name}${suffix}`, header: content.freeText.header, placeholder: content.freeText.placeholder });
+      default:
+        throw new Error(`Unknown slot: ${slot}`);
+    }
+  };
+  const html = assembleTemplate({ design, instructions: instructionsFor(design, taskType), tabs: design.tabs ?? 0, tabLabel: content.label, slotLines });
   return { name: `${design.title} (${taskType.title})`, html, sampleRow, properties: settingsFromProperties(content.properties) };
 }
 
