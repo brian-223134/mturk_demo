@@ -106,3 +106,28 @@ describe('ann-elements core', () => {
     assert.deepEqual(core.splitList(' yes, no ,, maybe'), ['yes', 'no', 'maybe']);
   });
 });
+
+describe('ann-item-choice core', () => {
+  const model = { kind: 'item-choice', name: 'support', required: true, keys: ['1', '2'], values: ['yes', 'no'] };
+
+  it('항목마다 답 칸이 하나다', () => {
+    assert.deepEqual(core.schemaOf([model]), [
+      { name: 'support_1', type: 'choice', values: ['yes', 'no'], required: true },
+      { name: 'support_2', type: 'choice', values: ['yes', 'no'], required: true },
+    ]);
+  });
+
+  it('모든 항목에 답해야 하고 답한 항목만 낸다', () => {
+    const partial = core.collect([{ model, value: { 1: 'yes' } }]);
+    assert.deepEqual(partial.answers, [{ name: 'support_1', value: 'yes' }]);
+    assert.equal(partial.problems[0].message, 'Choose an answer for every item.');
+    const full = core.collect([{ model, value: { 1: 'yes', 2: 'no' } }]);
+    assert.deepEqual(full.problems, []);
+    assert.deepEqual(full.answers, [{ name: 'support_1', value: 'yes' }, { name: 'support_2', value: 'no' }]);
+    assert.deepEqual(core.progressOf([{ model, value: { 1: 'yes' } }]), { done: 0, total: 1 });
+  });
+
+  it('필수가 아니면 일부만 답해도 된다', () => {
+    assert.deepEqual(core.collect([{ model: { ...model, required: false }, value: { 2: 'no' } }]).problems, []);
+  });
+});
