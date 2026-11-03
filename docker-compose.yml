@@ -292,6 +292,8 @@ services:
     volumes:
       - ./frontend:/app/frontend:ro
       - ./prototype/src/api/http/routes.ts:/app/prototype/src/api/http/routes.ts:ro
+      # design-binding 테스트가 LLM 설명서의 예시가 example/ 의 binding 과 같은지 본다
+      - ./agent/binding_reference.md:/app/agent/binding_reference.md:ro
       # lib-csv / lib-data-check 테스트가 README 의 업로드 시나리오대로 example/ 의 파일을 읽고, 시나리오 4 는 data/templates 의 템플릿을 읽는다
       - ./example:/app/example:ro
       - ./data/templates:/app/data/templates:ro

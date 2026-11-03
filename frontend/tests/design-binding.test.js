@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { checkData } from '../src/lib/data-check.js';
-import { adaptBinding, attentionItems, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, draftBinding, parseCell, parsePath } from '../src/lib/design-binding.js';
+import { adaptBinding, attentionItems, boundData, boundRow, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, parseCell, parsePath, requestBinding, summarizeData } from '../src/lib/design-binding.js';
 import { parseJsonData } from '../src/lib/json-data.js';
 import { hasLayoutErrors, lintLayout } from '../src/lib/layout-lint.js';
 import { ROUGH_DESIGNS, TASK_TYPES, roughDesignById, taskTypeById } from '../src/lib/rough-designs.js';
@@ -221,5 +221,95 @@ describe('영상과 이미지 칸', () => {
     const check = checkBinding(b, urls);
     assert.ok(buildBoundTemplate(b, roughDesignById('stacked'), taskTypeById('video'), 0).includes('<ann-video label="Video" src="${slot_data}">'));
     assert.equal(boundRow(b, check.design, check.taskType, 0, urls, 0).slot_data, '/m/a%22b.mp4');
+  });
+});
+
+describe('LLM 에 보내는 요약', () => {
+  const summary = summarizeData(reader);
+  const byName = Object.fromEntries(summary.columns.map((c) => [c.name, c]));
+
+  it('구조와 잘린 표본만 담고 파일 전체보다 훨씬 작다', () => {
+    assert.equal(summary.hit_count, 3);
+    assert.deepEqual(summary.columns.map((c) => c.name), data.columns);
+    assert.equal(byName.retrieved_chunk.shape, 'list[11] of str');
+    assert.match(byName.atomic_facts.shape, /^list\[11\] of list\[str\]/);
+    assert.equal(byName.retrieved_chunk.samples.length, 2);
+    assert.equal(byName.retrieved_chunk.samples[0].length, 4, '목록은 앞의 3개와 남은 수');
+    assert.ok(JSON.stringify(summary).length < JSON.stringify(data.rows).length / 3);
+  });
+
+  it('긴 글은 자르고 원래 길이를 알린다', () => {
+    const long = 'x'.repeat(1000);
+    const [column] = summarizeData(readerOf([{ text: long }])).columns;
+    assert.equal(column.shape, 'str');
+    assert.ok(column.samples[0].endsWith('… (1000 characters)'));
+    assert.ok(column.samples[0].length < 320);
+  });
+
+  it('가안 정의에서 칸 목록만 보낸다', () => {
+    const tabs = designForRequest(roughDesignById('tabs'));
+    assert.deepEqual(tabs.rows, [{ slots: ['data'] }, { slots: ['choice'] }]);
+    assert.equal(tabs.one_tab_per_item, true);
+    assert.equal('tabs' in tabs, false, '가안의 예시 탭 수는 보내지 않는다');
+    assert.equal('one_tab_per_item' in designForRequest(roughDesignById('stacked')), false);
+  });
+});
+
+describe('requestBinding', () => {
+  const check = (b) => checkBinding(b, reader);
+  const good = binding;
+  const bad = { ...binding, slots: { ...binding.slots, data: { from: 'no_such_column' } } };
+  const fake = (replies) => {
+    const seen = [];
+    return { seen, send: async (body) => { seen.push(body); return { binding: replies[seen.length - 1], usage: { prompt_tokens: 10, cost: 0.001, note: 'x' }, model: { model: 'm', provider_tag: 'p/fp8' } }; } };
+  };
+
+  it('첫 답이 맞으면 한 번만 묻는다', async () => {
+    const { send, seen } = fake([good]);
+    const result = await requestBinding({ send, check, request: { prompt: 'p' } });
+    assert.equal(seen.length, 1);
+    assert.equal('errors' in seen[0], false);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.attempts, 1);
+    assert.equal(result.model.provider_tag, 'p/fp8');
+  });
+
+  it('검사에 걸리면 오류와 이전 답을 보내 다시 묻고 사용량을 더한다', async () => {
+    const { send, seen } = fake([bad, good]);
+    const result = await requestBinding({ send, check, request: { prompt: 'p' } });
+    assert.equal(seen.length, 2);
+    assert.deepEqual(seen[1].previous, bad);
+    assert.match(seen[1].errors[0], /no column "no_such_column"/);
+    assert.equal(seen[1].prompt, 'p');
+    assert.equal(result.attempts, 2);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.usage.prompt_tokens, 20);
+    assert.equal(result.usage.note, undefined);
+  });
+
+  it('끝까지 틀리면 마지막 답과 오류를 돌려주고 횟수를 넘지 않는다', async () => {
+    const { send, seen } = fake([bad, bad, bad, good]);
+    const result = await requestBinding({ send, check, request: {} });
+    assert.equal(seen.length, 3);
+    assert.deepEqual(result.binding, bad);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.attempts, 3);
+  });
+
+  it('호출 실패는 그대로 던진다', async () => {
+    await assert.rejects(requestBinding({ send: async () => { throw new Error('boom'); }, check, request: {} }), /boom/);
+  });
+});
+
+describe('LLM 설명서 (agent/binding_reference.md)', () => {
+  const reference = readFileSync(new URL('../../agent/binding_reference.md', import.meta.url), 'utf8');
+
+  it('예시 binding 은 검사를 통과하는 example/6-rough-design 의 binding 과 같다', () => {
+    const block = /```json\n([\s\S]*?)\n```/.exec(reference)[1];
+    assert.deepEqual(JSON.parse(block), binding);
+  });
+
+  it('검사가 아는 칸을 모두 설명한다', () => {
+    for (const slot of ['data', 'data-a', 'data-b', 'choice', 'compare', 'checklist', 'free-text']) assert.ok(reference.includes(`\`${slot}\``), slot);
   });
 });

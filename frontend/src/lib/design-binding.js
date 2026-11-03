@@ -15,6 +15,7 @@
 // 경로는 컬럼 이름 뒤에 [i](repeat 의 현재 항목), [숫자], .키 를 붙인다. 셀은 JSON 이나 Python 리터럴이어도 구조로 읽는다.
 // 게시용 데이터는 칸마다 컬럼(slot_data_1 …)을 새로 만들고, binding 이 쓰지 않은 컬럼은 그대로 둔다.
 // binding 에 없는 문항 칸은 예시 문항을 쓰고 경고한다. 가안을 바꾸면 adaptBinding 이 값을 새 칸으로 옮긴다.
+// LLM 에게는 summarizeData 의 요약만 보내고, requestBinding 이 답을 checkBinding 으로 검사해 오류를 붙여 다시 묻는다.
 
 import { assembleTemplate, checklistLines, choiceLines, compareOptions, dataLines, freeTextLines, instructionsFor, roughDesignById, taskContent, taskTypeById } from './rough-designs.js';
 
@@ -379,6 +380,88 @@ export function attentionItems(binding, tabs, reader, rowIndex) {
   const isSet = (value) => value === true || value === 1 || value === '1';
   if (tabs === 0) return isSet(resolve(parsed, reader.cell(rowIndex, parsed.column), 0)) ? [1] : [];
   return Array.from({ length: tabs }, (_, index) => index).flatMap((index) => (isSet(resolve(parsed, reader.cell(rowIndex, parsed.column), index)) ? [index + 1] : []));
+}
+
+// ---- LLM 에 묻기 --------------------------------------------------------------------------------
+
+const SAMPLE_CHARS = 280;
+const SAMPLE_LIST_ITEMS = 3;
+const SAMPLE_KEYS = 4;
+const SHAPE_ROWS = 20;
+
+/** 값의 모양: str, int, list[11] of str, list[11] of list[str], object{a, b}. */
+function shapeOf(value) {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) {
+    const inner = [...new Set(value.slice(0, 20).map(shapeOfElement))];
+    return `list[${value.length}]${inner.length > 0 ? ` of ${inner.join(' | ')}` : ''}`;
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    return `object{${keys.slice(0, SAMPLE_KEYS).join(', ')}${keys.length > SAMPLE_KEYS ? ', …' : ''}}`;
+  }
+  return typeof value === 'string' ? 'str' : typeof value === 'boolean' ? 'bool' : 'number';
+}
+
+function shapeOfElement(value) {
+  return Array.isArray(value) ? `list[${[...new Set(value.slice(0, 20).map(shapeOfElement))].join(' | ')}]` : typeof value === 'object' && value !== null ? 'object' : shapeOf(value);
+}
+
+/** LLM 에 보여 줄 만큼 줄인 값. 긴 글은 자르고 목록은 앞의 몇 개만 둔다. */
+function sampleOf(value) {
+  if (typeof value === 'string') return value.length > SAMPLE_CHARS ? `${value.slice(0, SAMPLE_CHARS)}… (${value.length} characters)` : value;
+  if (Array.isArray(value)) {
+    const shown = value.slice(0, SAMPLE_LIST_ITEMS).map(sampleOf);
+    return value.length > SAMPLE_LIST_ITEMS ? [...shown, `… ${value.length - SAMPLE_LIST_ITEMS} more`] : shown;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value);
+    const shown = Object.fromEntries(entries.slice(0, SAMPLE_KEYS).map(([key, item]) => [key, sampleOf(item)]));
+    return entries.length > SAMPLE_KEYS ? { ...shown, '…': `${entries.length - SAMPLE_KEYS} more keys` } : shown;
+  }
+  return value;
+}
+
+/** HIT 데이터의 구조와 표본. 파일 전체 대신 이것만 서버와 LLM 으로 보낸다. */
+export function summarizeData(reader) {
+  const rowsForShape = Math.min(reader.rowCount, SHAPE_ROWS);
+  const sampleRows = [...new Set([0, Math.floor(reader.rowCount / 2)])].filter((rowIndex) => rowIndex < reader.rowCount);
+  return {
+    hit_count: reader.rowCount,
+    columns: reader.columns.map((name) => {
+      const shapes = new Set();
+      for (let rowIndex = 0; rowIndex < rowsForShape; rowIndex += 1) shapes.add(shapeOf(reader.cell(rowIndex, name)));
+      return { name, shape: [...shapes].slice(0, 3).join(' or '), samples: sampleRows.map((rowIndex) => sampleOf(reader.cell(rowIndex, name))) };
+    }),
+  };
+}
+
+/** 가안 정의 중 LLM 이 쓸 부분. */
+export function designForRequest(design) {
+  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}) };
+}
+
+/**
+ * LLM 에 binding 을 묻고 검사한다. 오류가 있으면 오류와 이전 답을 보내 maxAttempts 번까지 다시 묻는다.
+ * send(body) 는 POST /api/agent/bindings 이고, check(binding) 은 { errors } 를 돌려준다.
+ * → { binding, errors, attempts, usage, model }. errors 가 남아 있으면 사람이 고치도록 마지막 답을 돌려준다.
+ */
+export async function requestBinding({ send, check, request, maxAttempts = 3 }) {
+  let previous = null;
+  let errors = [];
+  const usage = { calls: 0 };
+  let last = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const reply = await send(errors.length > 0 ? { ...request, previous, errors } : request);
+    last = reply;
+    for (const [key, value] of Object.entries(reply.usage ?? {})) {
+      if (typeof value === 'number') usage[key] = (usage[key] ?? 0) + value;
+    }
+    errors = check(reply.binding).errors;
+    if (errors.length === 0) return { binding: reply.binding, errors, attempts: attempt, usage, model: reply.model };
+    previous = reply.binding;
+  }
+  return { binding: last.binding, errors, attempts: maxAttempts, usage, model: last.model };
 }
 
 // ---- 가안 바꾸기와 첫 binding ---------------------------------------------------------------------

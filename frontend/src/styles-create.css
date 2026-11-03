@@ -1140,3 +1140,31 @@ label.btn .dropzone-input {
     grid-template-columns: 1fr;
   }
 }
+
+.binding-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  margin: 12px 0;
+  background: #f8fafe;
+  border: 1px solid #d5e2f6;
+  border-radius: var(--radius);
+}
+.binding-agent > label {
+  font-weight: 600;
+}
+.binding-agent textarea {
+  width: 100%;
+  font: inherit;
+  resize: vertical;
+}
+.binding-agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.binding-agent-actions .check-label {
+  margin-right: auto;
+}

@@ -53,6 +53,7 @@ export const AGENT_ROUTES = {
   getJobInputs: { method: 'GET', path: '/agent/jobs/:id/inputs', args: ['id'] },
   reviewJob: { method: 'PUT', path: '/agent/jobs/:id/review', args: ['id', 'body'] },
   createJobGroup: { method: 'POST', path: '/agent/job-groups', args: ['form'], encoding: 'multipart' },
+  createBinding: { method: 'POST', path: '/agent/bindings', args: ['body'] },
   chooseCandidate: { method: 'PUT', path: '/agent/job-groups/:id/choice', args: ['id', 'job_id'] },
 };
 
