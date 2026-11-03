@@ -1,5 +1,5 @@
 // Create 화면들(Project 목록, New Project, Project 편집기, Publish Batch)이 함께 쓰는 작은 조각: 위쪽 구분 탭, Back / Next 줄,
-// `${이름}` 태그, 폼 항목, 구분 버튼, 요약 표, CSV 양식 내려받기, 잔액 갱신.
+// `${이름}` 태그, 폼 항목, 구분 버튼, 요약 표, JSON 양식 내려받기, 잔액 갱신.
 
 import { api } from '../../api-client/client.js';
 import { tag } from '../../components/badges.js';
@@ -7,7 +7,7 @@ import { el } from '../../components/dom.js';
 import { downloadFile } from '../../components/download.js';
 import { formatDateTime } from '../../components/format.js';
 import { notice } from '../../components/notice.js';
-import { formatCsv } from '../../lib/csv.js';
+import { formatJsonTemplate } from '../../lib/json-data.js';
 import { lintLayout } from '../../lib/layout-lint.js';
 import { extractPlaceholders } from '../../lib/template.js';
 
@@ -36,13 +36,11 @@ export function fileSlug(name) {
 }
 
 /**
- * MTurk 의 "Download CSV template": layout 이 읽는 컬럼을 머리줄로, 표본 행을 첫 행으로 둔 CSV 를 내려받는다.
+ * "Download JSON template": layout 이 읽는 컬럼을 키로, 표본 행을 값으로 둔 JSON 을 내려받는다.
  * 그대로 올리면 HIT 1개짜리 batch 가 된다.
  */
-export function downloadCsvTemplate(name, html, sampleRow = {}) {
-  const columns = extractPlaceholders(html);
-  const row = Object.fromEntries(columns.map((column) => [column, sampleRow[column] ?? '']));
-  downloadFile({ filename: `${fileSlug(name)}-template.csv`, mimeType: 'text/csv', content: formatCsv(columns, [row]) });
+export function downloadJsonTemplate(name, html, sampleRow = {}) {
+  downloadFile({ filename: `${fileSlug(name)}-template.json`, mimeType: 'application/json', content: formatJsonTemplate(extractPlaceholders(html), sampleRow) });
 }
 
 /** 모든 단계의 아래쪽 Back / Next 줄. hint 는 Next 가 막혀 있는 이유처럼 버튼 옆에 짧게 알릴 것. */

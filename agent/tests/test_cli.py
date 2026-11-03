@@ -677,7 +677,7 @@ class CommandTest(unittest.TestCase):
             code, stdout, stderr = run_cli(["run", RAW, "--prompt", "@" + PROMPT_FILE, "--out", str(self.out),
                                             "--spec", SPEC])
         self.assertEqual((code, stderr), (0, ""))
-        for name in ("profile.json", "profile.md", "task_spec.json", "items.jsonl", "hits.csv", "summary.json",
+        for name in ("profile.json", "profile.md", "task_spec.json", "items.json", "hits.json", "summary.json",
                      "settings.json", "template.html", "validation.json"):
             self.assertTrue((self.out / name).is_file(), name)
         for word in ("Profiled", "Planned", "Preprocessed", "Rendered", "Validation: OK"):
@@ -689,7 +689,7 @@ class CommandTest(unittest.TestCase):
     def test_preprocess_and_render_commands(self):
         code, stdout, stderr = run_cli(["preprocess", RAW, "--spec", SPEC, "--out", str(self.out)])
         self.assertEqual((code, stderr), (0, ""))
-        self.assertTrue((self.out / "hits.csv").is_file())
+        self.assertTrue((self.out / "hits.json").is_file())
         code, stdout, stderr = run_cli(["render", "--spec", SPEC, "--out", str(self.out)])
         self.assertEqual((code, stderr), (0, ""))
         self.assertTrue((self.out / "template.html").is_file())
@@ -768,12 +768,12 @@ class DefaultOutTest(unittest.TestCase):
         code, stdout, stderr = self.run_in_tmp(["preprocess", RAW, "--spec", SPEC])
         self.assertEqual((code, stderr), (0, ""))
         self.assertEqual(stdout.splitlines()[0], "Output folder: output/raw")
-        self.assertTrue((self.dir / "output" / "raw" / "hits.csv").is_file())
+        self.assertTrue((self.dir / "output" / "raw" / "hits.json").is_file())
         with no_yaml():
             code, stdout, stderr = self.run_in_tmp(["run", RAW, "--prompt", "@" + PROMPT_FILE, "--spec", SPEC])
         self.assertEqual((code, stderr), (0, ""))
         self.assertEqual(stdout.splitlines()[0], "Output folder: output/raw")
-        for name in ("profile.json", "task_spec.json", "hits.csv", "template.html", "validation.json"):
+        for name in ("profile.json", "task_spec.json", "hits.json", "template.html", "validation.json"):
             self.assertTrue((self.dir / "output" / "raw" / name).is_file(), name)
         code, _, _ = self.run_in_tmp(["validate", "output/raw"])
         self.assertEqual(code, 0)

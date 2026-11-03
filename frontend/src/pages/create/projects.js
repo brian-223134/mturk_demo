@@ -38,7 +38,7 @@ export async function renderProjects(root, signal) {
       { className: 'panel', id: 'projects-panel' },
       el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Projects')),
       muted(
-        'A project is a reusable task: the layout workers see plus its properties (title, reward, assignments, time, worker requirements). Publish Batch uploads a CSV to a project, and each row becomes one HIT. One project can publish many batches. To make a project, use New Project.',
+        'A project is a reusable task: the layout workers see plus its properties (title, reward, assignments, time, worker requirements). Publish Batch uploads a JSON file to a project, and each object becomes one HIT. One project can publish many batches. To make a project, use New Project.',
       ),
       body,
     ),
@@ -64,7 +64,7 @@ export async function renderProjects(root, signal) {
     const project = templates.find((t) => t.id === loaded.draft.templateId);
     if (!project) return;
     const { draft } = loaded;
-    const what = draft.data ? `${draft.data.fileName}, ${draft.data.rows.length.toLocaleString('en-US')} rows` : 'no CSV yet';
+    const what = draft.data ? `${draft.data.fileName}, ${draft.data.rows.length.toLocaleString('en-US')} rows` : 'no data yet';
     resumeSlot.replaceChildren(
       notice(
         'info',

@@ -1,13 +1,13 @@
 # agent: 원본 데이터에서 HIT 묶음까지
 
-`agent/`는 annotation 원본 데이터와 "무엇을 판정하게 할지" 적은 prompt를 받아, 콘솔에 올릴 HIT 묶음을 만드는 파이프라인입니다. 원본을 자동으로 분석하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 CSV와 MTurk crowd-form HTML 템플릿을 만들고, 그 결과가 콘솔에 올릴 수 있는 상태인지 검증합니다.
+`agent/`는 annotation 원본 데이터와 "무엇을 판정하게 할지" 적은 prompt를 받아, 콘솔에 올릴 HIT 묶음을 만드는 파이프라인입니다. 원본을 자동으로 분석하고, 작업 명세(task spec)를 정한 뒤, HIT 단위 JSON과 MTurk crowd-form HTML 템플릿을 만들고, 그 결과가 콘솔에 올릴 수 있는 상태인지 검증합니다.
 
 파이프라인은 Python 표준 라이브러리만 사용합니다. OpenRouter로 spec을 만들 때 모델 설정 파일을 읽기 위한 PyYAML 하나만 더 필요하며, 이것은 Docker 이미지 안에만 설치됩니다 (아래 [모델 설정](#모델-설정)). 실행은 항상 저장소 루트에서 `python3 -m agent …` 또는 Docker로 합니다.
 
 ## 흐름
 
 ```
-원본 데이터 (JSON / JSONL / CSV)   +   prompt (annotation 목적)
+원본 데이터 (JSON)   +   prompt (annotation 목적)
             │
             ▼
    profile  ─── 경로, 타입, 길이, 값 분포, 이상치를 자동 분석 ───▶ profile.json, profile.md
@@ -16,12 +16,12 @@
    plan     ─── task_spec.json ──── LLM(OpenRouter)이 채우거나, 손으로 쓴 파일을 그대로 씁니다
             │
             ▼
-   preprocess ───▶ items.jsonl, hits.csv, summary.json, settings.json
+   preprocess ───▶ items.json, hits.json, summary.json, settings.json
    render     ───▶ template.html
    validate   ───▶ validation.json
             │
             ▼
-   콘솔 Create 탭:  Project ◀ template.html, settings.json   Publish Batch ◀ hits.csv
+   콘솔 Create 탭:  Project ◀ template.html, settings.json   Publish Batch ◀ hits.json
 ```
 
 ## 코드 구성
@@ -30,15 +30,15 @@
 
 | 파일 | 하는 일 | 핵심 작업 |
 |---|---|---|
-| `source.py` | JSON, JSONL, CSV 원본을 읽어 레코드 목록으로 만듭니다. 형식은 확장자와 내용으로 알아냅니다. | 데이터 자동 분석·전처리 |
+| `source.py` | JSON 원본을 읽어 레코드 목록으로 만듭니다. 배열인지 객체인지는 내용으로 알아냅니다. JSONL과 CSV는 거절합니다. | 데이터 자동 분석·전처리 |
 | `profile.py` | 레코드를 훑어 경로 패턴별 타입·길이·값 분포·이상치와 planner용 힌트를 만들고, 프롬프트에 넣을 크기로 줄입니다. | 데이터 자동 분석·전처리 |
 | `paths.py` | spec의 경로 언어(`$.a.b[*]`, `{var}`)를 파싱하고 레코드에서 값을 꺼냅니다. | 데이터 자동 분석·전처리 |
 | `spec.py` | `task_spec.json`의 데이터클래스, 파서, 검증, 그리고 레코드에 spec을 적용하는 공통 규칙입니다. | 데이터 자동 분석·전처리 |
 | `planner/` | spec을 만드는 방법입니다. `file_planner.py`는 손으로 쓴 파일을 읽고, `openrouter.py`는 LLM에게 묻고, `prompts.py`는 그 프롬프트를 조립하며, `base.py`의 `run_plan`이 결과를 검증해 저장합니다. | 데이터 자동 분석·전처리 |
-| `preprocess.py` | spec대로 항목을 만들고 attention 항목을 끼워 HIT로 묶은 뒤 `hits.csv`와 요약을 씁니다. | 데이터 자동 분석·전처리 |
+| `preprocess.py` | spec대로 항목을 만들고 attention 항목을 끼워 HIT로 묶은 뒤 `hits.json`과 요약을 씁니다. | 데이터 자동 분석·전처리 |
 | `sample.py` | 실제 데이터의 일부를 뽑아 익명화한 표본을 만듭니다. | 데이터 자동 분석·전처리 |
 | `render.py` | spec의 필드, 문항(한 개 고르기, 여러 개 체크, 척도, 자유 서술), 안내문에서 MTurk crowd-form 템플릿 `template.html`을 만듭니다. | annotation HTML 자동 생성 |
-| `validate.py` | 출력 폴더의 spec, CSV, 템플릿이 콘솔에 올릴 수 있는 상태인지 검사해 `validation.json`을 씁니다. | annotation HTML 자동 생성 |
+| `validate.py` | 출력 폴더의 spec, HIT 데이터, 템플릿이 콘솔에 올릴 수 있는 상태인지 검사해 `validation.json`을 씁니다. | annotation HTML 자동 생성 |
 | `cli.py`, `__main__.py` | `python3 -m agent`의 하위 명령과 옵션입니다. | 실행 |
 | `config.py` | `environment/models/*.yaml`의 모델 설정과 `.env` 파일을 읽습니다. | 실행 |
 | `Dockerfile`, `requirements.txt` | agent 실행용 이미지와, 그 안에만 설치하는 PyYAML입니다. | 실행 |
@@ -51,7 +51,7 @@ LLM이 하는 일은 `task_spec.json` 하나를 쓰는 것뿐입니다. 어느 �
 
 이렇게 나눈 이유는 두 가지입니다.
 
-- **재현성**: 같은 원본과 같은 spec을 주면 언제나 같은 `hits.csv`와 `template.html`이 나옵니다. spec은 사람이 읽고 고칠 수 있는 작은 JSON이므로, 결과가 이상하면 spec을 보면 됩니다.
+- **재현성**: 같은 원본과 같은 spec을 주면 언제나 같은 `hits.json`과 `template.html`이 나옵니다. spec은 사람이 읽고 고칠 수 있는 작은 JSON이므로, 결과가 이상하면 spec을 보면 됩니다.
 - **크레딧 없이 실행**: spec을 손으로 쓰거나 이전에 만든 것을 다시 쓰면 LLM 호출 없이 전 과정을 돌릴 수 있습니다. 테스트와 예시도 모두 LLM 없이 동작합니다.
 
 spec의 형식은 [spec_reference.md](spec_reference.md)에 영어로 설명되어 있습니다. 이 문서는 LLM에게 보내는 프롬프트에 그대로 들어가므로, 사람과 LLM이 같은 설명을 읽습니다.
@@ -67,7 +67,7 @@ spec의 형식은 `spec_version: 2`입니다. 탭(항목) 하나에는 문맥 �
 | `likert` | 척도의 숫자 하나를 고릅니다. | `"1"`…`"5"` 같은 정수 문자열 |
 | `text` | 짧은 글을 씁니다. 다른 답에 따라 필수가 되게(`required_when`) 할 수 있습니다. | 앞뒤 공백을 지운 글. 비워 둔 선택 문항은 답에서 빠집니다. |
 
-범위가 `target`인 문항은 target마다 한 번, `item`인 문항은 탭마다 한 번 묻습니다. 답 이름은 각각 `general_{탭}_{target 번호}_{문항 id}`와 `general_{탭}_{문항 id}`입니다. attention 탭도 같은 `general_` 이름을 쓰므로 worker의 화면과 페이지 소스에서는 attention 탭을 구별할 수 없습니다. attention 탭의 기대 답은 `hits.csv`의 attention 컬럼(기본 `attention_expected`)에만 들어갑니다.
+범위가 `target`인 문항은 target마다 한 번, `item`인 문항은 탭마다 한 번 묻습니다. 답 이름은 각각 `general_{탭}_{target 번호}_{문항 id}`와 `general_{탭}_{문항 id}`입니다. attention 탭도 같은 `general_` 이름을 쓰므로 worker의 화면과 페이지 소스에서는 attention 탭을 구별할 수 없습니다. attention 탭의 기대 답은 `hits.json`의 attention 컬럼(기본 `attention_expected`)에만 들어갑니다.
 
 기존 라벨이 선택된 key의 목록(예: `selected_facts: ["Atomic fact1"]`)이면 문항의 hint에 `contains: "{target_key}"`를 적어 target마다 "목록에 있다/없다"를 대조 기준으로 씁니다. 옛 형식(`spec_version: 1`, 문항 하나)의 spec도 그대로 읽으며, 답 이름은 예전처럼 `general_{탭}_{target 번호}{answer_suffix}`이고 attention 탭만 `general_`로 바뀝니다. LLM에게는 새 형식만 쓰게 합니다.
 
@@ -122,7 +122,7 @@ python3 -m agent test
 |---|---|
 | `profile RAW [--out DIR] [--format F]` | 원본을 분석해 `profile.json`과 `profile.md`를 만듭니다. 형식은 확장자와 내용으로 알아내며, `--format`으로 정해 줄 수도 있습니다. |
 | `plan --profile DIR/profile.json --prompt TEXT [--out DIR] (--spec FILE \| --planner openrouter …) [--raw RAW]` | `task_spec.json`을 만듭니다. `--spec`은 그 파일을 검증만 해서 저장하고, `--planner openrouter`는 LLM에게 묻습니다. `--raw`를 주면 spec의 경로가 실제 레코드에서 풀리는지도 검사합니다. |
-| `preprocess RAW --spec DIR/task_spec.json [--out DIR]` | spec대로 항목을 만들고 HIT로 묶어 `items.jsonl`, `hits.csv`, `summary.json`, `settings.json`을 만듭니다. |
+| `preprocess RAW --spec DIR/task_spec.json [--out DIR]` | spec대로 항목을 만들고 HIT로 묶어 `items.json`, `hits.json`, `summary.json`, `settings.json`을 만듭니다. |
 | `render --spec DIR/task_spec.json [--out DIR]` | spec에서 MTurk 템플릿 `template.html`을 만듭니다. |
 | `validate DIR` | 출력 폴더를 검사해 `validation.json`을 만듭니다. 오류가 있으면 종료 코드 1입니다. |
 | `run RAW --prompt TEXT [--out DIR] (--spec FILE \| --planner openrouter …)` | 위 다섯 단계를 차례로 실행하고 각 결과 파일의 경로를 출력합니다. 검증에 실패하면 종료 코드 1입니다. |
@@ -143,8 +143,8 @@ python3 -m agent test
 | `plan_request.json` | OpenRouter에 보낸 요청입니다 (`--dry-run`이면 보내지 않고 이 파일만 만듭니다). 어떤 모델 설정을 썼는지(`model_config`), 보낼 주소(`endpoint`), 요청 본문(`body`)이 들어 있습니다. 프롬프트를 확인하는 용도이며 키는 들어 있지 않습니다. 검증에 실패해 다시 물으면 `plan_request_2.json`이 더 생깁니다. |
 | `plan_response.json` | OpenRouter가 돌려준 응답 원문입니다. 다시 물었을 때의 응답은 `plan_response_2.json`입니다. |
 | `task_spec.json` | 작업 명세입니다. 어떤 planner를 썼든 검증을 통과한 뒤 같은 형태로 저장됩니다. LLM이 만든 spec에는 planner가 자기 선택을 설명한 `planner_notes`가 들어 있습니다. |
-| `items.jsonl` | 항목(탭 하나) 단위의 중간 결과입니다. 레코드 ID, 필드 값, 판정 대상, 그리고 답 칸마다 답 이름·문항·대조 기준·이유·attention 기대 값이 한 줄에 하나씩 있습니다. |
-| `hits.csv` | HIT 단위 CSV입니다. 콘솔의 Publish Batch에서 `Upload CSV`에 올립니다. 컬럼은 `hit_id, record_ids, item_ids, attention`, spec의 필드들, 대조 기준 컬럼(기본 `llm_label`), 이유 컬럼(있을 때), attention 컬럼(기본 `attention_expected`, attention이 있을 때) 순서입니다. 모든 셀은 JSON입니다. 대조 기준 컬럼에는 일반 탭의 답만, attention 컬럼에는 attention 탭의 기대 답만 `{답 이름: 값}`으로 들어갑니다. |
+| `items.json` | 항목(탭 하나) 단위의 중간 결과입니다. 레코드 ID, 필드 값, 판정 대상, 그리고 답 칸마다 답 이름·문항·대조 기준·이유·attention 기대 값이 있습니다. |
+| `hits.json` | HIT 단위 데이터로, 객체 하나가 HIT 하나인 JSON 배열입니다. 콘솔의 Publish Batch에서 `Upload JSON`에 올립니다. 컬럼은 `hit_id, record_ids, item_ids, attention`, spec의 필드들, 대조 기준 컬럼(기본 `llm_label`), 이유 컬럼(있을 때), attention 컬럼(기본 `attention_expected`, attention이 있을 때) 순서입니다. 모든 값은 JSON을 담은 문자열입니다. 대조 기준 컬럼에는 일반 탭의 답만, attention 컬럼에는 attention 탭의 기대 답만 `{답 이름: 값}`으로 들어갑니다. |
 | `summary.json` | 레코드·항목·HIT 수, attention 항목 수, target과 답 칸 수, 대조 기준 값의 분포(문항별 분포는 `questions`), 행 크기 같은 요약입니다. 경로가 풀리지 않거나 형이 맞지 않아 건너뛴 레코드는 `skipped_records`에 개수와 예(최대 10개, 레코드 ID와 이유)로 적힙니다. |
 | `settings.json` | 콘솔의 Project 속성과 `Review settings`에 넣을 값입니다 (`Use this result`는 자동으로 채웁니다). 제목, 설명, 키워드, attention 규칙(`{"column": "attention_expected", "minCorrectRatio": 1}`), 대조 기준 컬럼, 자유 서술 답의 이름 접미어(`freeTextSuffixes`), 문항 목록, 답 이름 규칙이 들어 있습니다. |
 | `template.html` | MTurk crowd-form 템플릿입니다. 콘솔에서 Project의 layout으로 올립니다. `${hit_id}`와 spec의 필드만 placeholder로 쓰고, 탭을 다 그린 뒤 답 칸 목록을 `window.TASK_ANSWER_SCHEMA`에 둡니다. Submit을 누르면 hidden `input_answers`에 `[{name, value}]` 배열을 넣어 제출합니다. 다중 선택의 "해당 없음" 칸은 답이 아니지만 `none_<탭>_<문항 id>` 이름을 가집니다 (이름 없는 입력이 있으면 crowd-html-elements가 미리보기에 Potential errors 상자를 띄웁니다). |
@@ -152,12 +152,12 @@ python3 -m agent test
 
 ## 콘솔에 올리기
 
-production 콘솔(http://localhost:3000)의 **Create**에서 `New Project` → `Generate from raw data`로 job을 돌렸다면, job 카드의 `Use this result`가 아래 과정을 한 번에 합니다. template.html과 settings.json을 job 이름의 Project로 저장하고, hits.csv를 올린 상태로 그 Project의 Publish Batch를 엽니다. 화면에서 job을 돌리고 명세를 고쳐 다시 만드는 방법은 [원본 데이터에서 자동으로 만들기](../docs/create-projects.md#원본-데이터에서-자동으로-만들기)에 있습니다.
+production 콘솔(http://localhost:3000)의 **Create**에서 `New Project` → `Generate from raw data`로 job을 돌렸다면, job 카드의 `Use this result`가 아래 과정을 한 번에 합니다. template.html과 settings.json을 job 이름의 Project로 저장하고, hits.json을 올린 상태로 그 Project의 Publish Batch를 엽니다. 화면에서 job을 돌리고 명세를 고쳐 다시 만드는 방법은 [원본 데이터에서 자동으로 만들기](../docs/create-projects.md#원본-데이터에서-자동으로-만들기)에 있습니다.
 명령줄로 만든 결과는 다음 순서로 올립니다 (화면의 자세한 설명은 [Project로 batch 게시하기](../docs/create-projects.md)).
 
 1. `New Project`에서 `Upload or paste HTML`을 고르고 `Create Project`를 누릅니다. `Design Layout`의 `Upload .html`로 `template.html`을 올리면 템플릿이 쓰는 `${컬럼}` 목록이 `Variables`에 표시됩니다.
 2. `Enter Properties`에 `settings.json`의 제목·설명·키워드를 적고, `Preview and Finish`의 `Finish and publish a batch`로 저장합니다.
-3. `Upload CSV`에 `hits.csv`를 올립니다. 템플릿의 컬럼이 모두 있는지 콘솔이 검사합니다.
+3. `Upload JSON`에 `hits.json`을 올립니다. 템플릿의 컬럼이 모두 있는지 콘솔이 검사합니다.
 4. `Preview tasks`에서 HIT를 열어 봅니다.
 5. `Review settings`에서 `Attention check`를 켠 뒤 `Expected answers column` 방식을 골라 `settings.json`의 `attentionRule.column`에 적힌 컬럼(기본 `attention_expected`)을 고릅니다. 자유 서술 문항이 있으면 `Free-text answers`에 `freeTextSuffixes`의 접미어(예: `_missing_info`)를 쉼표로 구분해 적습니다. `Compare answers with`에서는 `reference.column`에 적힌 컬럼(기본 `llm_label`)을 고릅니다. 그러면 Manage의 `Answers` 열에 worker의 답과 LLM 라벨이 나란히 보입니다.
 6. `Confirm and publish`에서 비용을 확인하고 게시합니다.
@@ -308,7 +308,7 @@ python3 -m agent run agent/examples/groundedness/raw.json --prompt @agent/exampl
 python3 -m agent run agent/examples/coverage/raw.json --prompt @agent/examples/coverage/prompt.md --spec agent/examples/coverage/task_spec.json --out output/coverage
 ```
 
-`output/raw/`와 `output/coverage/`에 위 출력 파일들이 생기고, `template.html`과 `hits.csv`를 콘솔의 Create 탭에 올려 볼 수 있습니다.
+`output/raw/`와 `output/coverage/`에 위 출력 파일들이 생기고, `template.html`과 `hits.json`를 콘솔의 Create 탭에 올려 볼 수 있습니다.
 
 ## 실제 데이터의 일부로 테스트하기 (`sample`)
 

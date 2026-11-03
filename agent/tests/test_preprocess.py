@@ -330,9 +330,9 @@ class RowsTest(unittest.TestCase):
             self.assertEqual(reference, expected)
         self.assertTrue(any(len(json.loads(row["llm_label"])) < 8 for row in rows))
 
-    def test_row_bytes_counts_the_csv_line(self):
+    def test_row_bytes_counts_the_values(self):
         size = preprocess.row_bytes(self.columns, self.rows[0])
-        self.assertGreater(size, sum(len(cell.encode("utf-8")) for cell in self.rows[0].values()))
+        self.assertEqual(size, sum(len(cell.encode("utf-8")) for cell in self.rows[0].values()))
 
 
 class RunPreprocessTest(unittest.TestCase):
@@ -343,7 +343,7 @@ class RunPreprocessTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 out = Path(tmp)
                 summary = preprocess.run_preprocess(parsed, EXAMPLE_DIR / "raw.json", out)
-                files = {name: (out / name).read_bytes() for name in ("items.jsonl", "hits.csv", "summary.json", "settings.json")}
+                files = {name: (out / name).read_bytes() for name in ("items.json", "hits.json", "summary.json", "settings.json")}
                 outputs.append((summary, files))
         self.assertEqual(outputs[0], outputs[1])
         summary, files = outputs[0]
@@ -359,13 +359,12 @@ class RunPreprocessTest(unittest.TestCase):
         self.assertLessEqual(summary["row_bytes"]["min"], summary["row_bytes"]["median"])
         self.assertLessEqual(summary["row_bytes"]["median"], summary["row_bytes"]["max"])
 
-        self.assertFalse(files["hits.csv"].startswith(b"\xef\xbb\xbf"))
-        self.assertNotIn(b"\r\n", files["hits.csv"])
-        rows = list(csv.DictReader(files["hits.csv"].decode("utf-8").splitlines()))
+        self.assertFalse(files["hits.json"].startswith(b"\xef\xbb\xbf"))
+        rows = json.loads(files["hits.json"].decode("utf-8"))
         self.assertEqual(len(rows), 6)
         self.assertEqual(list(rows[0]), summary["columns"])
 
-        lines = [json.loads(line) for line in files["items.jsonl"].decode("utf-8").splitlines()]
+        lines = json.loads(files["items.json"].decode("utf-8"))
         self.assertEqual(len(lines), 30)
         self.assertEqual(lines[0]["hit_id"], "hit-0001")
         self.assertEqual(lines[0]["item_index"], 0)
@@ -397,10 +396,10 @@ class RunPreprocessTest(unittest.TestCase):
         settings = preprocess.build_settings(plain)
         self.assertIsNone(settings["attentionRule"])
         self.assertEqual(settings["attentionPerHit"], 0)
-        self.assertNotIn("attention_expected", preprocess.csv_columns(plain))
+        self.assertNotIn("attention_expected", preprocess.hit_columns(plain))
         zero = variant(parsed, lambda d: d["hit"]["attention"].__setitem__("per_hit", 0))
         self.assertIsNone(preprocess.build_settings(zero)["attentionRule"])
-        self.assertNotIn("attention_expected", preprocess.csv_columns(zero))
+        self.assertNotIn("attention_expected", preprocess.hit_columns(zero))
 
 
 class LegacySpecTest(unittest.TestCase):

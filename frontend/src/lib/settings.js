@@ -309,8 +309,8 @@ export function validateSettings(values, { columns = [], pools = [] } = {}) {
   if (values.attentionEnabled) {
     if (values.attentionMode === 'column') {
       const attentionColumn = values.attentionColumn;
-      if (!attentionColumn) errors.attentionColumn = 'Choose the CSV column that holds the expected answers.';
-      else if (!columns.includes(attentionColumn)) errors.attentionColumn = `Column "${attentionColumn}" is not in the uploaded CSV. Choose another column.`;
+      if (!attentionColumn) errors.attentionColumn = 'Choose the data column that holds the expected answers.';
+      else if (!columns.includes(attentionColumn)) errors.attentionColumn = `Column "${attentionColumn}" is not in the uploaded data. Choose another column.`;
     } else {
       if (!values.attentionPrefix || values.attentionPrefix.trim() === '') errors.attentionPrefix = 'Enter the prefix.';
       if (!values.attentionExpected || values.attentionExpected.trim() === '') errors.attentionExpected = 'Enter the expected value, e.g. not_grounded.';
@@ -320,7 +320,7 @@ export function validateSettings(values, { columns = [], pools = [] } = {}) {
 
   const column = values.referenceColumn;
   if (column && !columns.includes(column)) {
-    errors.referenceColumn = `Column "${column}" is not in the uploaded CSV. Choose another column or the majority.`;
+    errors.referenceColumn = `Column "${column}" is not in the uploaded data. Choose another column or the majority.`;
   }
   return errors;
 }

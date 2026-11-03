@@ -539,7 +539,7 @@ a.btn:hover {
   flex-wrap: wrap;
 }
 
-/* ── Upload CSV ────────────────────────────────────────────────────────────────── */
+/* ── Upload JSON ───────────────────────────────────────────────────────────────── */
 
 .dropzone {
   display: flex;
@@ -934,3 +934,209 @@ a.btn:hover {
 .tutorial-subtitle { margin: 16px 0 4px; font-size: 14px; }
 .tutorial-example { max-width: 640px; }
 .tutorial-example select { width: 100%; }
+
+/* ── New Project: rough design 과 task 종류 고르기 ───────────────────────────── */
+
+.choice-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.design-grid {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+.type-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.choice-card {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.choice-card:hover {
+  border-color: #bcd2f3;
+  background: #f8fafe;
+}
+.choice-card.active {
+  border-color: var(--link);
+  box-shadow: 0 0 0 1px var(--link);
+  background: #f3f7fe;
+}
+.choice-card-title {
+  font-weight: 600;
+}
+.choice-card-summary {
+  color: var(--muted);
+  font-size: 13px;
+}
+.other-starts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.design-chosen {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px;
+  margin-top: 8px;
+  background: #fafaf8;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.design-chosen .wire {
+  flex: none;
+  width: 180px;
+  height: 120px;
+  margin: 0;
+  font-size: 9px;
+}
+.design-chosen-summary {
+  margin: 2px 0 4px;
+}
+#design-preview .section-title {
+  margin-top: 16px;
+}
+#design-preview .preview-frame-wrap {
+  margin-top: 8px;
+}
+[data-field='design-project-name'] {
+  max-width: 420px;
+  margin-top: 16px;
+}
+[data-field='design-project-name'][hidden] {
+  display: none;
+}
+
+/* 도형만 놓은 가안 그림 */
+.wire {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: 180px;
+  padding: 7px;
+  margin-bottom: 6px;
+  background: #fff;
+  border: 1px solid #c9c8c2;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4d4d4d;
+}
+.wire-instructions {
+  flex: none;
+  padding: 1px 6px;
+  background: #efeee9;
+  border: 1px solid #c9c8c2;
+  color: var(--muted);
+  font-weight: 500;
+}
+.wire-tabs {
+  flex: none;
+  display: flex;
+  gap: 3px;
+  margin-bottom: -5px;
+}
+.wire-tab {
+  padding: 0 9px;
+  background: #efeee9;
+  border: 1px solid #a8a79f;
+  border-bottom: 0;
+}
+.wire-tab.active {
+  background: #fff;
+}
+.wire-row {
+  flex: 1 1 0;
+  display: grid;
+  gap: 5px;
+  min-height: 0;
+}
+.wire-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 2px 4px;
+  text-align: center;
+  border: 1px solid #8f8e86;
+  line-height: 1.2;
+}
+.wire-data {
+  /* 그림 자리를 나타내는 PPT 식 대각선 */
+  background:
+    linear-gradient(to top right, transparent calc(50% - 0.5px), #d3d2cb calc(50% - 0.5px), #d3d2cb calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom right, transparent calc(50% - 0.5px), #d3d2cb calc(50% - 0.5px), #d3d2cb calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    #f7f7f4;
+}
+.wire-data span {
+  padding: 0 3px;
+  background: #f7f7f4;
+}
+.wire-hit {
+  background: #e8f0fc;
+  border-color: #7fa3da;
+  color: #1c4587;
+}
+
+@media (max-width: 700px) {
+  .type-grid,
+  .other-starts {
+    grid-template-columns: 1fr;
+  }
+  .design-chosen {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ── New Project: HIT 데이터를 가안에 넣어 보기 ─────────────────────────────── */
+
+.bound-controls {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  margin: 14px 0;
+}
+.bound-controls .segmented {
+  flex-wrap: wrap;
+  justify-self: start;
+}
+.binding-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(0, 5fr);
+  gap: 16px;
+  align-items: start;
+}
+.binding-column {
+  min-width: 0;
+}
+.binding-editor {
+  width: 100%;
+  margin-top: 8px;
+  font: 12px/1.45 var(--mono);
+  resize: vertical;
+}
+#binding-problems .notice,
+#bound-preview .preview-frame-wrap {
+  margin-top: 8px;
+}
+label.btn .dropzone-input {
+  display: none;
+}
+
+@media (max-width: 1000px) {
+  .binding-split {
+    grid-template-columns: 1fr;
+  }
+}

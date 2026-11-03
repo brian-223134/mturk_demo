@@ -2,7 +2,7 @@
 
     profile     원본을 분석해 profile.json, profile.md를 만든다
     plan        profile + prompt → task_spec.json (--spec 파일을 그대로 쓰거나 --planner openrouter)
-    preprocess  spec + 원본 → items.jsonl, hits.csv, summary.json, settings.json
+    preprocess  spec + 원본 → items.json, hits.json, summary.json, settings.json
     render      spec → template.html
     validate    출력 묶음을 검사해 validation.json을 만든다
     run         profile → plan → preprocess → render → validate 를 한 번에
@@ -17,7 +17,7 @@
 preprocess·render·validate 모듈은 하위 명령 안에서 늦게 import 한다. 그래서 그 모듈이 없어도 profile, plan,
 test는 돈다. 오류는 SpecError, PlannerError, SourceError, PathError, ConfigError, 그 밖의 ValueError(sample의
 잘못된 --n, --max-list 등)와 OSError를 잡아 메시지만 stderr에 쓰고 종료 코드 1을 돌려준다. 출력 파일 이름은
-고정이다 (profile.json, task_spec.json, hits.csv, template.html, …).
+고정이다 (profile.json, task_spec.json, hits.json, template.html, …).
 
 --planner openrouter 일 때만 모델 설정(environment/models/<이름>.yaml)을 읽는다. 이름은 --model-config, 없으면
 AGENT_MODEL(환경변수 → env 파일), 없으면 default 다. --spec 실행은 설정을 읽지 않으므로 PyYAML 없이도 돈다.
@@ -205,8 +205,8 @@ def preprocess_step(spec: TaskSpec, raw_path: Path, out_dir: Path) -> dict:
     from agent.preprocess import run_preprocess
 
     summary = run_preprocess(spec, raw_path, out_dir)
-    print(f"Preprocessed: {describe_summary(summary)} -> {out_dir / 'hits.csv'}"
-          f" (+ items.jsonl, summary.json, settings.json)")
+    print(f"Preprocessed: {describe_summary(summary)} -> {out_dir / 'hits.json'}"
+          f" (+ items.json, summary.json, settings.json)")
     return summary
 
 
@@ -367,12 +367,12 @@ def check_planner_arguments(parser: argparse.ArgumentParser, args: argparse.Name
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m agent",
-        description="Turn raw annotation data and a prompt into HIT data (hits.csv) and an MTurk template (template.html).")
+        description="Turn raw annotation data and a prompt into HIT data (hits.json) and an MTurk template (template.html).")
     parser.add_argument("--version", action="version", version=f"agent {__version__}")
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
 
     profile = commands.add_parser("profile", help="analyse the raw data and write profile.json and profile.md")
-    profile.add_argument("raw", metavar="RAW", help="raw data file (.json, .jsonl or .csv)")
+    profile.add_argument("raw", metavar="RAW", help="raw data file (.json)")
     profile.add_argument("--out", metavar="DIR", help=OUT_HELP_RAW)
     profile.add_argument("--format", choices=source.FORMATS, help="source format (default: detect from the file)")
     profile.set_defaults(func=cmd_profile)
@@ -385,7 +385,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_planner_arguments(plan)
     plan.set_defaults(func=cmd_plan)
 
-    preprocess = commands.add_parser("preprocess", help="write items.jsonl, hits.csv, summary.json and settings.json")
+    preprocess = commands.add_parser("preprocess", help="write items.json, hits.json, summary.json and settings.json")
     preprocess.add_argument("raw", metavar="RAW", help="raw data file")
     preprocess.add_argument("--spec", required=True, metavar="FILE", help="task_spec.json")
     preprocess.add_argument("--out", metavar="DIR", help=OUT_HELP_RAW)
@@ -397,11 +397,11 @@ def build_parser() -> argparse.ArgumentParser:
     render.set_defaults(func=cmd_render)
 
     validate = commands.add_parser("validate", help="check an output directory and write validation.json")
-    validate.add_argument("out_dir", metavar="DIR", help="output directory with task_spec.json, hits.csv and template.html")
+    validate.add_argument("out_dir", metavar="DIR", help="output directory with task_spec.json, hits.json and template.html")
     validate.set_defaults(func=cmd_validate)
 
     run = commands.add_parser("run", help="profile, plan, preprocess, render and validate in one go")
-    run.add_argument("raw", metavar="RAW", help="raw data file (.json, .jsonl or .csv)")
+    run.add_argument("raw", metavar="RAW", help="raw data file (.json)")
     run.add_argument("--prompt", required=True, metavar="TEXT", help=PROMPT_HELP)
     run.add_argument("--out", metavar="DIR", help=OUT_HELP_RAW)
     add_planner_arguments(run)

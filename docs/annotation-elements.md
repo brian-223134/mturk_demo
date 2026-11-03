@@ -28,7 +28,7 @@ Create의 New Project에서 고르는 starter 템플릿 9종이 모두 이 요�
 ```
 
 - 맨 위의 `<script>` 한 줄이 요소를 불러옵니다. 빠지면 Design Layout의 Checks가 오류로 알려 줍니다.
-- `${query}`, `${passage}`는 batch를 게시할 때 CSV의 같은 이름 컬럼 값으로 바뀝니다. 바꿀 때 escape하지 않으므로 값에 든 HTML은 그대로 그려집니다.
+- `${query}`, `${passage}`는 batch를 게시할 때 HIT 데이터의 같은 이름 키 값으로 바뀝니다. 바꿀 때 escape하지 않으므로 값에 든 HTML은 그대로 그려집니다.
 - 문항은 모두 `<ann-form>` 안에 둡니다. 폼이 맨 아래에 진행 상황과 `Submit` 버튼을 붙입니다.
 - 이 템플릿의 답은 `relevance` 하나이며, 값은 `relevant` 또는 `not_relevant`입니다.
 
@@ -54,11 +54,49 @@ worker가 접고 펼 수 있는 안내 패널입니다. 안에는 어떤 HTML이
 
 ### `ann-text`
 
-CSV의 값을 보여 주는 카드입니다. 값에 든 줄바꿈은 그대로 보입니다.
+HIT 데이터의 값을 보여 주는 카드입니다. 값에 든 줄바꿈은 그대로 보입니다.
 
 | 속성 | 설명 |
 |---|---|
 | `label` | 카드 위의 작은 제목입니다. |
+
+### `ann-image`
+
+주소로 이미지를 보여 주는 카드입니다. 불러오지 못하면 카드 안에 문구가 나옵니다.
+
+| 속성 | 설명 |
+|---|---|
+| `src` | 이미지 주소입니다. 보통 `${image_url}`처럼 컬럼을 씁니다. 필수입니다. |
+| `label` | 카드 위의 작은 제목입니다. |
+| `alt` | 화면 낭독기에 읽어 줄 글입니다 (기본은 `label`). |
+
+### `ann-video`
+
+주소의 영상을 플레이어로 보여 주는 카드입니다. 주소가 이미지 파일이면 플레이어 모양의 정지 화면을 보여 줍니다. New Project의 `Video` 미리보기가 이 방식으로 표본 그림을 보여 줍니다.
+
+| 속성 | 설명 |
+|---|---|
+| `src` | 영상 주소입니다. 보통 `${video_url}`처럼 컬럼을 씁니다. 필수입니다. |
+| `label` | 카드 위의 작은 제목입니다. |
+
+### `ann-columns`, `ann-column`
+
+데이터와 문항을 좌우로 나눕니다. 화면이 좁으면 위아래로 쌓입니다.
+
+```html
+<ann-columns columns="3fr 2fr">
+  <ann-column>
+    <ann-image label="Image" src="${image_url}"></ann-image>
+  </ann-column>
+  <ann-column>
+    <ann-choice name="label" header="What does the image show?" options="a, b, c" required></ann-choice>
+  </ann-column>
+</ann-columns>
+```
+
+| 속성 | 설명 |
+|---|---|
+| `columns` | 칸의 너비를 CSS grid 값으로 적습니다 (기본은 같은 너비). |
 
 ### `ann-choice`
 
@@ -93,7 +131,7 @@ CSV의 값을 보여 주는 카드입니다. 값에 든 줄바꿈은 그대로 �
 항목을 적는 방법은 두 가지입니다.
 
 - 정해진 항목: `<ann-item key="price">Price or billing</ann-item>`. `key`를 빼면 1부터 센 순번입니다.
-- CSV 컬럼에 든 목록: 컬럼 값이 `["…", "…"]` 같은 JSON 배열이면 아래처럼 `<script type="application/json">` 안에 넣습니다. 원소는 문자열이거나 `{"text": "…", "key": "…"}`입니다.
+- 데이터 컬럼에 든 목록: 값이 `["…", "…"]` 같은 배열이면 아래처럼 `<script type="application/json">` 안에 넣습니다. 원소는 문자열이거나 `{"text": "…", "key": "…"}`입니다.
 
 ```html
 <ann-checklist name="supported" header="Which statements does the passage support?" required
@@ -124,7 +162,7 @@ Publish Batch의 `Review settings`가 이 문항의 이름을 자유 서술 답�
 ### `ann-tabs`, `ann-tab`
 
 한 HIT에 항목이 여러 개일 때 탭으로 나눕니다. 탭 제목 옆에 그 탭에서 남은 필수 답의 수가 보이고, 다 답하면 체크 표시로 바뀝니다.
-항목마다 CSV 컬럼을 하나씩 두는 방식입니다 (`${passage_1}`, `${passage_2}` …). starter의 `Several passages per HIT (tabs)`가 이 형식입니다.
+항목마다 데이터 컬럼을 하나씩 두는 방식입니다 (`${passage_1}`, `${passage_2}` …). starter의 `Several passages per HIT (tabs)`가 이 형식입니다.
 
 | 속성 | 설명 |
 |---|---|
@@ -132,8 +170,8 @@ Publish Batch의 `Review settings`가 이 문항의 이름을 자유 서술 답�
 
 ## attention check와 대조 기준
 
-`<ann-*>` 템플릿에는 attention 문항을 따로 표시하지 않습니다. 대신 **CSV에 attention 행을 섞고, 그 행의 기대 답을 컬럼에 적습니다.**
-예를 들어 [example/5-project/passage-relevance.csv](../example/5-project/passage-relevance.csv)에는 질문과 상관없는 passage를 붙인 행이 두 개 있고, 그 행의 `attention_expected` 컬럼에 `{"relevance": "not_relevant"}`가 적혀 있습니다. 다른 행의 이 컬럼은 비어 있습니다.
+`<ann-*>` 템플릿에는 attention 문항을 따로 표시하지 않습니다. 대신 **HIT 데이터에 attention 항목을 섞고, 그 항목의 기대 답을 키에 적습니다.**
+예를 들어 [example/5-project/passage-relevance.json](../example/5-project/passage-relevance.json)에는 질문과 상관없는 passage를 붙인 객체가 두 개 있고, 그 객체의 `attention_expected`에 `{"relevance": "not_relevant"}`가 적혀 있습니다. 다른 객체에는 이 키가 없습니다.
 
 게시할 때 `Review settings`에서 다음과 같이 고릅니다.
 

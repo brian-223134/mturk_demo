@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 STEP_NAMES = ("profile", "plan", "preprocess", "render", "validate")
 # files 목록에서 앞에 두는 이름과 순서. 그 밖의 파일(plan_request.json 등)은 이름순으로 뒤에 붙는다.
-KNOWN_FILES = ("profile.json", "profile.md", "task_spec.json", "hits.csv", "settings.json", "items.jsonl",
+KNOWN_FILES = ("profile.json", "profile.md", "task_spec.json", "hits.json", "hits.csv", "settings.json", "items.json", "items.jsonl",
                "summary.json", "template.html", "validation.json")
 JOB_FILE = "job.json"   # 예전에 상태를 쓰던 파일. 지금은 켤 때 DB 로 가져오기만 한다
 INPUT_DIR = "input"

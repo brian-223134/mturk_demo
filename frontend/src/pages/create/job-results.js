@@ -5,9 +5,8 @@ import { openModal } from '../../components/modal.js';
 import { errorNotice, loading, muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
 import { downloadFile } from '../../components/download.js';
-import { parseCsv, decodeUtf8 } from '../../lib/csv.js';
 import { comparisonWarnings, sharedRows, experimentReport } from '../../lib/experiments.js';
-import { candidateLabel } from '../../lib/job-groups.js';
+import { candidateLabel, hitsFileOf, parseHits } from '../../lib/job-groups.js';
 
 async function resultFile(job, name, type, signal) {
   const response = await fetch(agent.fileUrl(job.id, name), { signal });
@@ -16,11 +15,12 @@ async function resultFile(job, name, type, signal) {
 }
 
 export async function loadBundle(job, signal) {
-  const [html, csv, spec, inputs] = await Promise.all([
-    resultFile(job, 'template.html', 'text', signal), resultFile(job, 'hits.csv', 'bytes', signal),
+  const hitsFile = hitsFileOf(job);
+  const [html, hits, spec, inputs] = await Promise.all([
+    resultFile(job, 'template.html', 'text', signal), resultFile(job, hitsFile, 'bytes', signal),
     resultFile(job, 'task_spec.json', 'json', signal), agent.getJobInputs(job.id),
   ]);
-  const data = parseCsv(decodeUtf8(csv), 'hits.csv');
+  const data = parseHits(hitsFile, hits);
   if (!data.rows.length) throw new Error('The result contains no HIT rows.');
   return { job, html, data, spec, inputs };
 }
@@ -140,7 +140,7 @@ export function openJobResults(jobs, onSaved = () => {}, { onChoose } = {}) {
     if (common) common.addEventListener('change', () => { if (common.value !== '') shared[Number(common.value)].indexes.forEach((index, i) => showRow(i, index)); });
     const download = el('button', { type: 'button', className: 'btn btn-small', onClick: () => downloadFile({ filename: 'prompt-comparison.json', mimeType: 'application/json', content: JSON.stringify(experimentReport(bundles), null, 2) }) }, 'Export comparison JSON');
     body.replaceChildren(
-      ...(onChoose ? [notice('info', 'Choose one candidate', `All candidates used the same raw data and prompt; only the model that wrote the task spec differs. Choosing one saves its layout and settings as the project "${name}" (replacing a project with that name) and opens Publish Batch with its hits.csv.`)] : []),
+      ...(onChoose ? [notice('info', 'Choose one candidate', `All candidates used the same raw data and prompt; only the model that wrote the task spec differs. Choosing one saves its layout and settings as the project "${name}" (replacing a project with that name) and opens Publish Batch with its hits.json.`)] : []),
       notice('info', 'Structural validation and quality are separate', 'Inspect the data, instructions and attention checks. Preview submissions are displayed here; worker responses are not stored.'),
       ...warnings.map((warning) => notice('warning', warning)), metrics(bundles),
       el('div', { className: 'form-actions' }, download, muted('Export includes saved evaluations and prompts. Save notes before exporting.')),

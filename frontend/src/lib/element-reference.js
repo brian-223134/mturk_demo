@@ -20,9 +20,34 @@ export const ELEMENT_REFERENCE = [
   },
   {
     tag: 'ann-text',
-    summary: 'A card that shows a value from the CSV. Line breaks in the value are kept.',
+    summary: 'A card that shows a value from the HIT data. Line breaks in the value are kept.',
     attributes: [['label', 'Small title above the text.']],
     snippet: '<ann-text label="Passage">${passage}</ann-text>',
+  },
+  {
+    tag: 'ann-image',
+    summary: 'A card that shows an image from a URL in the HIT data.',
+    attributes: [
+      ['src', 'Image URL, usually a column. Required.'],
+      ['label', 'Small title above the image.'],
+      ['alt', 'Text for screen readers (default: the label).'],
+    ],
+    snippet: '<ann-image label="Image" src="${image_url}"></ann-image>',
+  },
+  {
+    tag: 'ann-video',
+    summary: 'A card with a video player for a URL in the HIT data. An image URL is shown as a still frame instead, which is how the samples preview a video task.',
+    attributes: [
+      ['src', 'Video URL, usually a column. Required.'],
+      ['label', 'Small title above the player.'],
+    ],
+    snippet: '<ann-video label="Video" src="${video_url}"></ann-video>',
+  },
+  {
+    tag: 'ann-columns',
+    summary: 'Place content side by side with <ann-column> children. The columns stack on narrow screens.',
+    attributes: [['columns', 'Column widths as CSS grid values, like "3fr 2fr" (default: equal widths).']],
+    snippet: '<ann-columns columns="3fr 2fr">\n  <ann-column>\n    \n  </ann-column>\n  <ann-column>\n    \n  </ann-column>\n</ann-columns>',
   },
   {
     tag: 'ann-choice',

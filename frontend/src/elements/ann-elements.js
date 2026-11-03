@@ -16,6 +16,9 @@
  *   ann-form          제출 폼. 맨 아래에 진행 상황과 Submit 을 붙이고, 필수 문항을 검사한 뒤 답을 모아 제출한다
  *   ann-instructions  접을 수 있는 안내 패널
  *   ann-text          라벨이 붙은 본문 카드 (CSV 값을 보여 준다)
+ *   ann-image         라벨이 붙은 이미지 카드 (src 에 CSV 값)
+ *   ann-video         라벨이 붙은 영상 플레이어 (src 에 CSV 값). src 가 이미지 파일이면 플레이어 모양의 정지 화면을 보인다
+ *   ann-columns/ann-column  문항과 데이터를 좌우로 나눈다. 좁은 화면에서는 위아래로 쌓인다
  *   ann-choice        하나 고르기 (라디오). 선택지는 <ann-option> 또는 options="a, b"
  *   ann-likert        min~max 점수 하나 고르기
  *   ann-checklist     항목마다 해당 여부 체크 (+ "해당 없음"). 항목은 <ann-item> 또는 JSON 배열 <script type="application/json">
@@ -162,7 +165,13 @@
     return { done: done, total: total };
   }
 
+  /** 주소가 이미지 파일인지. ann-video 는 이미지 주소를 받으면 정지 화면으로 그린다 (미리보기의 표본 자료). */
+  function isImageSource(src) {
+    return /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#].*)?$/i.test(String(src || '').trim());
+  }
+
   var core = {
+    isImageSource: isImageSource,
     splitList: splitList,
     parseItems: parseItems,
     itemKeys: itemKeys,
@@ -181,7 +190,7 @@
     ':root{--ann-accent:#1d5fc4;--ann-accent-soft:#e8f0fc;--ann-text:#1f1f1f;--ann-muted:#646464;--ann-border:#dcdcd8;--ann-bg:#f4f4f2;--ann-card:#fff;--ann-error:#c62f2f;--ann-done:#13893a}',
     'ann-form{display:block;max-width:1000px;margin:0 auto;padding:16px;color:var(--ann-text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}',
     'body:has(> ann-form),body:has(> form > ann-form){background:var(--ann-bg);margin:0}',
-    'ann-instructions,ann-text,ann-choice,ann-likert,ann-checklist,ann-textarea,ann-tabs,ann-tab{display:block}',
+    'ann-instructions,ann-text,ann-choice,ann-likert,ann-checklist,ann-textarea,ann-tabs,ann-tab,ann-image,ann-video,ann-column{display:block;min-width:0}',
     'ann-option,ann-item{display:none}',
     // 위의 display 규칙이 hidden 속성을 덮지 않게 한다 (탭 전환, 탭 상태, 오류 문구가 hidden 으로 숨는다)
     'ann-tab[hidden],.ann-tab-status[hidden],.ann-error[hidden]{display:none}',
@@ -192,6 +201,17 @@
     '.ann-card{background:var(--ann-card);border:1px solid var(--ann-border);border-radius:6px;padding:12px 16px;margin:0 0 12px}',
     '.ann-label{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ann-muted);margin:0 0 4px}',
     '.ann-text-body{white-space:pre-line;overflow-wrap:anywhere}',
+    '.ann-media{display:block;max-width:100%;height:auto;max-height:420px;margin:0 auto;border-radius:4px}',
+    // 플레이어는 칸 너비를 채우고 남는 자리를 검게 둔다 (영상과 그 자리의 정지 화면이 같다)
+    '.ann-video-frame{width:100%;object-fit:contain;background:#111}',
+    '.ann-video-still{border-radius:4px 4px 0 0}',
+    '.ann-media-error{color:var(--ann-error);font-size:13px;margin-top:6px}',
+    '.ann-media-error[hidden]{display:none}',
+    '.ann-video-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:0 0 4px 4px;background:#2b2b2b;color:#fff;font-size:12px}',
+    '.ann-video-track{flex:1;height:4px;border-radius:2px;background:#6f6f6f}',
+    '.ann-video-note{color:var(--ann-muted);font-size:12px;margin-top:4px}',
+    'ann-columns{display:grid;gap:12px;align-items:start}',
+    '@media (max-width:640px){ann-columns{grid-template-columns:1fr !important}}',
     '.ann-question{border:1px solid var(--ann-border);border-radius:6px;background:var(--ann-card);padding:12px 16px;margin:0 0 12px;min-width:0}',
     '.ann-question.ann-missing{border-color:var(--ann-error);box-shadow:0 0 0 1px var(--ann-error)}',
     '.ann-header{font-weight:600;padding:0;margin:0 0 8px;float:left;width:100%}',
@@ -394,6 +414,69 @@
       trimEdges(body);
       card.appendChild(body);
       element.appendChild(card);
+    });
+
+    /** ann-image, ann-video 의 공통: 라벨이 붙은 카드와 불러오기 실패 문구. */
+    function mediaCard(element) {
+      var doc = element.ownerDocument;
+      var card = make(doc, 'div', 'ann-card ann-media-card');
+      var label = element.getAttribute('label');
+      if (label) card.appendChild(make(doc, 'div', 'ann-label', label));
+      element.replaceChildren(card);
+      return card;
+    }
+
+    function watchLoadError(media, card, message) {
+      var error = make(card.ownerDocument, 'div', 'ann-media-error', message);
+      error.hidden = true;
+      error.setAttribute('role', 'alert');
+      card.appendChild(error);
+      media.addEventListener('error', function () { error.hidden = false; });
+    }
+
+    function appendImage(element, card) {
+      var image = make(element.ownerDocument, 'img', 'ann-media');
+      image.alt = element.getAttribute('alt') || element.getAttribute('label') || '';
+      image.src = element.getAttribute('src') || '';
+      card.appendChild(image);
+      return image;
+    }
+
+    define('ann-image', function (element) {
+      var card = mediaCard(element);
+      watchLoadError(appendImage(element, card), card, 'This image could not be loaded.');
+    });
+
+    define('ann-video', function (element) {
+      var doc = element.ownerDocument;
+      var card = mediaCard(element);
+      var src = element.getAttribute('src') || '';
+      if (isImageSource(src)) {
+        var still = appendImage(element, card);
+        still.className += ' ann-video-frame ann-video-still';
+        var bar = make(doc, 'div', 'ann-video-bar');
+        bar.setAttribute('aria-hidden', 'true');
+        bar.appendChild(make(doc, 'span', null, '▶'));
+        bar.appendChild(make(doc, 'span', 'ann-video-track'));
+        bar.appendChild(make(doc, 'span', null, '0:00'));
+        card.appendChild(bar);
+        card.appendChild(make(doc, 'div', 'ann-video-note', 'A still image is shown in place of a video.'));
+        watchLoadError(still, card, 'This image could not be loaded.');
+        return;
+      }
+      var video = make(doc, 'video', 'ann-media ann-video-frame');
+      video.controls = true;
+      video.preload = 'metadata';
+      video.src = src;
+      card.appendChild(video);
+      watchLoadError(video, card, 'This video could not be loaded.');
+    });
+
+    define('ann-column', null);
+
+    define('ann-columns', function (element) {
+      var count = Array.prototype.filter.call(element.children, function (child) { return isTag(child, 'ann-column'); }).length;
+      element.style.gridTemplateColumns = element.getAttribute('columns') || 'repeat(' + Math.max(count, 1) + ', minmax(0, 1fr))';
     });
 
     define(

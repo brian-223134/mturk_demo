@@ -16,7 +16,7 @@ import { hasLayoutErrors, lintLayout } from '../../lib/layout-lint.js';
 import { NEW_PROJECT, projectDraftFromTemplate, projectDraftStorage, sameAsSaved, toSaveRequest } from '../../lib/project-draft.js';
 import { describeQualifications, estimateFor, validateProperties } from '../../lib/settings.js';
 import { navigate } from '../../router.js';
-import { createSubnav, descList, downloadCsvTemplate, failureNotice, layoutKindTag, placeholderTags } from './common.js';
+import { createSubnav, descList, downloadJsonTemplate, failureNotice, layoutKindTag, placeholderTags } from './common.js';
 import { answerFieldList, previewRow, renderLayoutTab } from './layout-tab.js';
 import { flashOnProjects } from './projects.js';
 import { propertiesForm } from './properties-form.js';
@@ -310,13 +310,13 @@ export async function renderProjectEditor(root, params, signal) {
               ? el('span', { className: 'muted' }, 'No pool restriction')
               : [v.requiredPoolIds.length > 0 ? `Only ${poolNames(v.requiredPoolIds)}` : null, v.excludedPoolIds.length > 0 ? `Excluding ${poolNames(v.excludedPoolIds)}` : null].filter(Boolean).join('; '),
         },
-        { key: 'variables', label: `CSV columns (${lint.placeholders.length})`, wide: true, value: placeholderTags(lint.placeholders) },
+        { key: 'variables', label: `Data columns (${lint.placeholders.length})`, wide: true, value: placeholderTags(lint.placeholders) },
       ],
       { id: 'finish-summary' },
     );
     const fieldsBody = el('div', { id: 'finish-fields' }, answerFieldList([]));
     const frame = d.html.trim() ? previewFrame({ html: d.html, row: previewRow(d.sampleRow), height: FINISH_PREVIEW_HEIGHT, onSchema: (fields) => fieldsBody.replaceChildren(answerFieldList(fields)) }) : null;
-    const csvButton = el('button', { type: 'button', className: 'btn btn-small', id: 'download-csv-template', disabled: lint.placeholders.length === 0, onClick: () => downloadCsvTemplate(d.name || 'project', d.html, d.sampleRow) }, 'Download CSV template');
+    const templateButton = el('button', { type: 'button', className: 'btn btn-small', id: 'download-json-template', disabled: lint.placeholders.length === 0, onClick: () => downloadJsonTemplate(d.name || 'project', d.html, d.sampleRow) }, 'Download JSON template');
     const errors = hasLayoutErrors(lint);
     const finish = el('button', { type: 'button', className: 'btn', id: 'finish', onClick: () => void save('list') }, 'Finish');
     const finishPublish = el('button', { type: 'button', className: 'btn btn-primary', id: 'finish-publish', onClick: () => void save('publish') }, 'Finish and publish a batch');
@@ -331,8 +331,8 @@ export async function renderProjectEditor(root, params, signal) {
           'div',
           { className: 'card' },
           el('h4', { className: 'card-title' }, 'Before you publish a batch'),
-          el('p', {}, 'Prepare a CSV with one row per task and one column per variable. The template below has the right header and the sample values as its first row.'),
-          el('div', { className: 'form-actions inline' }, csvButton),
+          el('p', {}, 'Prepare a JSON array with one object per task and one key per variable. The template below has the right keys and the sample values.'),
+          el('div', { className: 'form-actions inline' }, templateButton),
           el('h4', { className: 'section-title' }, 'Answer fields'),
           fieldsBody,
           errors ? notice('error', 'The layout has errors. Fix them in Design Layout before finishing.') : null,

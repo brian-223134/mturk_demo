@@ -1,6 +1,5 @@
 """validate 모듈: 예시 묶음 통과, 컬럼 누락·reference 오류·attention 컬럼 오류·큰 행·렌더 검사, 문항 여러 개."""
 
-import csv
 import io
 import json
 import shutil
@@ -12,7 +11,6 @@ from pathlib import Path
 
 from agent import preprocess, render, spec, validate
 
-csv.field_size_limit(sys.maxsize)
 
 EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "groundedness"
 COVERAGE_DIR = EXAMPLE_DIR.parent / "coverage"
@@ -26,13 +24,12 @@ def build_bundle(out: Path, example: Path = EXAMPLE_DIR) -> None:
 
 
 def read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
-    with path.open(encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        return list(reader.fieldnames or []), list(reader)
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    return list(rows[0]), rows
 
 
 def write_rows(path: Path, columns: list[str], rows: list[dict[str, str]]) -> None:
-    preprocess.write_csv(path, columns, rows)
+    preprocess.write_hits(path, columns, rows)
 
 
 class ValidateTest(unittest.TestCase):
@@ -50,7 +47,7 @@ class ValidateTest(unittest.TestCase):
     def bundle(self) -> Path:
         """예시 묶음의 복사본 (테스트마다 고쳐 쓴다)."""
         out = Path(tempfile.mkdtemp(dir=self.tmp.name))
-        for name in ("task_spec.json", "hits.csv", "template.html"):
+        for name in ("task_spec.json", "hits.json", "template.html"):
             shutil.copy(self.source / name, out / name)
         return out
 
@@ -98,11 +95,34 @@ class ValidateTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertTrue(any(e.startswith("task_spec.json: $.item") for e in result["errors"]))
 
+    def test_hits_file_must_be_an_array_of_string_objects(self):
+        cases = [
+            ("not json", "invalid JSON"),
+            ('{"hit_id": "x"}', "must be a JSON array of objects"),
+            ('["x"]', "must be a JSON array of objects"),
+            ("[]", "no data rows"),
+        ]
+        for text, message in cases:
+            out = self.bundle()
+            (out / "hits.json").write_text(text, encoding="utf-8")
+            result = validate.validate_bundle(out)
+            self.assertFalse(result["ok"], text)
+            self.assertTrue(any(message in e for e in result["errors"]), result["errors"])
+
+        out = self.bundle()
+        rows = json.loads((out / "hits.json").read_text(encoding="utf-8"))
+        rows[0]["attention"] = [0, 1]
+        del rows[1]["attention"]
+        (out / "hits.json").write_text(json.dumps(rows), encoding="utf-8")
+        errors = "\n".join(validate.validate_bundle(out)["errors"])
+        self.assertIn("row 1: values must be strings", errors)
+        self.assertIn("row 2: keys differ from the first row", errors)
+
     def test_removed_column_is_an_error(self):
         out = self.bundle()
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         columns.remove("passage")
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         result = validate.validate_bundle(out)
         self.assertFalse(result["ok"])
         self.assertTrue(any("placeholder column(s) missing: passage" in e for e in result["errors"]))
@@ -110,7 +130,7 @@ class ValidateTest(unittest.TestCase):
 
     def test_corrupted_reference_is_an_error(self):
         out = self.bundle()
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         reference = json.loads(rows[0]["llm_label"])
         attention_name = next(iter(json.loads(rows[0]["attention_expected"])))
         general_name = next(iter(reference))
@@ -118,7 +138,7 @@ class ValidateTest(unittest.TestCase):
         reference[general_name] = "maybe"
         reference["general_9_9_support"] = "grounded"
         rows[0]["llm_label"] = preprocess.json_cell(reference)
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         result = validate.validate_bundle(out)
         self.assertFalse(result["ok"])
         errors = "\n".join(result["errors"])
@@ -128,7 +148,7 @@ class ValidateTest(unittest.TestCase):
 
     def test_corrupted_attention_column_is_an_error(self):
         out = self.bundle()
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         expected = json.loads(rows[0]["attention_expected"])
         first, *rest = list(expected)
         expected[first] = "grounded"
@@ -140,12 +160,12 @@ class ValidateTest(unittest.TestCase):
         del second[dropped]
         rows[1]["attention_expected"] = preprocess.json_cell(second)
         rows[2]["attention_expected"] = "[]"
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         errors = "\n".join(validate.validate_bundle(out)["errors"])
-        self.assertIn(f"line 2: attention_expected['{first}'] = 'grounded', expected 'not_grounded'", errors)
-        self.assertIn(f"line 2: attention_expected has key(s) that are not attention answers with an expected value: {reference_name}", errors)
-        self.assertIn(f"line 3: attention_expected lacks the attention answer {dropped}", errors)
-        self.assertIn("line 4: attention_expected must be a JSON object", errors)
+        self.assertIn(f"row 1: attention_expected['{first}'] = 'grounded', expected 'not_grounded'", errors)
+        self.assertIn(f"row 1: attention_expected has key(s) that are not attention answers with an expected value: {reference_name}", errors)
+        self.assertIn(f"row 2: attention_expected lacks the attention answer {dropped}", errors)
+        self.assertIn("row 3: attention_expected must be a JSON object", errors)
 
     def test_template_must_hide_attention(self):
         out = self.bundle()
@@ -163,24 +183,24 @@ class ValidateTest(unittest.TestCase):
 
     def test_item_count_mismatch_and_bad_json(self):
         out = self.bundle()
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         rows[1]["attention"] = "[0,0,0,0]"
         rows[2]["question"] = "not json"
         rows[3]["attention"] = "[0,0,0,0,0]"
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         result = validate.validate_bundle(out)
         errors = "\n".join(result["errors"])
-        self.assertIn("line 3: item counts differ", errors)
-        self.assertIn("line 4: column 'question' is not JSON", errors)
-        self.assertIn("line 5: 0 attention item(s), spec says 1", errors)
+        self.assertIn("row 2: item counts differ", errors)
+        self.assertIn("row 3: column 'question' is not JSON", errors)
+        self.assertIn("row 4: 0 attention item(s), spec says 1", errors)
 
     def test_big_row_is_a_warning(self):
         out = self.bundle()
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         passages = json.loads(rows[0]["passage"])
         passages[1] = "x" * (70 * 1024)
         rows[0]["passage"] = preprocess.json_cell(passages)
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         result = validate.validate_bundle(out)
         self.assertTrue(result["ok"])
         self.assertEqual(len(result["warnings"]), 1)
@@ -190,11 +210,11 @@ class ValidateTest(unittest.TestCase):
 
     def test_unescaped_script_tag_in_data(self):
         out = self.bundle()
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         passages = json.loads(rows[0]["passage"])
         passages[1] = "text </script><script>alert(1)</script>"
         rows[0]["passage"] = json.dumps(passages, ensure_ascii=False)  # json_cell을 거치지 않아 <가 남는다
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         result = validate.validate_bundle(out)
         self.assertFalse(result["ok"])
         self.assertTrue(any("introduces '</script'" in e for e in result["errors"]))
@@ -220,14 +240,14 @@ class ValidateTest(unittest.TestCase):
         for key in ("targets", "answers", "attention_answers", "hints_missing", "reference_values", "row_bytes"):
             self.assertEqual(stats[key], summary[key], key)
         # 자유 서술 답을 reference에 넣으면 오류다
-        columns, rows = read_rows(out / "hits.csv")
+        columns, rows = read_rows(out / "hits.json")
         reference = json.loads(rows[0]["llm_label"])
         flags = json.loads(rows[0]["attention"])
         normal = flags.index(0)
         reference[f"general_{normal}_missing"] = "covered"
         reference[f"general_{normal}_coverage"] = "relevant"
         rows[0]["llm_label"] = preprocess.json_cell(reference)
-        write_rows(out / "hits.csv", columns, rows)
+        write_rows(out / "hits.json", columns, rows)
         errors = "\n".join(validate.validate_bundle(out)["errors"])
         self.assertIn(f"llm_label['general_{normal}_missing'] is a free-text answer", errors)
         self.assertIn(f"llm_label['general_{normal}_coverage'] = 'relevant' is not an option value of question 'coverage'", errors)

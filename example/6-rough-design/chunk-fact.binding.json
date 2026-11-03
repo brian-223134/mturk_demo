@@ -1,0 +1,29 @@
+{
+  "design": "item-list",
+  "task_type": "text",
+  "repeat": {
+    "over": "retrieved_chunk",
+    "label": "Chunk"
+  },
+  "slots": {
+    "data": [
+      {
+        "label": "Query",
+        "from": "query[i]"
+      },
+      {
+        "label": "Chunk",
+        "from": "retrieved_chunk[i]"
+      }
+    ],
+    "checklist": {
+      "name": "supported",
+      "header": "Which atomic facts does this chunk support?",
+      "items": "atomic_facts[i]"
+    }
+  },
+  "attention": {
+    "flag": "attention_check[i]"
+  },
+  "instructions": "For each chunk, read the query and the chunk, then check every atomic fact that the chunk supports."
+}

@@ -117,8 +117,7 @@ class ExternalTasksTest(unittest.TestCase):
             summary = preprocess.run_preprocess(parsed, SAMPLE, out)
             render.run_render(parsed, out)
             result = validate.validate_bundle(out)
-            with (out / "hits.csv").open(encoding="utf-8", newline="") as handle:
-                rows = list(csv.DictReader(handle))
+            rows = json.loads((out / "hits.json").read_text(encoding="utf-8"))
             cls.results[task] = (parsed, out, summary, result, rows)
 
     @classmethod
@@ -164,7 +163,7 @@ class ExternalTasksTest(unittest.TestCase):
         for task, (parsed, out, summary, result, rows) in self.results.items():
             scopes = {qid: scope for qid, _, scope, _ in QUESTIONS[task]}
             target = parsed.target_field.name if parsed.target_field is not None else None
-            items = [json.loads(line) for line in (out / "items.jsonl").read_text(encoding="utf-8").splitlines()]
+            items = json.loads((out / "items.json").read_text(encoding="utf-8"))
             with self.subTest(task=task):
                 for line in items:
                     n_targets = len(line["targets"])

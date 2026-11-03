@@ -170,7 +170,7 @@ MTurk 처럼 HIT 를 만들 때 비용을 미리 잡아 두고, 반려하면 돌
 
 | 동작 | 규칙 | 잔액 |
 |---|---|---|
-| `createBatch` | 템플릿이 요구하는 컬럼, Title, MaxAssignments(정수 ≥ 1), 세 기간(> 0), 자동 승인 30일 상한, 최소 보상 $0.01, pool 존재, 대조 기준 컬럼, attention 규칙(`null`, 비지 않은 `namePrefix`와 문자열 `expectedValue`, 또는 CSV 에 있는 `column`. `minCorrectRatio`는 0~1 이고 없으면 1), `freeTextSuffixes`(빈 문자열이 없는 문자열 배열, 없으면 `[]`), 잔액을 검사한 뒤 행마다 HIT(게시 시점의 `templateHtml` 사본, `inputColumns`, `initialMaxAssignments`, `answerSchema`)를 만듭니다. 규칙은 모르는 키를 버리고 저장합니다. | 견적 총액(행 수 × MaxAssignments × 단가)을 뺍니다 |
+| `createBatch` | 템플릿이 요구하는 컬럼, Title, MaxAssignments(정수 ≥ 1), 세 기간(> 0), 자동 승인 30일 상한, 최소 보상 $0.01, pool 존재, 대조 기준 컬럼, attention 규칙(`null`, 비지 않은 `namePrefix`와 문자열 `expectedValue`, 또는 HIT 데이터에 있는 `column`. `minCorrectRatio`는 0~1 이고 없으면 1), `freeTextSuffixes`(빈 문자열이 없는 문자열 배열, 없으면 `[]`), 잔액을 검사한 뒤 행마다 HIT(게시 시점의 `templateHtml` 사본, `inputColumns`, `initialMaxAssignments`, `answerSchema`)를 만듭니다. 규칙은 모르는 키를 버리고 저장합니다. | 견적 총액(행 수 × MaxAssignments × 단가)을 뺍니다 |
 | `rejectAssignments` | 사유(feedback)가 필수이고 Submitted 만 반려할 수 있습니다. `RejectionTime`, `RequesterFeedback`을 적습니다. | 건마다 단가를 돌려받습니다 |
 | `approveAssignments` | Submitted 를 승인합니다. Rejected 는 `override: true`이고 반려한 지 30일 이내일 때만 되돌립니다. feedback 은 있으면 적고 없으면 지웁니다. | 되돌린 건마다 단가를 다시 냅니다 |
 | `addAssignments` | `mode`는 추가할 수(정수 ≥ 1) 또는 `"fill-to-target"`(부족분 = 목표 − 승인 − 검수 대기 − 열린 자리). 처음 10 미만으로 만든 HIT 는 합계 9까지이고, 넘으면 그 HIT 는 건너뛰고 `skipped`에 사유를 적습니다. 만료된 HIT 는 게시 기간(`LifetimeInSeconds`)만큼 연장하며, 부족분이 없어도 만료되어 막힌 미완료 HIT 는 `fill-to-target`에서 추가 없이 연장만 합니다 (`count: 0, expirationExtended: true`). | 추가한 자리 × 단가를 뺍니다 |
@@ -245,7 +245,7 @@ worker 계정만 부를 수 있습니다(다른 역할은 403). 경로 표는 `a
 
 | 필드 | 종류 | 설명 |
 |---|---|---|
-| `raw` | 파일 | 원본 데이터입니다. JSON, JSONL, CSV를 받으며 형식은 agent의 `source.load_records`가 확장자로 정합니다. `source_job_id`로 재사용하지 않으면 필수입니다. |
+| `raw` | 파일 | 원본 데이터입니다. JSON 파일만 받으며 배열인지 객체인지는 agent의 `source.load_records`가 내용으로 정합니다. `source_job_id`로 재사용하지 않으면 필수입니다. |
 | `source_job_id` | 문자열 | Raw 업로드를 생략하면 이 job의 raw를 복사합니다. Prompt는 새로 전달합니다. |
 | `reuse_spec` | `"true"` / `"false"` | `source_job_id`의 spec도 복사할지입니다. 기본은 false이며 새 spec 업로드와 함께 사용할 수 없습니다. |
 | `prompt` | 파일 | annotation 목적을 적은 prompt(`prompt.md`)입니다. `prompt_text`로 본문을 문자열로 보내도 됩니다. |
@@ -269,7 +269,7 @@ curl -s -F raw=@agent/examples/groundedness/raw.json \
 
 curl -s http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6          # status, steps, files, validation …
 curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/template.html
-curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/hits.csv
+curl -sO -J http://localhost:8000/api/agent/jobs/job-20260924-133205-67b6/files/hits.json
 ```
 
 ### 후보 묶음
@@ -309,7 +309,7 @@ curl -s -F raw=@agent/examples/groundedness/raw.json -F prompt_text="Judge wheth
  "log": ["<ISO 시각> <메시지>", …],
  "planner_notes": string | null, "summary": <summary.json> | null, "validation": <validation.json> | null,
  "usage": {"calls", "prompt_tokens", "completion_tokens", "total_tokens", "cost": float | null} | null,
- "files": ["profile.json", "profile.md", "task_spec.json", "hits.csv", "settings.json", "items.jsonl",
+ "files": ["profile.json", "profile.md", "task_spec.json", "hits.json", "settings.json", "items.json",
            "summary.json", "template.html", "validation.json", …있는 파일만…],
  "error": string | null, "provenance": {…}, "review": {…},
  "group": {"id": "grp-…", "index": int, "size": int, "chosen_job_id": "<job id>" | null} | null}

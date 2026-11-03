@@ -1,4 +1,5 @@
-// Create → New Project: 무엇으로 시작할지 고른다 (MTurk 의 "Select a customizable template to start a new project").
+// Create → New Project → Other ways to start (/create/new/gallery): rough design(pages/create/rough-design.js) 대신 무엇으로 시작할지 고른다
+// (MTurk 의 "Select a customizable template to start a new project").
 // 왼쪽은 starter 템플릿(lib/starters.js)과 다른 시작 방법 두 가지(HTML 올리기, 원본 데이터에서 agent 로 만들기), 오른쪽은 고른 것의
 // 설명과 실제 미리보기다. starter 의 미리보기는 표본 행으로 그린 worker 화면 그대로이고 Submit 도 가로채 보인다.
 // Create Project 를 누르면 새 Project 의 임시 저장(lib/project-draft.js, key 'new')을 만들고 편집기로 간다.
@@ -8,8 +9,8 @@ import { el } from '../../components/dom.js';
 import { confirmModal } from '../../components/modal.js';
 import { loading, muted, notice } from '../../components/notice.js';
 import { previewFrame } from '../../components/preview-frame.js';
-import { decodeUtf8, parseCsv } from '../../lib/csv.js';
 import { draftStorage, emptyDraft } from '../../lib/draft.js';
+import { hitsFileOf, parseHits } from '../../lib/job-groups.js';
 import { NEW_PROJECT, emptyProjectDraft, projectDraftFromStarter, projectDraftStorage, sampleFor } from '../../lib/project-draft.js';
 import { applyJobSettings, settingsFromProperties } from '../../lib/settings.js';
 import { STARTERS, STARTER_CATEGORIES, starterById, starterUrl } from '../../lib/starters.js';
@@ -24,7 +25,7 @@ const SAMPLE_ROW_LIMIT = 60 * 1024; // backend 의 sampleRow 상한(64KB)보다 
 
 const OTHER_STARTS = [
   { id: 'upload', title: 'Upload or paste HTML', summary: 'Start from an empty layout and upload or paste your own template HTML.' },
-  { id: 'generate', title: 'Generate from raw data', summary: 'Give raw JSON and a prompt. The agent writes the layout and the CSV for you.' },
+  { id: 'generate', title: 'Generate from raw data', summary: 'Give raw JSON and a prompt. The agent writes the layout and the HIT data for you.' },
 ];
 
 function readChoice() {
@@ -76,6 +77,18 @@ async function startProject(draft, tab, signal) {
   if (!signal.aborted) navigate(`/create/project/${NEW_PROJECT}/${tab}`);
 }
 
+/** 저장하지 않은 새 Project 가 있으면 이어서 고치는 링크가 있는 안내. 없으면 null. */
+export async function pendingProjectNotice() {
+  const pending = await pendingNewProject();
+  if (!pending) return null;
+  return notice(
+    'info',
+    el('span', {}, 'The new project ', el('strong', {}, pending.name.trim() || 'Untitled'), ' has not been saved yet.'),
+    null,
+    el('div', { className: 'notice-actions' }, el('a', { href: `/create/project/${NEW_PROJECT}/properties`, className: 'btn btn-small', id: 'continue-new-project' }, 'Continue editing')),
+  );
+}
+
 export async function renderNewProject(root, signal) {
   let choice = readChoice();
   let stopDetail = null;
@@ -90,9 +103,9 @@ export async function renderNewProject(root, signal) {
     el(
       'section',
       { className: 'panel', id: 'new-project' },
-      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a template to start a new project')),
+      el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a template to start a new project'), el('a', { href: '/create/new', className: 'btn btn-small btn-link', id: 'back-to-designs' }, 'Back to rough designs')),
       muted(
-        'A new project starts from a template, your own HTML, or a layout generated from raw data. You set its properties and layout here, then publish batches from it in New Batch with an Existing Project. The preview shows sample data; your CSV replaces it when you publish a batch.',
+        'A new project starts from a template, your own HTML, or a layout generated from raw data. You set its properties and layout here, then publish batches from it in New Batch with an Existing Project. The preview shows sample data; your JSON file replaces it when you publish a batch.',
       ),
       el('div', { className: 'gallery' }, list, detail),
     ),
@@ -145,7 +158,7 @@ export async function renderNewProject(root, signal) {
       create.addEventListener('click', () => void startProject(projectDraftFromStarter(starter, html), 'properties', signal));
       detail.replaceChildren(
         el('div', { className: 'gallery-head' }, el('div', {}, el('h3', { className: 'gallery-title' }, starter.title), el('p', { className: 'gallery-summary' }, starter.summary)), create),
-        el('div', { className: 'gallery-meta' }, el('span', { className: 'muted' }, 'CSV columns: '), placeholderTags(extractPlaceholders(html))),
+        el('div', { className: 'gallery-meta' }, el('span', { className: 'muted' }, 'Data columns: '), placeholderTags(extractPlaceholders(html))),
         frame.node,
       );
       return;
@@ -158,7 +171,7 @@ export async function renderNewProject(root, signal) {
         el(
           'ul',
           { className: 'gallery-notes' },
-          el('li', {}, 'Use ', el('code', {}, '${column}'), ' placeholders for the CSV values, or read ', el('code', {}, 'window.TASK_DATA'), '.'),
+          el('li', {}, 'Use ', el('code', {}, '${column}'), ' placeholders for the data values, or read ', el('code', {}, 'window.TASK_DATA'), '.'),
           el('li', {}, 'Layouts written with ', el('code', {}, '<ann-*>'), ' elements get answer checks, the Submit button and the answer list for Review for free. Insert them from the Design Layout toolbar.'),
           el('li', {}, 'Older MTurk templates with ', el('code', {}, '<crowd-form>'), ' also work. They load crowd-html-elements from assets.crowd.aws.'),
         ),
@@ -175,17 +188,8 @@ export async function renderNewProject(root, signal) {
 
   renderList();
   await renderDetail();
-  const pending = await pendingNewProject();
-  if (pending && !signal.aborted) {
-    pendingSlot.replaceChildren(
-      notice(
-        'info',
-        el('span', {}, 'The new project ', el('strong', {}, pending.name.trim() || 'Untitled'), ' has not been saved yet.'),
-        null,
-        el('div', { className: 'notice-actions' }, el('a', { href: `/create/project/${NEW_PROJECT}/properties`, className: 'btn btn-small', id: 'continue-new-project' }, 'Continue editing')),
-      ),
-    );
-  }
+  const pending = await pendingProjectNotice();
+  if (pending && !signal.aborted) pendingSlot.replaceChildren(pending);
   return () => {
     if (typeof stopDetail === 'function') stopDetail();
   };
@@ -203,17 +207,18 @@ async function fetchJobFile(job, name, as) {
 
 /**
  * template.html 은 job 이름의 Project 로 저장하고(같은 이름이 있으면 덮어쓴다), settings.json 은 그 속성과 검수 설정으로,
- * hits.csv 의 첫 행은 표본 행으로 둔다. hits.csv 전체는 그 Project 의 Publish Batch 에 올린 상태로 넘긴다.
+ * HIT 데이터의 첫 행은 표본 행으로 둔다. HIT 데이터 전체는 그 Project 의 Publish Batch 에 올린 상태로 넘긴다.
  */
 async function useJobResult(job, signal) {
-  const [html, csvBytes, settingsJson, templates] = await Promise.all([
+  const hitsFile = hitsFileOf(job);
+  const [html, hitsBytes, settingsJson, templates] = await Promise.all([
     fetchJobFile(job, 'template.html', 'text'),
-    fetchJobFile(job, 'hits.csv', 'bytes'),
+    fetchJobFile(job, hitsFile, 'bytes'),
     fetchJobFile(job, 'settings.json', 'json'),
     api.listTemplates(),
   ]);
   if (signal.aborted) return;
-  const data = parseCsv(decodeUtf8(csvBytes), 'hits.csv');
+  const data = parseHits(hitsFile, hitsBytes);
   const name = (job.name || job.id).trim();
   const existing = templates.find((t) => t.name === name);
   const settings = applyJobSettings(settingsFromProperties(existing?.properties), settingsJson, data.columns);

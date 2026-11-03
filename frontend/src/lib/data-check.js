@@ -64,9 +64,9 @@ export function checkLines(check, placeholders) {
     lines.push({
       level: 'error',
       key: 'missing',
-      text: `${check.missingColumns.length} placeholder(s) have no matching CSV column:`,
+      text: `${check.missingColumns.length} placeholder(s) have no matching data column:`,
       names: check.missingColumns,
-      note: "An unsubstituted ${x} stays in the page as it is and breaks the template's JavaScript. Add the column(s) to the CSV, or go back and choose another template.",
+      note: "An unsubstituted ${x} stays in the page as it is and breaks the template's JavaScript. Add the key(s) to the JSON file, or go back and choose another template.",
     });
   }
   if (usesTaskData) {
@@ -79,7 +79,7 @@ export function checkLines(check, placeholders) {
     lines.push({
       level: check.missingColumns.length > 0 ? 'info' : 'ok',
       key: 'matched',
-      text: `${check.matchedPlaceholders.length}/${placeholders.length} matched with a CSV column:`,
+      text: `${check.matchedPlaceholders.length}/${placeholders.length} matched with a data column:`,
       names: check.matchedPlaceholders,
     });
   }

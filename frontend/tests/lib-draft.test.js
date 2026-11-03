@@ -39,8 +39,8 @@ function memoryStore() {
 }
 
 describe('emptyDraft / steps', () => {
-  it('has the four Publish Batch steps and starts at Upload CSV with the default settings', () => {
-    assert.deepEqual(STEP_TITLES, ['Upload CSV', 'Preview tasks', 'Review settings', 'Confirm and publish']);
+  it('has the four Publish Batch steps and starts at Upload JSON with the default settings', () => {
+    assert.deepEqual(STEP_TITLES, ['Upload JSON', 'Preview tasks', 'Review settings', 'Confirm and publish']);
     assert.equal(LAST_STEP, 3);
     const draft = emptyDraft();
     assert.equal(draft.step, 0);

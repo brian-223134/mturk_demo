@@ -81,7 +81,7 @@ def test_group_runs_three_candidates_at_once(llm_client, fake_planner, settings)
     assert len({job["provenance"]["prompt_sha256"] for job in done}) == 1
     for job in done:
         assert (settings.jobs_dir / job["id"] / "input" / "raw.json").is_file()
-        assert "hits.csv" in job["files"] and "template.html" in job["files"]
+        assert "hits.json" in job["files"] and "template.html" in job["files"]
     listed = [job for job in llm_client.get(JOBS).json()["jobs"] if job["group"]]
     assert sorted(job["group"]["index"] for job in listed) == [0, 1, 2]
     assert not list(settings.output_dir.rglob("plan_request*.json"))

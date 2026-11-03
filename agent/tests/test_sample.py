@@ -248,8 +248,8 @@ class CommandTest(unittest.TestCase):
         self.assertEqual((args.n, args.seed, args.anonymize, args.max_list, args.format), (6, 7, True, None, None))
         self.assertIs(args.func, sample.cmd_sample)
         args = parser.parse_args(["sample", "raw.json", "--out", "o.json", "--n", "2", "--seed", "3", "--no-anonymize",
-                                  "--max-list", "4", "--format", "jsonl"])
-        self.assertEqual((args.n, args.seed, args.anonymize, args.max_list, args.format), (2, 3, False, 4, "jsonl"))
+                                  "--max-list", "4", "--format", "json_array"])
+        self.assertEqual((args.n, args.seed, args.anonymize, args.max_list, args.format), (2, 3, False, 4, "json_array"))
         with self.assertRaises(SystemExit):
             with contextlib.redirect_stderr(io.StringIO()):
                 parser.parse_args(["sample", "raw.json"])

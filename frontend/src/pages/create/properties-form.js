@@ -102,7 +102,7 @@ export function propertiesForm({ name, values, onName, set, pools, poolsError })
       el('span', { className: 'muted' }, 'Cost per task: '),
       el('span', { className: 'tabular' }, `${v.MaxAssignments} assignments × ${formatCents(rewardToCents(v.Reward))} = reward ${formatCents(estimate.rewardCents)} + fee (${estimate.feePercent}%) ${formatCents(estimate.feeCents)} = `),
       el('strong', { className: 'tabular', id: 'settings-total' }, formatCents(estimate.totalCents)),
-      el('span', { className: 'muted' }, '. One CSV row is one task.'),
+      el('span', { className: 'muted' }, '. One object in the JSON file is one task.'),
     );
   }
 
@@ -163,7 +163,7 @@ export function propertiesForm({ name, values, onName, set, pools, poolsError })
   fields.Description = field({ id: 's-Description', label: 'Description', control: description, required: true, hint: 'Shown to workers when they look at the task in more detail.' });
   fields.Keywords = field({ id: 's-Keywords', label: 'Keywords', control: keywords, hint: 'Comma separated words that help workers find the task.' });
   fields.Reward = field({ id: 's-Reward', label: 'Reward per assignment', control: el('div', { className: 'prefix-input' }, el('span', { className: 'prefix' }, '$'), reward), required: true });
-  fields.MaxAssignments = field({ id: 's-MaxAssignments', label: 'Number of assignments per task', control: maxAssignments, hint: 'How many different workers answer each task (each CSV row).', required: true });
+  fields.MaxAssignments = field({ id: 's-MaxAssignments', label: 'Number of assignments per task', control: maxAssignments, hint: 'How many different workers answer each task (each object in the JSON file).', required: true });
   fields.durationMinutes = field({ id: 's-durationMinutes', label: 'Time allotted per assignment', control: el('div', { className: 'suffix-input' }, duration, el('span', { className: 'suffix' }, 'minutes')), hint: 'How long a worker has to finish one task.', required: true });
   fields.lifetimeDays = field({ id: 's-lifetimeDays', label: 'Task expires in', control: el('div', { className: 'suffix-input' }, lifetime, el('span', { className: 'suffix' }, 'days')), hint: 'How long the tasks stay available after publishing.', required: true });
   fields.autoApprovalDays = field({ id: 's-autoApprovalDays', label: 'Auto-approve and pay workers in', control: el('div', { className: 'suffix-input' }, autoApproval, el('span', { className: 'suffix' }, 'days')), hint: `Submissions not reviewed within this time are approved. At most ${MAX_AUTO_APPROVAL_DAYS} days.`, required: true });

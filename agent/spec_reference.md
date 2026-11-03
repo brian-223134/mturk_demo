@@ -1,14 +1,14 @@
 # Task spec reference
 
-`task_spec.json` is the single input that drives the deterministic pipeline: **preprocess** (records → items → HITs → `hits.csv`), **render** (`template.html`) and **validate**. A planner (a person, or an LLM given a data profile and an annotation prompt) writes the spec; nothing else is needed. This document defines every key, the path language, the variables, the question types, the answer-name rule, the attention strategies, the CSV output, and how to design a spec from a prompt.
+`task_spec.json` is the single input that drives the deterministic pipeline: **preprocess** (records → items → HITs → `hits.json`), **render** (`template.html`) and **validate**. A planner (a person, or an LLM given a data profile and an annotation prompt) writes the spec; nothing else is needed. This document defines every key, the path language, the variables, the question types, the answer-name rule, the attention strategies, the CSV output, and how to design a spec from a prompt.
 
 ## 1. Concepts
 
-- **Record**: one element of the source file (a JSON array element, a value of a JSON object, a JSONL line, or a CSV row).
+- **Record**: one element of the source file (a JSON array element or a value of a JSON object).
 - **Item**: one tab in the HIT. It shows **context fields** (question, passage, …) and at most one **target field**: the list of things the worker judges one by one (statements, facts, sub-questions). Items are produced by iterating over lists or maps inside a record (`item.iterate`); with no `iterate`, each record is one item.
 - **Questions**: every tab asks the same list of questions (`item.questions`). A question has a **type** (`choice`, `multi_select`, `likert`, `text`) and a **scope**: `"target"` asks it once for every target of the tab, `"item"` asks it once per tab.
 - **HIT**: `hit.items_per_hit` items plus optional **attention items** whose expected answers are known. Workers cannot tell attention items from normal ones.
-- **Hint**: where an existing label (from an LLM or a gold standard) sits in the record, per question. Hints become the **reference column** of the CSV that the console compares worker answers with. Expected answers of attention items go to a separate **attention column**.
+- **Hint**: where an existing label (from an LLM or a gold standard) sits in the record, per question. Hints become the **reference column** of the HIT data that the console compares worker answers with. Expected answers of attention items go to a separate **attention column**.
 
 The output must be a single JSON object. Comments and trailing commas are not allowed, unknown keys are errors, and keys with a default may be omitted.
 
@@ -56,7 +56,7 @@ Always `2`. (Version `1` is the legacy single-question format with `item.questio
 
 | key | default | meaning |
 | --- | --- | --- |
-| `format` | `null` | `null` = detect from the file; otherwise `"json_array"`, `"json_object_values"`, `"jsonl"` or `"csv"`. |
+| `format` | `null` | `null` = detect from the file; otherwise `"json_array"` or `"json_object_values"`. |
 | `record_id` | `null` | Path to a string or integer that identifies the record (`"$.id"`). `null` = `r{record_no}` (`r1`, `r2`, …). |
 | `filter` | `null` | `{"path": "$.split", "equals": "test"}` keeps records whose value equals the given value; `{"path": "$.labels", "exists": true}` keeps records where the path resolves (`false`: where it does not). |
 | `sample` | `null` | `{"n": 160, "seed": 7}`: random sample of the filtered records. |
@@ -76,7 +76,7 @@ A list of zero or more `{"var": "passage", "path": "$.passages.retriever_a", "li
 
 ### `item.fields`
 
-An object whose keys are the field names and whose values describe the fields. The order is the display order and the CSV column order.
+An object whose keys are the field names and whose values describe the fields. The order is the display order and the HIT data column order.
 
 | key | default | meaning |
 | --- | --- | --- |
@@ -171,9 +171,9 @@ The Instructions panel of the template. In every text, `**bold**` becomes bold; 
 
 | key | default | meaning |
 | --- | --- | --- |
-| `reference_column` | `"llm_label"` | CSV column holding `{answer name: value}` built from the hints of normal items. Chosen as the review reference in the console. |
-| `reason_column` | `null` | CSV column holding `{answer name: reason}` when a hint has `reason_path`. |
-| `attention_column` | `"attention_expected"` | CSV column holding `{answer name: expected value}` for the attention items. The console's attention rule reads it. |
+| `reference_column` | `"llm_label"` | Column of `hits.json` holding `{answer name: value}` built from the hints of normal items. Chosen as the review reference in the console. |
+| `reason_column` | `null` | Column of `hits.json` holding `{answer name: reason}` when a hint has `reason_path`. |
+| `attention_column` | `"attention_expected"` | Column of `hits.json` holding `{answer name: expected value}` for the attention items. The console's attention rule reads it. |
 
 The three column names match `^[A-Za-z_][A-Za-z0-9_]*$`, differ from each other and from the field names, and are not `hit_id`, `record_ids`, `item_ids` or `attention`.
 
@@ -246,9 +246,9 @@ Both strategies copy the first item of the HIT, cut its targets to `max_targets`
 - **`mismatch`**: the values of `swap_fields` (context fields) are replaced by the values of the same-position item of another record, `(record_index + distance) mod N` (the next record if that is the same one; the other record's first item if it has no item at that position). The targets stay. This works when the answers can only be judged from the swapped context (a passage from another record cannot support these statements, a statement cannot answer another record's sub-question), and the expected answers are the negative ones (`not_supported`, `not_covered`, `neither`, …). Swap every context field that carries the topic, otherwise the item may still look consistent.
 - **`instruction`**: the targets are replaced by the single sentence `instruction.text`, which tells the worker what to answer, e.g. `This is an attention check. Please choose "Not supported".` The expected answer is the one named in the sentence. It needs a target field and is easier to spot, so prefer `mismatch` when the task is a support, relevance or coverage judgement.
 
-## 8. CSV output (`hits.csv`)
+## 8. HIT data output (`hits.json`)
 
-One row per HIT, every cell a JSON value (so the template can use it as a JavaScript literal):
+A JSON array with one object per HIT. The keys are the columns below, and every value is a string that holds a JSON value (so the template can use it as a JavaScript literal):
 
 | column | content |
 | --- | --- |

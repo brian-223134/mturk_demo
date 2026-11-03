@@ -257,7 +257,7 @@ def cmd_sample(args: argparse.Namespace) -> int:
 def register_sample_command(subparsers: argparse._SubParsersAction) -> None:
     """`sample` 하위 명령: RAW --out FILE [--n N] [--seed N] [--no-anonymize] [--max-list N] [--format F]."""
     parser = subparsers.add_parser("sample", help="write a small anonymized sample of the raw data (for tests)")
-    parser.add_argument("raw", metavar="RAW", help="raw data file (.json, .jsonl or .csv)")
+    parser.add_argument("raw", metavar="RAW", help="raw data file (.json)")
     parser.add_argument("--out", required=True, metavar="FILE", help="output file (a JSON array of records)")
     parser.add_argument("--n", type=int, default=DEFAULT_N, metavar="N", help="records to keep (default: %(default)s)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED, metavar="N",

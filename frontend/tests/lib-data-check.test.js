@@ -80,7 +80,7 @@ describe('시나리오 2: ${컬럼명} 방식', () => {
 
     const lines = byKey(checkLines(check, placeholderTemplate));
     assert.equal(lines.matched.level, 'ok');
-    assert.equal(lines.matched.text, '5/5 matched with a CSV column:');
+    assert.equal(lines.matched.text, '5/5 matched with a data column:');
     assert.deepEqual(lines.matched.names, placeholderTemplate);
     assert.equal(lines.unused.level, 'warn');
     assert.equal(lines.unused.text, '1 column(s) not used by the template: note. They are still stored with each HIT.');
@@ -94,12 +94,12 @@ describe('시나리오 2: ${컬럼명} 방식', () => {
 
     const lines = checkLines(check, placeholderTemplate);
     assert.equal(lines[0].level, 'error');
-    assert.equal(lines[0].text, '1 placeholder(s) have no matching CSV column:');
+    assert.equal(lines[0].text, '1 placeholder(s) have no matching data column:');
     assert.deepEqual(lines[0].names, ['sentence_2']);
     assert.ok(lines[0].note.startsWith('An unsubstituted ${x} stays in the page'));
     // 일부만 맞은 줄은 OK 가 아니라 INFO 다
     assert.equal(byKey(lines).matched.level, 'info');
-    assert.equal(byKey(lines).matched.text, '4/5 matched with a CSV column:');
+    assert.equal(byKey(lines).matched.text, '4/5 matched with a data column:');
   });
 });
 
@@ -151,7 +151,7 @@ describe('시나리오 4: 콘솔에 저장돼 있는 기존 템플릿', () => {
 
       const lines = byKey(checkLines(check, placeholders));
       assert.equal(lines.matched.level, 'ok');
-      assert.equal(lines.matched.text, '12/12 matched with a CSV column:');
+      assert.equal(lines.matched.text, '12/12 matched with a data column:');
       assert.equal(lines.unused.level, 'warn');
       assert.ok(lines.unused.text.startsWith('4 column(s) not used by the template: '));
       assert.equal(lines.size.text, `Row input size: ${sizes}.`);
@@ -165,7 +165,7 @@ describe('시나리오 4: 콘솔에 저장돼 있는 기존 템플릿', () => {
     assert.equal(check.missingColumns.length, 12);
     const lines = checkLines(check, placeholders);
     assert.equal(lines[0].level, 'error');
-    assert.equal(lines[0].text, '12 placeholder(s) have no matching CSV column:');
+    assert.equal(lines[0].text, '12 placeholder(s) have no matching data column:');
     assert.equal(byKey(lines).matched, undefined); // 맞은 것이 하나도 없으면 matched 줄이 없다
   });
 });

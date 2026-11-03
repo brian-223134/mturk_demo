@@ -1,6 +1,6 @@
 // starter 템플릿 검사 (lib/starters.js, elements/starters/*.html). New Project 갤러리에서 고른 템플릿이 바로 쓸 수 있는 상태인지 본다:
 // 파일이 있고, layout 검사에 오류가 없고, 표본 행이 placeholder 를 모두 채우고, 미리 채우는 속성이 Settings 폼의 키다.
-// docs/create-projects.md 의 따라 하기가 쓰는 example/5-project 의 CSV 가 passage-relevance starter 와 맞는지도 본다.
+// docs/create-projects.md 의 따라 하기가 쓰는 example/5-project 의 JSON 이 passage-relevance starter 와 맞는지도 본다.
 
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -8,8 +8,8 @@ import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 
 import { checkAnswerFields } from '../src/lib/answer-fields.js';
-import { parseCsv } from '../src/lib/csv.js';
 import { checkData } from '../src/lib/data-check.js';
+import { parseJsonData } from '../src/lib/json-data.js';
 import { hasLayoutErrors, lintLayout } from '../src/lib/layout-lint.js';
 import { DEFAULT_SETTINGS, defaultSettings, validateQuality } from '../src/lib/settings.js';
 import { STARTERS, STARTER_CATEGORIES, starterById, starterUrl } from '../src/lib/starters.js';
@@ -63,9 +63,9 @@ describe('starters', () => {
   }
 });
 
-describe('example/5-project/passage-relevance.csv with the passage-relevance starter', () => {
+describe('example/5-project/passage-relevance.json with the passage-relevance starter', () => {
   const html = readFileSync(new URL('passage-relevance.html', DIR), 'utf8');
-  const data = parseCsv(readFileSync(new URL('../../example/5-project/passage-relevance.csv', import.meta.url), 'utf8'), 'passage-relevance.csv');
+  const data = parseJsonData(readFileSync(new URL('../../example/5-project/passage-relevance.json', import.meta.url), 'utf8'), 'passage-relevance.json');
   const { placeholders } = lintLayout(html);
   const schema = [{ name: 'relevance', type: 'choice', values: ['relevant', 'partially_relevant', 'not_relevant'], required: true }];
   const settings = { ...defaultSettings(), attentionEnabled: true, attentionMode: 'column', attentionColumn: 'attention_expected', referenceColumn: 'gold' };

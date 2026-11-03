@@ -283,9 +283,9 @@ describe('validateSettings', () => {
   it('checks the expected answers column instead of the prefix fields in column mode', () => {
     const on = { ...DEFAULT_SETTINGS, attentionEnabled: true, attentionMode: 'column', attentionPrefix: '', attentionExpected: '' };
     assert.deepEqual(validateSettings({ ...on, attentionColumn: 'passage' }, { columns }), {});
-    assert.deepEqual(validateSettings({ ...on, attentionColumn: null }, { columns }), { attentionColumn: 'Choose the CSV column that holds the expected answers.' });
+    assert.deepEqual(validateSettings({ ...on, attentionColumn: null }, { columns }), { attentionColumn: 'Choose the data column that holds the expected answers.' });
     assert.deepEqual(validateSettings({ ...on, attentionColumn: 'attention_expected', attentionMinRatio: -1 }, { columns }), {
-      attentionColumn: 'Column "attention_expected" is not in the uploaded CSV. Choose another column.',
+      attentionColumn: 'Column "attention_expected" is not in the uploaded data. Choose another column.',
       attentionMinRatio: 'Enter a value from 0 to 1.',
     });
     assert.deepEqual(validateSettings({ ...on, attentionEnabled: false, attentionColumn: 'nope' }, { columns }), {});
@@ -295,7 +295,7 @@ describe('validateSettings', () => {
     assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS, referenceColumn: 'passage' }, { columns }), {});
     assert.equal(
       validateSettings({ ...DEFAULT_SETTINGS, referenceColumn: 'llm_label' }, { columns }).referenceColumn,
-      'Column "llm_label" is not in the uploaded CSV. Choose another column or the majority.',
+      'Column "llm_label" is not in the uploaded data. Choose another column or the majority.',
     );
   });
 });
@@ -395,7 +395,7 @@ describe('applyJobSettings (settings.json with an expected answers column)', () 
   it('keeps an attention column that the CSV lacks so that Next reports it', () => {
     const values = applyJobSettings(defaultSettings(), json, ['hit_id', 'llm_label']);
     assert.equal(values.attentionColumn, 'attention_expected');
-    assert.equal(validateSettings(values, { columns: ['hit_id', 'llm_label'] }).attentionColumn, 'Column "attention_expected" is not in the uploaded CSV. Choose another column.');
+    assert.equal(validateSettings(values, { columns: ['hit_id', 'llm_label'] }).attentionColumn, 'Column "attention_expected" is not in the uploaded data. Choose another column.');
   });
 
   it('switches back to the prefix mode for an old settings.json, and keeps the suffixes when the key is missing', () => {

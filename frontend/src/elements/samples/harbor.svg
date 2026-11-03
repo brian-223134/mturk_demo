@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img" aria-label="A harbor with a sailboat, a fishing boat, a pier and a lighthouse">
+  <rect width="640" height="230" fill="#f7dfc2"/>
+  <circle cx="320" cy="214" r="62" fill="#f6b16b"/>
+  <path d="M0 230 L80 176 L168 212 L250 168 L350 222 L440 190 L540 224 L640 180 V230 Z" fill="#a9a6b8"/>
+  <rect y="226" width="640" height="174" fill="#3f7fa8"/>
+  <g stroke="#7fb4d0" stroke-width="4" stroke-linecap="round"><path d="M40 268 H110M190 252 H250M420 262 H500M70 344 H150M300 372 H392M520 328 H600"/></g>
+  <rect x="542" y="96" width="42" height="136" fill="#f4f1e8"/>
+  <rect x="542" y="126" width="42" height="24" fill="#c2453d"/><rect x="542" y="178" width="42" height="24" fill="#c2453d"/>
+  <rect x="536" y="84" width="54" height="14" fill="#34373d"/>
+  <path d="M546 84 L563 58 L580 84 Z" fill="#c2453d"/>
+  <path d="M0 236 H300 V254 H0 Z" fill="#7a5a3f"/>
+  <g fill="#5e452f"><rect x="40" y="254" width="12" height="52"/><rect x="130" y="254" width="12" height="52"/><rect x="220" y="254" width="12" height="52"/></g>
+  <path d="M154 354 H330 L302 388 H184 Z" fill="#f4f1e8"/>
+  <rect x="238" y="210" width="6" height="146" fill="#4a3a2b"/>
+  <path d="M246 214 L322 340 H246 Z" fill="#fdfaf0"/><path d="M234 236 L176 340 H234 Z" fill="#e36f50"/>
+  <path d="M396 304 H548 L524 344 H420 Z" fill="#2f5d7c"/>
+  <rect x="436" y="266" width="58" height="38" fill="#f4f1e8"/><rect x="446" y="276" width="18" height="16" fill="#9bc7dd"/><rect x="472" y="276" width="14" height="16" fill="#9bc7dd"/>
+  <rect x="504" y="240" width="5" height="64" fill="#4a3a2b"/>
+</svg>

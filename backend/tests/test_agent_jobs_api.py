@@ -72,7 +72,7 @@ def test_job_with_spec_succeeds(client: TestClient, settings: Settings) -> None:
     assert job["error"] is None
     assert step_statuses(job) == {"profile": "succeeded", "plan": "skipped", "preprocess": "succeeded",
                                   "render": "succeeded", "validate": "succeeded"}
-    assert job["files"] == list(KNOWN_FILES)
+    assert job["files"] == [name for name in KNOWN_FILES if name not in ("hits.csv", "items.jsonl")]  # 두 이름은 옛 job 의 파일이다
     assert job["validation"]["ok"] is True and job["validation"]["errors"] == []
     assert job["summary"]["records"]["used"] == 6 and job["summary"]["records"]["total"] == 6
     assert job["summary"]["hits"] == 6
@@ -91,6 +91,16 @@ def test_job_with_spec_succeeds(client: TestClient, settings: Settings) -> None:
     assert not list(settings.output_dir.rglob("plan_request*.json"))
 
 
+def test_csv_raw_fails_with_the_reason(client: TestClient) -> None:
+    """원본은 JSON 파일만 받는다. CSV 를 올리면 job 이 실패하고 이유를 알린다."""
+    response = client.post(JOBS, files={**example_uploads(), "raw": ("raw.csv", b"id,text\n1,a\n", "text/csv")})
+    assert response.status_code == 202, response.text
+    job = wait_for_job(client, response.json()["job"]["id"])
+    assert job["status"] == "failed"
+    assert "must be a JSON file" in job["error"]
+    assert not {"hits.json", "template.html"} & set(job["files"])
+
+
 def test_job_files_download(client: TestClient) -> None:
     job = wait_for_job(client, submit_example(client)["id"])
     assert job["status"] == "succeeded"
@@ -104,11 +114,11 @@ def test_job_files_download(client: TestClient) -> None:
     assert "<crowd-form>" in template.text
     assert template.headers["cache-control"] == "no-store"
 
-    hits = client.get(f"{base}/hits.csv")
-    assert hits.status_code == 200 and hits.headers["content-type"].startswith("text/csv")
-    assert hits.text.splitlines()[0].startswith("hit_id,")
+    hits = client.get(f"{base}/hits.json")
+    assert hits.status_code == 200 and hits.headers["content-type"].startswith("application/json")
+    assert list(hits.json()[0])[0] == "hit_id"
     assert client.get(f"{base}/summary.json").headers["content-type"].startswith("application/json")
-    assert client.get(f"{base}/items.jsonl").headers["content-type"].startswith("application/x-ndjson")
+    assert client.get(f"{base}/items.json").headers["content-type"].startswith("application/json")
     assert client.get(f"{base}/profile.md").headers["content-type"].startswith("text/markdown")
 
     # job.files 에 없는 이름과 폴더 밖으로 나가는 이름은 404
@@ -227,7 +237,7 @@ def test_mismatched_spec_fails_at_preprocess(client: TestClient) -> None:
     assert failed["error"].startswith("the task spec is not valid: ")
     assert job["error"] == f"preprocess: {failed['error']}"
     assert {"profile.json", "profile.md", "task_spec.json"} <= set(job["files"])
-    assert not {"hits.csv", "template.html", "validation.json"} & set(job["files"])
+    assert not {"hits.json", "template.html", "validation.json"} & set(job["files"])
     assert job["summary"] is None and job["validation"] is None
 
 

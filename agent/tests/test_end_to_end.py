@@ -1,6 +1,5 @@
 """예시 spec으로 preprocess → render → validate를 한 번에 돌린다."""
 
-import csv
 import json
 import shutil
 import tempfile
@@ -10,7 +9,7 @@ from pathlib import Path
 from agent import preprocess, render, spec, validate
 
 EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "groundedness"
-EXPECTED_FILES = {"task_spec.json", "items.jsonl", "hits.csv", "summary.json", "settings.json", "template.html", "validation.json"}
+EXPECTED_FILES = {"task_spec.json", "items.json", "hits.json", "summary.json", "settings.json", "template.html", "validation.json"}
 
 
 class EndToEndTest(unittest.TestCase):
@@ -34,8 +33,7 @@ class EndToEndTest(unittest.TestCase):
             self.assertEqual(result["stats"]["reference_values"], summary["reference_values"])
 
             # 첫 행을 콘솔처럼 렌더하면 데이터가 JS 리터럴로 들어가고 placeholder가 남지 않는다
-            with (out / "hits.csv").open(encoding="utf-8", newline="") as handle:
-                rows = list(csv.DictReader(handle))
+            rows = json.loads((out / "hits.json").read_text(encoding="utf-8"))
             rendered = validate.substitute_row(template.read_text(encoding="utf-8"), rows[0])
             self.assertEqual(validate.extract_placeholders(rendered), [])
             self.assertIn('var HIT_ID = "hit-0001";', rendered)

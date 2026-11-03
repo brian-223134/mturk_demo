@@ -1,4 +1,4 @@
-// Create (2) Data: CSV 읽기. prototype/src/features/create/csv.ts 를 옮긴 것인데, papaparse 대신 작은 RFC 4180 파서를 직접 쓴다.
+// JSON 으로 통일하기 전에 만든 agent job 의 hits.csv 읽기 (화면에서 올리는 데이터는 lib/json-data.js). prototype/src/features/create/csv.ts 를 옮긴 것인데, papaparse 대신 작은 RFC 4180 파서를 직접 쓴다.
 // 셀은 전부 문자열로 둔다 (`${}` 치환은 셀 문자열을 그대로 끼워 넣는다). 따옴표 안의 쉼표, 줄바꿈, 겹따옴표("")와 CRLF, BOM 을 다룬다.
 
 /** 파일을 쓸 수 없을 때. message 를 화면에 그대로 보여 준다. */
@@ -193,17 +193,4 @@ export function decodeUtf8(bytes) {
 /** File 또는 Blob 을 읽는다. 브라우저의 업로드와 Node 테스트 양쪽에서 쓴다. */
 export async function readCsvFile(file) {
   return parseCsv(decodeUtf8(await file.arrayBuffer()), file.name ?? 'data.csv');
-}
-
-/** 셀 하나를 CSV 필드로. 쉼표, 따옴표, 줄바꿈이 있거나 앞뒤에 공백이 있으면 따옴표로 감싼다 (RFC 4180). */
-export function csvField(value) {
-  const text = value === null || value === undefined ? '' : String(value);
-  return /[",\r\n]|^\s|\s$/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-/** 머리줄과 행들로 CSV 글을 만든다. 줄 끝은 CRLF 이다. Publish Batch 의 "Download CSV template" 이 쓴다. */
-export function formatCsv(columns, rows = []) {
-  const lines = [columns.map(csvField).join(',')];
-  for (const row of rows) lines.push(columns.map((column) => csvField(row?.[column])).join(','));
-  return `${lines.join('\r\n')}\r\n`;
 }

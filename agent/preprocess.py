@@ -9,7 +9,7 @@
     json_cell(value)               <script> 안에 그대로 넣어도 안전한 JSON
     build_settings(spec)           콘솔 Create의 Settings 값 (settings.json)
     run_preprocess(spec, raw_path, out_dir)
-                                   items.jsonl, hits.csv, summary.json, settings.json을 저장하고 summary를 돌려준다
+                                   items.json, hits.json, summary.json, settings.json을 저장하고 summary를 돌려준다
 
 경로를 푸는 규칙(record_id, 변수, 필드, target, hint)은 spec.py의 도우미를 그대로 써서 validate_against_records와
 같은 결과가 나오게 한다. 같은 입력과 spec이면 출력은 항상 같다 (샘플과 attention 위치는 seed로 정한다).
@@ -24,8 +24,6 @@ record_index는 필터·샘플·limit을 거친 뒤 실제로 쓰는 레코드 �
 
 from __future__ import annotations
 
-import csv
-import io
 import json
 import random
 from collections import Counter
@@ -56,8 +54,8 @@ GENERAL_PREFIX = "general_"
 ROW_BYTES_LIMIT = 64 * 1024
 SKIPPED_EXAMPLES = 10
 
-ITEMS_FILE = "items.jsonl"
-HITS_FILE = "hits.csv"
+ITEMS_FILE = "items.json"
+HITS_FILE = "hits.json"
 SUMMARY_FILE = "summary.json"
 SETTINGS_FILE = "settings.json"
 
@@ -350,8 +348,8 @@ def has_attention_column(spec: TaskSpec) -> bool:
     return attention is not None and attention.per_hit >= 1
 
 
-def csv_columns(spec: TaskSpec) -> list[str]:
-    """hits.csv의 컬럼 순서: hit_id, record_ids, item_ids, attention, 필드들(spec 순서), reference, [reason], [attention 기대 값]."""
+def hit_columns(spec: TaskSpec) -> list[str]:
+    """hits.json의 키 순서: hit_id, record_ids, item_ids, attention, 필드들(spec 순서), reference, [reason], [attention 기대 값]."""
     columns = ["hit_id", "record_ids", "item_ids", "attention", *spec.item.fields]
     columns.append(spec.output.reference_column)
     if spec.output.reason_column is not None:
@@ -362,16 +360,16 @@ def csv_columns(spec: TaskSpec) -> list[str]:
 
 
 def json_cell(value: Any) -> str:
-    """CSV 셀용 JSON. `<`는 \\u003c로, U+2028/U+2029는 \\u2028/\\u2029로 써서 <script> 안에 그대로 넣어도 안전하다."""
+    """HIT 값으로 쓰는 JSON 글. `<`는 \\u003c로, U+2028/U+2029는 \\u2028/\\u2029로 써서 <script> 안에 그대로 넣어도 안전하다."""
     text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return text.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 
 def hit_rows(spec: TaskSpec, hits: list[list[Item]]) -> tuple[list[str], list[dict[str, str]]]:
-    """HIT들을 CSV 행으로 만든다. 모든 셀은 json_cell을 거친 문자열이다.
+    """HIT들을 행으로 만든다. 모든 값은 json_cell을 거친 문자열이다.
 
     reference·reason 컬럼에는 일반 항목의 답만, attention 컬럼에는 attention 항목의 기대 값만 들어간다."""
-    columns = csv_columns(spec)
+    columns = hit_columns(spec)
     rows: list[dict[str, str]] = []
     for hit_index, hit in enumerate(hits):
         names = answer_names(spec, hit)
@@ -406,18 +404,18 @@ def hit_rows(spec: TaskSpec, hits: list[list[Item]]) -> tuple[list[str], list[di
 
 
 def row_bytes(columns: list[str], row: dict[str, str]) -> int:
-    """CSV 한 줄의 UTF-8 바이트 수 (MTurk의 64KB 제한과 비교한다)."""
-    buffer = io.StringIO()
-    csv.writer(buffer, lineterminator="\n").writerow([row.get(column, "") for column in columns])
-    return len(buffer.getvalue().encode("utf-8"))
+    """행 값들의 UTF-8 바이트 수 (MTurk의 64KB 제한과 비교한다). 콘솔의 rowSizeBytes와 같은 계산이다."""
+    return sum(len(row.get(column, "").encode("utf-8")) for column in columns)
 
 
-def write_csv(path: Path, columns: list[str], rows: list[dict[str, str]]) -> None:
-    with Path(path).open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(columns)
-        for row in rows:
-            writer.writerow([row.get(column, "") for column in columns])
+def write_json(path: Path, data: Any) -> None:
+    with Path(path).open("w", encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+
+
+def write_hits(path: Path, columns: list[str], rows: list[dict[str, str]]) -> None:
+    write_json(path, [{column: row.get(column, "") for column in columns} for row in rows])
 
 
 # ----------------------------------------------------------------------------------------------
@@ -526,7 +524,7 @@ def build_settings(spec: TaskSpec) -> dict:
 
 
 def item_records(spec: TaskSpec, hits: list[list[Item]]) -> list[dict]:
-    """items.jsonl의 줄들: 항목의 필드·target과 답 칸들(이름, 문항, target 번호, 대조 기준, 이유, 기대 값)."""
+    """items.json의 원소들: 항목의 필드·target과 답 칸들(이름, 문항, target 번호, 대조 기준, 이유, 기대 값)."""
     out = []
     for hit_index, hit in enumerate(hits):
         names = answer_names(spec, hit)
@@ -549,7 +547,7 @@ def item_records(spec: TaskSpec, hits: list[list[Item]]) -> list[dict]:
 
 
 def run_preprocess(spec: TaskSpec, raw_path: Path, out_dir: Path) -> dict:
-    """원본을 읽어 items.jsonl, hits.csv, summary.json, settings.json을 out_dir에 저장하고 summary를 돌려준다."""
+    """원본을 읽어 items.json, hits.json, summary.json, settings.json을 out_dir에 저장하고 summary를 돌려준다."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     source_format, records = source.load_records(Path(raw_path), spec.source.format)
@@ -559,22 +557,16 @@ def run_preprocess(spec: TaskSpec, raw_path: Path, out_dir: Path) -> dict:
     hits = group_hits(spec, items)
     columns, rows = hit_rows(spec, hits)
 
-    write_csv(out_dir / HITS_FILE, columns, rows)
-    with (out_dir / ITEMS_FILE).open("w", encoding="utf-8") as handle:
-        for data in item_records(spec, hits):
-            handle.write(json.dumps(data, ensure_ascii=False) + "\n")
+    write_hits(out_dir / HITS_FILE, columns, rows)
+    write_json(out_dir / ITEMS_FILE, item_records(spec, hits))
     summary = build_summary(spec, item_stats, hits, columns, rows, source_format)
-    with (out_dir / SUMMARY_FILE).open("w", encoding="utf-8") as handle:
-        json.dump(summary, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
-    with (out_dir / SETTINGS_FILE).open("w", encoding="utf-8") as handle:
-        json.dump(build_settings(spec), handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
+    write_json(out_dir / SUMMARY_FILE, summary)
+    write_json(out_dir / SETTINGS_FILE, build_settings(spec))
     return summary
 
 
 __all__ = [
     "Answer", "Item", "build_items", "group_hits", "answer_name", "answer_names", "hit_rows", "json_cell",
-    "run_preprocess", "select_records", "csv_columns", "has_attention_column", "row_bytes", "build_settings",
+    "run_preprocess", "select_records", "hit_columns", "has_attention_column", "row_bytes", "build_settings",
     "build_summary", "hit_id", "answer_patterns",
 ]

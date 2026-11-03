@@ -1,6 +1,6 @@
 // Publish Batch: /create/publish/:projectId. MTurk 에서 Project 의 "Publish Batch" 를 누른 뒤의 흐름이다.
-//   (1) Upload CSV → (2) Preview tasks → (3) Review settings → (4) Confirm and publish
-// 보상, 인원, 기간, worker 조건은 Project 의 속성을 그대로 쓴다 (바꾸려면 Project 를 고친다). 이 batch 에서 정하는 것은 CSV 와
+//   (1) Upload JSON → (2) Preview tasks → (3) Review settings → (4) Confirm and publish
+// 보상, 인원, 기간, worker 조건은 Project 의 속성을 그대로 쓴다 (바꾸려면 Project 를 고친다). 이 batch 에서 정하는 것은 HIT 데이터와
 // 검수 설정(attention, 자유 서술, 대조 기준)뿐이다. 입력은 draft 하나에 모아 IndexedDB 에 임시 저장한다 (lib/draft.js).
 // 임시 저장은 한 번에 하나다: 다른 Project 의 Publish Batch 를 열면 이전 것을 바꾼다.
 //
@@ -121,7 +121,7 @@ export async function renderPublishBatch(root, params, signal) {
     return check;
   }
 
-  /** CSV 가 없거나 컬럼이 모자라면 Upload CSV 로 돌려보낸다. 사라진 pool 이 남아 있으면 게시가 실패하므로 걸러 낸다. */
+  /** 데이터가 없거나 컬럼이 모자라면 Upload JSON 으로 돌려보낸다. 사라진 pool 이 남아 있으면 게시가 실패하므로 걸러 낸다. */
   function reconcile() {
     if (pools.value) {
       const known = new Set(pools.value.map((p) => p.id));
@@ -179,7 +179,7 @@ export async function renderPublishBatch(root, params, signal) {
   };
 
   startOver.addEventListener('click', () => {
-    if (!window.confirm('Start over? The uploaded CSV and the review settings of this batch are discarded. The project is not changed.')) return;
+    if (!window.confirm('Start over? The uploaded data and the review settings of this batch are discarded. The project is not changed.')) return;
     ctx.reset();
   });
 
