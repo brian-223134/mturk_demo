@@ -1,7 +1,7 @@
 // New Project 의 rough design: Requester 가 먼저 고르는 화면 배치 가안과, Vision / Video / Text 별 예시 내용.
 // ROUGH_DESIGNS 는 도형 배치만 적은 JSON 모양의 정의다. 고르는 화면의 도형 그림(pages/create/rough-design.js)과 미리보기 템플릿이
 // 모두 이 정의에서 나오고, 나중에 LLM 에 넘길 명세서도 이 정의를 쓴다.
-//   rows[].slots   왼쪽부터 놓을 칸 (SLOT_LABELS 의 키). 칸이 둘 이상이면 columns 비율로 나눈다
+//   rows[].slots   왼쪽부터 놓을 칸 (SLOT_LABELS 의 키). 칸이 둘 이상이면 columns 비율로 나눈다. 목록을 쓰면 한 열에 칸을 위아래로 쌓는다
 //   rows[].weight  도형 그림에서 이 줄의 높이 비율
 //   tabs           있으면 rows 전체를 탭 수만큼 되풀이한다
 // 표본 글과 그림은 모두 직접 만든 합성 자료다. Video 의 표본은 영상 파일 없이 Vision 의 그림을 쓴다 (ann-video 가 정지 화면으로 그린다).
@@ -228,9 +228,9 @@ export function freeTextLines({ name, header, placeholder = '' }) {
  */
 export function assembleTemplate({ design, instructions, tabs = 0, tabLabel, slotLines, contextLines = () => [] }) {
   const rowLines = (row, tabIndex) => {
-    const cells = row.slots.map((slot) => slotLines(slot, tabIndex));
+    const cells = row.slots.map((cell) => [cell].flat().flatMap((slot) => slotLines(slot, tabIndex)));
     if (cells.length === 1) return cells[0];
-    return [`<ann-columns columns="${row.columns}">`, ...cells.flatMap((cell) => indented(['<ann-column>', ...indented(cell), '</ann-column>'])), '</ann-columns>'];
+    return [`<ann-columns${row.columns ? ` columns="${row.columns}"` : ''}>`, ...cells.flatMap((cell) => indented(['<ann-column>', ...indented(cell), '</ann-column>'])), '</ann-columns>'];
   };
   const body =
     tabs > 0
@@ -264,7 +264,7 @@ export function taskContent(taskType) {
 /** 가안에 맞는 안내문. */
 export function instructionsFor(design, taskType) {
   const content = CONTENT[taskType.id];
-  if (design.rows.some((row) => row.slots.includes('compare'))) return content.compare.instructions;
+  if (design.rows.some((row) => row.slots.flat().includes('compare'))) return content.compare.instructions;
   return design.tabs ? `${content.instructions} Do this in every tab.` : content.instructions;
 }
 

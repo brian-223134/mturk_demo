@@ -1112,6 +1112,10 @@ a.btn:hover {
   flex-wrap: wrap;
   justify-self: start;
 }
+.bound-layout-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
 .binding-split {
   display: grid;
   grid-template-columns: minmax(340px, 2fr) minmax(0, 5fr);

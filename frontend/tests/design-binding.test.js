@@ -6,10 +6,10 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { checkData } from '../src/lib/data-check.js';
-import { adaptBinding, attentionItems, boundData, boundRow, bindingSettings, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, parseCell, parsePath, requestBinding, summarizeData } from '../src/lib/design-binding.js';
+import { adaptBinding, attentionItems, boundData, boundRow, bindingSettings, buildBoundTemplate, checkBinding, dataReader, designForRequest, draftBinding, dropLayout, layoutErrors, parseCell, parsePath, requestBinding, summarizeData } from '../src/lib/design-binding.js';
 import { parseJsonData } from '../src/lib/json-data.js';
 import { hasLayoutErrors, lintLayout } from '../src/lib/layout-lint.js';
-import { ROUGH_DESIGNS, TASK_TYPES, roughDesignById, taskTypeById } from '../src/lib/rough-designs.js';
+import { ROUGH_DESIGNS, SLOT_LABELS, TASK_TYPES, roughDesignById, taskTypeById } from '../src/lib/rough-designs.js';
 import { extractPlaceholders, renderTemplate } from '../src/lib/template.js';
 
 const example = (name) => readFileSync(new URL(`../../example/6-rough-design/${name}`, import.meta.url), 'utf8');
@@ -316,6 +316,130 @@ describe('LLM 설명서 (agent/binding_reference.md)', () => {
 
   it('검사가 아는 칸을 모두 설명한다', () => {
     for (const slot of ['data', 'data-a', 'data-b', 'choice', 'compare', 'item-choice', 'free-text', 'context', 'reference', 'kind']) assert.ok(reference.includes(`\`${slot}\``), slot);
+  });
+});
+
+describe('binding 의 layout', () => {
+  const layout = (...rows) => ({ rows });
+  const at = (html, text) => {
+    const index = html.indexOf(text);
+    assert.ok(index >= 0, text);
+    return index;
+  };
+
+  it('문항을 왼쪽으로: 값과 대조 기준은 그대로이고 배치와 폭만 바뀐다', () => {
+    const moved = { ...binding, layout: layout({ columns: '2fr 3fr', slots: ['item-choice', 'data'] }) };
+    const { check, html } = build(moved, reader);
+    assert.equal(check.design.id, 'item-list');
+    assert.equal(check.design.customLayout, true);
+    assert.ok(at(html, '<ann-columns columns="2fr 3fr">') < at(html, '<ann-item-choice'));
+    assert.ok(at(html, '<ann-item-choice') < at(html, '<ann-text'));
+    assert.equal(hasLayoutErrors(lintLayout(html)), false);
+    const before = boundRow(binding, checkBinding(binding, reader).design, check.taskType, check.tabs, reader, 1);
+    assert.deepEqual(boundRow(moved, check.design, check.taskType, check.tabs, reader, 1), before);
+  });
+
+  it('한 열에 칸을 쌓고, 탭마다 배치를 되풀이한다', () => {
+    const stacked = { ...binding, layout: layout({ columns: '3fr 2fr', slots: ['data', ['item-choice', 'free-text']] }), slots: { ...binding.slots, 'free-text': { name: 'comment', header: 'Any comment?' } } };
+    const { check, html } = build(stacked, reader);
+    const firstTab = html.slice(0, html.indexOf('</ann-tab>'));
+    assert.ok(firstTab.indexOf('<ann-item-choice') < firstTab.indexOf('<ann-textarea'));
+    assert.equal(firstTab.match(/<ann-column>/g).length, 2);
+    assert.equal(html.match(/<ann-textarea name="comment_/g).length, check.tabs);
+    assert.equal(hasLayoutErrors(lintLayout(html)), false);
+  });
+
+  it('위아래로 놓으면 열 없이 줄만 생긴다', () => {
+    const { html } = build({ ...binding, layout: layout({ slots: ['data'] }, { slots: ['item-choice'] }) }, reader);
+    assert.equal(html.includes('<ann-columns'), false);
+    assert.ok(at(html, '<ann-text') < at(html, '<ann-item-choice'));
+  });
+
+  it('폭을 안 적으면 같은 폭이고 속성을 쓰지 않는다', () => {
+    const { html } = build({ ...binding, layout: layout({ slots: ['data', 'item-choice'] }) }, reader);
+    assert.ok(html.includes('<ann-columns>'));
+    assert.equal(html.includes('undefined'), false);
+  });
+
+  it('틀린 배치를 고칠 수 있는 말로 알린다', () => {
+    const cases = [
+      ['x', /"layout" must be an object/],
+      [{ rows: [] }, /"layout" must be an object/],
+      [layout(...Array.from({ length: 7 }, () => ({ slots: ['data'] }))), /at most 6 rows/],
+      [layout({ slots: 'data' }), /must have a list of "slots"/],
+      [layout({ slots: ['data', 'item-choice', 'free-text', 'choice'] }), /at most 3/],
+      [layout({ slots: ['data', []] }), /empty column/],
+      [layout({ slots: ['data', 'chart'] }), /"chart" is not a slot/],
+      [layout({ slots: ['data', 'data', 'item-choice'] }), /placed twice/],
+      [layout({ slots: ['data', 'item-choice'], columns: '1fr' }), /one width per column/],
+      [layout({ slots: ['data', 'data-a', 'item-choice'] }), /must be placed together/],
+      [layout({ slots: ['data', 'compare'] }), /place them too/],
+      [layout({ slots: ['item-choice'] }), /at least one data slot/],
+      [layout({ slots: ['data'] }), /at least one answer slot/],
+    ];
+    for (const [value, message] of cases) assert.match(checkBinding({ ...binding, layout: value }, reader).errors.join(' '), message, JSON.stringify(value));
+  });
+
+  it('폭은 템플릿의 속성으로 들어가므로 fr 숫자 말고는 받지 않는다', () => {
+    for (const columns of ['1fr" onload="alert(1)', '1fr 1fr;color:red', '100px 1fr', '0fr 1fr', '1fr  1fr', 3]) {
+      assert.match(checkBinding({ ...binding, layout: layout({ slots: ['data', 'item-choice'], columns }) }, reader).errors.join(' '), /one width per column/, String(columns));
+    }
+  });
+
+  it('배치에 없는 칸의 값이 남으면 오류이고, 새 문항 칸은 비면 예시를 쓰며 경고한다', () => {
+    const removed = checkBinding({ ...binding, layout: layout({ slots: ['data'] }, { slots: ['free-text'] }) }, reader);
+    assert.match(removed.errors.join(' '), /no slot "item-choice"/);
+    const added = checkBinding({ ...binding, layout: layout({ slots: ['data', 'item-choice'] }, { slots: ['free-text'] }) }, reader);
+    assert.deepEqual(added.errors, []);
+    assert.match(added.warnings.join(' '), /Slot "free-text" has no binding/);
+  });
+
+  it('고른 문항 칸이 사라지면 대조 기준이 가리킬 곳이 없어 오류로 알린다', () => {
+    const { reference, attention, ...rest } = binding;
+    const slots = { data: binding.slots.data, 'free-text': { name: 'comment', header: 'Why?' } };
+    const check = checkBinding({ ...rest, reference, slots, layout: layout({ slots: ['data', 'free-text'] }) }, reader);
+    assert.match(check.errors.join(' '), /"reference" needs a question/);
+  });
+
+  it('task 종류를 바꿔도, 같은 가안으로 다시 들어와도 배치는 유지된다', () => {
+    const moved = { ...binding, layout: layout({ slots: ['item-choice', 'data'] }) };
+    assert.deepEqual(adaptBinding(moved, 'item-list').layout, moved.layout);
+    assert.deepEqual(adaptBinding(moved, 'item-list').slots, moved.slots);
+  });
+
+  it('다른 가안으로 가면 배치를 보관했다가 돌아오면 되살린다', () => {
+    const moved = { ...binding, layout: layout({ slots: ['item-choice', 'data'] }), slots: { ...binding.slots } };
+    const away = adaptBinding(moved, 'stacked');
+    assert.equal(away.layout, undefined);
+    assert.deepEqual(checkBinding(away, reader).errors, []);
+    assert.deepEqual(away.unused.layout, { design: 'item-list', layout: moved.layout });
+    const further = adaptBinding(away, 'side-by-side');
+    assert.deepEqual(further.unused.layout, away.unused.layout);
+    const back = adaptBinding(further, 'item-list');
+    assert.deepEqual(back.layout, moved.layout);
+    assert.deepEqual(back.reference, binding.reference);
+    assert.equal(back.unused, undefined);
+    assert.deepEqual(checkBinding(back, reader).errors, []);
+  });
+
+  it('가안의 배치로 돌아가면 가안에 없는 칸의 값은 보관한다', () => {
+    const custom = { ...binding, layout: layout({ slots: ['data', 'item-choice'] }, { slots: ['free-text'] }), slots: { ...binding.slots, 'free-text': { name: 'comment', header: 'Why?' } } };
+    const dropped = dropLayout(custom);
+    assert.equal('layout' in dropped, false);
+    assert.equal(dropped.slots['free-text'], undefined);
+    assert.equal(dropped.unused['free-text'].name, 'comment');
+    assert.deepEqual(checkBinding(dropped, reader).errors, []);
+    assert.deepEqual(dropped.slots['item-choice'], binding.slots['item-choice']);
+  });
+
+  it('틀린 배치가 들어 있어도 가안 바꾸기는 예외를 내지 않는다', () => {
+    const broken = { ...binding, layout: { rows: 'nope' } };
+    assert.equal(adaptBinding(broken, 'stacked').layout, undefined);
+    assert.ok(adaptBinding(broken, 'item-list').slots);
+  });
+
+  it('LLM 에 가안의 폭도 함께 보낸다', () => {
+    assert.deepEqual(designForRequest(roughDesignById('item-list')).rows, [{ columns: '3fr 2fr', slots: ['data', 'item-choice'] }]);
   });
 });
 

@@ -12,7 +12,8 @@
 //     "context": [{ "label": "Question", "from": "question" }],        어느 칸에도 안 맞지만 worker 가 읽어야 하는 값. 칸들 위에 보인다
 //     "reference": { "selected": "labels", "key": "Chunk {i}", "item": "Fact {n}", "yes": "supported", "no": "not_supported" },
 //     "attention": { "flag": "attention_check[i]", "expected": "not_supported" },  expected 가 있으면 게시 때 판정한다
-//     "instructions": "…"                                             없으면 task 종류의 예시 안내문
+//     "instructions": "…",                                            없으면 task 종류의 예시 안내문
+//     "layout": { "rows": [{ "columns": "2fr 3fr", "slots": ["item-choice", ["data", "free-text"]] }] }   없으면 가안의 배치
 //   }
 // 경로는 컬럼 이름 뒤에 [i](repeat 의 현재 항목), [숫자], .키 를 붙인다. 셀은 JSON 이나 Python 리터럴이어도 구조로 읽는다.
 // 게시용 데이터는 칸마다 컬럼(slot_data_1 …)을 새로 만들고, binding 이 쓰지 않은 컬럼은 그대로 둔다.
@@ -21,12 +22,15 @@
 //   { "map": "<경로>", "key": "general_{i}_{n}" }  키에 번호가 든 객체. {i} 는 탭 번호(0부터), {n} 은 항목 번호(1부터)
 //   { "selected": "<경로>", "key": "Chunk {i}", "item": "Fact {n}", "yes": "…", "no": "…" }  고른 항목만 적힌 목록
 // binding 에 없는 문항 칸은 예시 문항을 쓰고 경고한다. 가안을 바꾸면 adaptBinding 이 값을 새 칸으로 옮긴다.
+// layout 은 가안의 rows 를 대신한다. checkBinding 이 돌려주는 design 에 이미 반영되어 있어 조립과 폼은 차이를 모른다.
+// columns 는 템플릿의 속성으로 들어가므로 layoutErrors 가 형식을 좁게 검사한다.
 // LLM 에게는 summarizeData 의 요약만 보내고, requestBinding 이 답을 checkBinding 으로 검사해 오류를 붙여 다시 묻는다.
 
-import { DATA_KINDS, assembleTemplate, choiceLines, compareOptions, dataLines, defaultKind, freeTextLines, instructionsFor, itemChoiceLines, roughDesignById, taskContent, taskTypeById } from './rough-designs.js';
+import { DATA_KINDS, SLOT_LABELS, assembleTemplate, choiceLines, compareOptions, dataLines, defaultKind, freeTextLines, instructionsFor, itemChoiceLines, roughDesignById, taskContent, taskTypeById } from './rough-designs.js';
 
 const DATA_SLOTS = ['data', 'data-a', 'data-b'];
 const ANSWER_SLOTS = ['choice', 'compare', 'item-choice', 'free-text'];
+const SLOT_NAMES = Object.keys(SLOT_LABELS);
 const JUDGED_SLOTS = ['item-choice', 'choice', 'compare']; // 대조 기준과 attention 이 가리키는 문항 칸. 앞의 것이 먼저다
 const REFERENCE_COLUMN = 'slot_reference';
 const ATTENTION_COLUMN = 'slot_attention';
@@ -37,6 +41,9 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PATH = /^([^\s[\].]+)((?:\[(?:i|\d+)\]|\.[^\s[\].]+)*)$/;
 const STEP = /\[(i|\d+)\]|\.([^\s[\].]+)/g;
 const SKIP_COLUMN = /(^|_)(q?id|idx|ids|index|counts?|check|reasoning|reason|label|gold|expected)$/i;
+const LAYOUT_ROWS = 6;
+const LAYOUT_COLUMNS = 3;
+const COLUMN_WIDTHS = /^[1-9]\d?fr( [1-9]\d?fr)*$/;
 
 // ---- 셀 값 --------------------------------------------------------------------------------------
 
@@ -202,7 +209,50 @@ function isObject(value) {
 const fieldsOf = (spec) => (Array.isArray(spec) ? spec : spec === undefined || spec === null ? [] : [spec]);
 
 function slotsOf(design) {
-  return design.rows.flatMap((row) => row.slots);
+  return design.rows.flatMap((row) => row.slots.flat());
+}
+
+/** binding 의 layout 이 어긋난 곳들. 없으면 빈 목록이다. */
+export function layoutErrors(layout) {
+  if (!isObject(layout) || !Array.isArray(layout.rows) || layout.rows.length === 0) return ['"layout" must be an object with a list of "rows".'];
+  if (layout.rows.length > LAYOUT_ROWS) return [`"layout" can have at most ${LAYOUT_ROWS} rows.`];
+  const errors = [];
+  const seen = [];
+  layout.rows.forEach((row, index) => {
+    const where = `layout.rows[${index}]`;
+    if (!isObject(row) || !Array.isArray(row.slots) || row.slots.length === 0) {
+      errors.push(`${where} must have a list of "slots".`);
+      return;
+    }
+    if (row.slots.length > LAYOUT_COLUMNS) errors.push(`${where} has ${row.slots.length} columns. A row can have at most ${LAYOUT_COLUMNS}.`);
+    for (const cell of row.slots) {
+      const stack = Array.isArray(cell) ? cell : [cell];
+      if (stack.length === 0) errors.push(`${where} has an empty column.`);
+      for (const slot of stack) {
+        if (!SLOT_NAMES.includes(slot)) errors.push(`${where}: ${JSON.stringify(slot)} is not a slot. The slots are ${SLOT_NAMES.join(', ')}.`);
+        else if (seen.includes(slot)) errors.push(`${where}: slot "${slot}" is placed twice. Each slot can appear once.`);
+        else seen.push(slot);
+      }
+    }
+    if (row.columns !== undefined && (typeof row.columns !== 'string' || !COLUMN_WIDTHS.test(row.columns) || row.columns.split(' ').length !== row.slots.length)) {
+      errors.push(`${where}: "columns" must give one width per column, like "3fr 2fr" (got ${JSON.stringify(row.columns)}).`);
+    }
+  });
+  if (errors.length > 0) return errors;
+  const pair = ['data-a', 'data-b'].filter((slot) => seen.includes(slot));
+  if (pair.length === 1) errors.push('"layout": "data-a" and "data-b" must be placed together.');
+  if (seen.includes('compare') && pair.length < 2) errors.push('"layout": "compare" picks between "data-a" and "data-b", so place them too.');
+  if (!seen.some((slot) => DATA_SLOTS.includes(slot))) errors.push('"layout" must place at least one data slot.');
+  if (!seen.some((slot) => ANSWER_SLOTS.includes(slot))) errors.push('"layout" must place at least one answer slot.');
+  return errors;
+}
+
+const withLayout = (design, layout) => ({ ...design, rows: layout.rows, customLayout: true });
+
+/** binding 이 실제로 쓰는 배치의 가안. layout 이 틀렸으면 가안 그대로다. */
+function designOf(binding) {
+  const design = roughDesignById(binding.design);
+  return design && binding.layout !== undefined && layoutErrors(binding.layout).length === 0 ? withLayout(design, binding.layout) : design;
 }
 
 function optionPairs(options) {
@@ -289,13 +339,19 @@ export function checkBinding(binding, reader) {
   if (errors.length > 0) return result;
   result.design = design;
   result.taskType = taskType;
+  if (binding.layout !== undefined) {
+    errors.push(...layoutErrors(binding.layout));
+    if (errors.length > 0) return result;
+    result.design = withLayout(design, binding.layout);
+  }
+  const designed = result.design;
 
-  const designSlots = slotsOf(design);
+  const designSlots = slotsOf(designed);
   for (const slot of Object.keys(binding.slots ?? {})) {
     if (!designSlots.includes(slot)) errors.push(`The ${design.title} design has no slot "${slot}". Its slots are ${designSlots.join(', ')}.`);
   }
   if (design.tabs && !binding.repeat) errors.push(`The ${design.title} design shows one item per tab, so it needs "repeat" over a list column.`);
-  const { slots, sampled, context } = normalize(binding, design, taskType);
+  const { slots, sampled, context } = normalize(binding, designed, taskType);
   for (const slot of designSlots.filter((name) => DATA_SLOTS.includes(name))) {
     if (slots[slot].length === 0) errors.push(`Slot "${slot}" has no data. Add {"from": "<column>"} to it.`);
   }
@@ -331,7 +387,7 @@ export function checkBinding(binding, reader) {
   if (errors.length > 0) return result;
   checkLanguage(binding, errors);
   checkKinds({ slots, context, taskType, binding, reader, tabs: result.tabs, errors });
-  checkJudged({ binding, design, slots, reader, tabs: result.tabs, errors, warnings });
+  checkJudged({ binding, design: designed, slots, reader, tabs: result.tabs, errors, warnings });
   for (const slot of sampled) warnings.push(`Slot "${slot}" has no binding, so the example question is shown. Replace it before you publish.`);
   return result;
 }
@@ -649,7 +705,7 @@ export function summarizeData(reader) {
 
 /** 가안 정의 중 LLM 이 쓸 부분. */
 export function designForRequest(design) {
-  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}) };
+  return { id: design.id, title: design.title, summary: design.summary, rows: design.rows.map((row) => ({ ...(row.columns ? { columns: row.columns } : {}), slots: row.slots })), ...(design.tabs ? { one_tab_per_item: true } : {}) };
 }
 
 /**
@@ -685,7 +741,10 @@ export async function requestBinding({ send, check, request, maxAttempts = 3 }) 
  * LLM 을 다시 부르지 않고 가안을 비교하기 위한 것이다.
  */
 export function adaptBinding(binding, designId) {
-  const target = roughDesignById(designId);
+  const staying = binding.design === designId;
+  const savedLayout = binding.unused?.layout;
+  const layout = staying ? binding.layout : savedLayout?.design === designId ? savedLayout.layout : undefined;
+  const target = layout !== undefined && layoutErrors(layout).length === 0 ? withLayout(roughDesignById(designId), layout) : roughDesignById(designId);
   const source = { ...binding.unused, ...binding.slots };
   const targetSlots = slotsOf(target);
   const fields = DATA_SLOTS.flatMap((slot) => fieldsOf(source[slot]));
@@ -700,8 +759,13 @@ export function adaptBinding(binding, designId) {
   }
   const unused = Object.fromEntries(Object.entries(source).filter(([slot]) => ANSWER_SLOTS.includes(slot) && !targetSlots.includes(slot)));
   const next = { ...binding, design: designId, slots };
+  if (layout !== undefined) next.layout = layout;
+  else delete next.layout;
+  // 고친 배치는 그 가안의 것이다. 다른 가안으로 가면 보관했다가 돌아오면 되살린다
+  if (!staying && binding.layout !== undefined) unused.layout = { design: binding.design, layout: binding.layout };
+  else if (savedLayout && savedLayout.design !== designId) unused.layout = savedLayout;
   // 대조 기준과 기대 답은 문항 칸에 달렸다. 문항 칸이 달라지면 보관했다가 돌아오면 되살린다
-  const sourceJudged = judgedSlot(roughDesignById(binding.design)) ;
+  const sourceJudged = judgedSlot(designOf(binding));
   const targetJudged = judgedSlot(target);
   let checks = binding.unused?.judged ?? null;
   if (sourceJudged !== targetJudged && (binding.reference !== undefined || binding.attention?.expected !== undefined)) {
@@ -720,6 +784,12 @@ export function adaptBinding(binding, designId) {
   if (Object.keys(unused).length > 0) next.unused = unused;
   else delete next.unused;
   return next;
+}
+
+/** 고친 배치를 버리고 가안의 배치로 돌아간다. 가안에 없는 칸의 값은 unused 에 남는다. */
+export function dropLayout(binding) {
+  const { layout, ...rest } = binding;
+  return adaptBinding(rest, binding.design);
 }
 
 /** 값의 글자 수로 보여 줄 만한 컬럼을 고른다. */

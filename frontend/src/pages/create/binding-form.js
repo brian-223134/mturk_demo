@@ -147,7 +147,7 @@ export function bindingForm({ get, check, reader, onChange }) {
   }
 
   const judged = judgedOptions(binding, design, taskType);
-  const slots = design.rows.flatMap((row) => row.slots);
+  const slots = design.rows.flatMap((row) => row.slots.flat());
   return el(
     'div',
     { className: 'binding-form', id: 'binding-form' },
