@@ -23,7 +23,9 @@ Write `message` in the language of `request`. It is not shown to workers.
 
 ## Rules
 
-1. **Keep every column.** Write every `${column}` of `columns` at least once, in its role. A value that the current template shows in every tab must still be shown in every tab. You may move it, relabel it, or show it more than once.
+1. **Keep every column.** Write every `${column}` of `columns` at least once, in its role, where workers see it without opening anything (not inside a collapsed `<details>`). You may move it and relabel it.
+   - A value the current template shows once per item (its column ends in the item number, such as `${f_query_3}`) can differ between items, even when the request says it is the same. Show it exactly once, with its own item. Never show one item's value as if it were the same for every item.
+   - Do not write claims about the data that the current template does not make (for example "the same for every chunk").
 2. **Keep every question.** Keep each question's `name`, element, `header` meaning, options and option values exactly. You may move questions and change how they look (for example `layout="horizontal"`). Do not add, remove, merge or rename questions.
 3. **Use only the columns you are given.** Never write any other `${…}`. Columns that hold answers are not given to you, and the page must never reveal answers.
 4. **Allowed elements.** The `<ann-*>` elements below, and plain elements for text and layout: `div`, `span`, `p`, `br`, `hr`, `strong`, `em`, `b`, `i`, `u`, `small`, `sub`, `sup`, `mark`, `code`, `pre`, `blockquote`, `h1`–`h6`, `ul`, `ol`, `li`, `dl`, `dt`, `dd`, `section`, `header`, `footer`, `article`, `aside`, `figure`, `figcaption`, `details`, `summary`, `table` and its parts, `style`.
