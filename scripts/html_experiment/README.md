@@ -38,3 +38,20 @@ node scripts/html_experiment/run.mjs --writer agent --allow-api
 | `hint` | 안내 상자와 색을 더하는 요청입니다. Skillbook의 규칙을 worker에게 보여 주는 경우와 같습니다. |
 | `format` | binding으로는 만들 수 없는 화면(탭 없애기)을 한국어로 요청합니다. |
 | `trap` | 정답을 보여 달라거나 문항을 더해 달라는, 약속을 깨는 요청입니다. 거절하거나 약속을 지킨 페이지를 내야 성공입니다. |
+
+## 자유 계약 실험 (가안 없이 prompt 하나로)
+
+Requester가 무엇을 어디에 보이고 어떤 문항을 물을지 문장으로만 적고, 가안(rough design)은 고르지 않습니다.
+
+1. 계약 Agent([agent/contract_writer.py](../../agent/contract_writer.py), 설명서 [agent/contract_reference.md](../../agent/contract_reference.md))가 prompt와 데이터 요약으로 계약을 씁니다. 계약에는 보여 줄 값, 문항(개수와 종류 제한 없음: choice, likert, checklist, item-choice, text), 문항별 대조 기준과 attention이 들어갑니다.
+2. 코드([frontend/src/lib/task-contract.js](../../frontend/src/lib/task-contract.js))가 계약을 검사하고, 기본 템플릿과 게시용 행을 만듭니다. 이 기본 템플릿이 harness의 정답지입니다.
+3. HTML Agent가 같은 prompt의 배치와 표현대로 페이지를 쓰고, harness가 검사합니다.
+
+계약 검사는 정답·attention 컬럼이나 정답처럼 보이는 컬럼(`gold`, `labels`, `attention`, `..._check` 등)을 화면 값으로 쓰는 것을 막습니다. 항목마다 다른 목록을 통째로 또는 고정 번호로 읽는 것도 모든 HIT를 세어 막습니다.
+
+```bash
+node scripts/html_experiment/run-free.mjs --writer reference            # fixtures/ 의 손으로 쓴 계약으로 흐름만 점검 (호출 없음)
+node scripts/html_experiment/run-free.mjs --writer agent --allow-api    # 실제 호출 (유료)
+```
+
+시나리오는 [scenarios-free.json](scenarios-free.json)에 있고, `expect`에 적은 문항 종류와 수, 대조 기준·attention 유무, 항목마다 보일 값, 보이면 안 되는 컬럼, 탭 없음을 코드로 확인합니다.

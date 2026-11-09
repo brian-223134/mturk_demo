@@ -7,7 +7,6 @@
 //   옵션: --only a,b  --out DIR  --no-render  --max-attempts 3  --python python3  --model-config NAME
 // 결과는 var/html-experiment/<시각>/ 에 남는다 (git 에 넣지 않는다): 시나리오별 시도마다의 HTML, 요청, 응답, 화면 사진, results.json, summary.md.
 
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -15,10 +14,8 @@ import { parseArgs } from 'node:util';
 import { dataReader } from '../../frontend/src/lib/design-binding.js';
 import { checkAgentHtml, compareRendered, contractFor, requestHtml } from '../../frontend/src/lib/html-harness.js';
 import { parseJsonData } from '../../frontend/src/lib/json-data.js';
+import { ROOT, buildRequest, groupRowErrors, pythonSender, stamp } from './common.mjs';
 import { findChrome, renderPages, screenshot } from './render.mjs';
-
-const ROOT = resolve(import.meta.dirname, '../..');
-const SAMPLE_CHARS = 200;
 
 const { values: args } = parseArgs({
   options: {
@@ -34,50 +31,6 @@ const { values: args } = parseArgs({
 });
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
-const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const unescape = (text) => String(text).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-const clip = (text) => (text.length > SAMPLE_CHARS ? `${text.slice(0, SAMPLE_CHARS)}… (${text.length} characters)` : text);
-
-/** Agent 에게 보낼 요청. 정답이 든 컬럼은 넣지 않는다. */
-export function buildRequest(contract, scenario, taskType) {
-  const first = contract.data.rows[0] ?? {};
-  return {
-    task_type: taskType,
-    request: scenario.request,
-    template: contract.html,
-    columns: contract.shown.map((name) => ({ name, role: contract.roles[name], sample: clip(unescape(first[name] ?? '')) })),
-    questions: contract.questions,
-  };
-}
-
-/** 행마다의 렌더 오류를 같은 문구끼리 묶는다: "HIT 1, 2, 5: …". */
-function groupRowErrors(errors) {
-  const byMessage = new Map();
-  for (const { row, message } of errors) byMessage.set(message, [...(byMessage.get(message) ?? []), row + 1]);
-  return [...byMessage].map(([message, rows]) => `HIT ${rows.slice(0, 5).join(', ')}${rows.length > 5 ? ` and ${rows.length - 5} more` : ''}: ${message}`);
-}
-
-function agentSender(dir) {
-  let call = 0;
-  return async (body) => {
-    call += 1;
-    const requestFile = join(dir, `request-${call}.json`);
-    const replyFile = join(dir, `reply-${call}.json`);
-    writeFileSync(requestFile, JSON.stringify(body, null, 2));
-    const command = ['-m', 'agent.html_writer', requestFile, '--out', replyFile, '--log-dir', join(dir, `log-${call}`)];
-    if (args['allow-api']) command.push('--allow-api');
-    if (args['model-config']) command.push('--model-config', args['model-config']);
-    const run = spawnSync(args.python, command, { cwd: ROOT, encoding: 'utf8', env: process.env });
-    let reply;
-    try {
-      reply = JSON.parse(readFileSync(replyFile, 'utf8'));
-    } catch {
-      throw new Error(`The agent wrote no reply (exit ${run.status}): ${run.stderr.trim().slice(-400)}`);
-    }
-    if (reply.error) throw new Error(`The agent call failed: ${reply.error}`);
-    return reply;
-  };
-}
 
 async function runScenario(scenario, outRoot, chrome) {
   const dir = join(outRoot, scenario.name);
@@ -103,10 +56,10 @@ async function runScenario(scenario, outRoot, chrome) {
     const rendered = renderPages({ html, rows, chrome, workDir: dir, name: `attempt-${attempt}` });
     return { errors: groupRowErrors(compareRendered(contract, reference, rendered).errors), warnings: result.warnings };
   };
-  const send = args.writer === 'agent' ? agentSender(dir) : async () => ({ html: contract.html, message: 'Returned the current template unchanged.' });
+  const send = args.writer === 'agent' ? pythonSender({ module: 'agent.html_writer', dir, prefix: '', allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] }) : async () => ({ html: contract.html, message: 'Returned the current template unchanged.' });
 
   const started = Date.now();
-  const result = await requestHtml({ send, check, request: buildRequest(contract, scenario, binding.task_type), maxAttempts: Number(args['max-attempts']) });
+  const result = await requestHtml({ send, check, request: buildRequest(contract, scenario.request, binding.task_type), maxAttempts: Number(args['max-attempts']) });
   const seconds = Math.round((Date.now() - started) / 100) / 10;
   const outcome = result.cannot ? 'cannot' : result.errors.length === 0 ? 'pass' : 'fail';
   const success = scenario.expect === 'refuse' ? outcome !== 'fail' : outcome === 'pass';
