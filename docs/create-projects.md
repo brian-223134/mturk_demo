@@ -256,17 +256,22 @@ LLM이 받는 배치 요소의 설명은 `agent/binding_reference.md`의 `Laying
 1. HIT 데이터(JSON)를 올립니다. 파일은 이 탭에만 있고, LLM에는 구조와 잘린 표본만 갑니다.
 2. `Your task`에 과제를 적고 `Allow API calls`를 체크한 뒤 `Write the task`를 누릅니다(유료 호출). 정답이 든 컬럼과 attention 표시 컬럼을 함께 적으면 Review가 그 값과 대조합니다.
 3. `The task`에 LLM이 정한 내용이 표로 나옵니다. `What workers see`는 보여 줄 값과 그 값을 읽는 데이터 경로, 항목마다 보이는지입니다. `What workers answer`는 문항, 답의 모양, 대조 기준(`Compared with your labels`)과 `Attention check` 표시입니다. LLM의 설명도 함께 나오며, 요청과 데이터가 다르면(예: "모든 항목에 같다"고 했지만 실제로는 다른 값) 그 사실을 알립니다.
-4. `The page`에 기본 배치로 그린 미리보기가 나옵니다. `Arrange the page`를 누르면 LLM이 같은 문장(또는 `How should the page look?`에 적은 글)대로 배치와 표현을 다시 씁니다(유료 호출). `Use the plain layout`으로 기본 배치로 돌아갑니다.
-5. Project 이름을 확인하고 `Use this task`를 누르면 Project가 저장되고, 게시용 데이터와 대조 기준·attention 설정이 Publish Batch로 넘어갑니다.
+4. 과제를 고치는 방법은 세 가지입니다.
+   - **요청으로 고치기**: 과제가 생기면 입력 칸이 `What should change?`로 바뀝니다. 고칠 점을 적고 `Revise the task`를 누르면(유료 호출) 요청과 답이 대화처럼 쌓이고, 답마다 바뀐 점이 보입니다. 문항이 없어지거나 대조 기준·attention이 사라지면 빨간색으로 표시하며, `Restore`로 어느 때로든 돌아갈 수 있습니다. 처음부터 다시 쓰려면 `Start over`를 누릅니다.
+   - **폼으로 고치기**: `Edit the task`에서 안내문, 항목 반복, 보여 줄 값(제목, 데이터 경로, 종류), 문항(질문, 답의 종류, 선택지의 값과 글, 항목, 점수 범위, 필수 여부, 항목마다 묻기), 대조 기준, attention을 고칩니다. 문항을 지우면 그 문항의 대조 기준과 attention도 함께 지워집니다.
+   - **JSON으로 고치기**: `Edit as JSON (advanced)`.
+5. `The page`에 기본 배치로 그린 미리보기가 나옵니다. `Arrange the page`를 누르면 LLM이 처음 문장(또는 `How should the page look?`에 적은 글)대로 배치와 표현을 다시 씁니다(유료 호출). `Use the plain layout`으로 기본 배치로 돌아갑니다.
+6. **요청한 배치대로 되었는지 자동 확인**: 다시 쓴 페이지는 화면 밖에서 실제로 그려 칸의 위치, 폭, 탭, 굵기, 글자 크기, 색, 강조 상자를 재고, 판정 LLM이 문장의 배치·표현 요구를 하나씩 `met`(✓), `not met`(✗), `unclear`(?)로 판정합니다(유료 호출). 맞지 않는 것이 있으면 LLM에게 고쳐 달라고 다시 묻고, 끝까지 남으면 페이지는 쓰되 경고로 보입니다. `Check against my description`은 지금 페이지(기본 배치 포함)를 판정만 합니다. 과제가 정한 것(정답을 보이지 않는다, 항목마다 다른 값은 항목마다 보인다)과 어긋나는 요구는 판정하지 않고 `unclear`로 둡니다.
+7. Project 이름을 확인하고 `Use this task`를 누르면 Project가 저장되고, 게시용 데이터와 대조 기준·attention 설정이 Publish Batch로 넘어갑니다.
 
 콘솔은 LLM의 답을 그대로 쓰지 않고 검사합니다. 걸리면 오류를 붙여 최대 3번 다시 묻고, 그래도 남으면 쓰지 않습니다.
 
 - 과제: 데이터에 있는 경로인지, 문항 이름과 선택지가 맞는지, worker에게 보일 글이 영어인지 봅니다. 정답·attention 컬럼이나 정답처럼 보이는 컬럼(`gold`, `labels`, `attention`, `..._check` 등)을 화면 값으로 쓰면 막습니다. 항목마다 다른 목록을 통째로 또는 고정 번호로 읽는 것도 모든 HIT를 세어 막습니다.
 - 페이지: 기본 배치의 값과 문항이 모두 같은 이름과 자리로 남아 있는지, 정답 컬럼을 쓰지 않는지, 허용한 요소만 쓰고 스크립트·외부 주소가 없는지 봅니다. 한 항목의 값을 모든 항목의 값처럼 한 번 더 보이거나, 값을 접힌 상자에 숨기는 것도 막습니다.
 
-`Edit as JSON (advanced)`에서 과제를 직접 고칠 수 있고, LLM 없이 과제를 붙여 넣어 시작할 수도 있습니다. 형식 설명서는 [agent/contract_reference.md](../agent/contract_reference.md)와 [agent/html_reference.md](../agent/html_reference.md)입니다. 같은 흐름을 시나리오로 시험하는 방법은 [scripts/html_experiment/README.md](../scripts/html_experiment/README.md)에 있습니다.
+LLM 없이 과제를 붙여 넣어 시작할 수도 있습니다. 형식 설명서는 [agent/contract_reference.md](../agent/contract_reference.md), [agent/html_reference.md](../agent/html_reference.md), [agent/layout_reference.md](../agent/layout_reference.md)입니다. 같은 흐름을 시나리오로 시험하는 방법은 [scripts/html_experiment/README.md](../scripts/html_experiment/README.md)에 있습니다.
 
-아직 없는 것: 과제를 대화처럼 고치는 수정 요청(지금은 다시 쓰거나 JSON으로 고칩니다), 폼으로 고치기, 요청한 배치대로 되었는지의 자동 확인(화면으로 확인합니다).
+판정은 잰 값만 보므로 그림의 내용이나 글의 뜻은 판단하지 못하고, 판정 자체가 틀릴 수 있습니다. 미리보기도 함께 확인합니다.
 
 ### 앞으로 할 일
 
