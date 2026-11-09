@@ -1361,3 +1361,72 @@ label.btn .dropzone-input {
   background: #e7f4ec;
   color: #1d6b3a;
 }
+
+/* Describe your task 의 과제 폼과 배치 판정 (pages/create/contract-form.js, describe-task.js) */
+.bf-heading {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.bf-question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.bf-checks {
+  align-items: center;
+  gap: 14px;
+}
+.layout-checks {
+  margin: 8px 0;
+}
+.layout-check-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.layout-check {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.layout-check-mark {
+  flex: none;
+  width: 1.2em;
+  font-weight: 700;
+  text-align: center;
+}
+.layout-check-met .layout-check-mark {
+  color: #1d6b3a;
+}
+.layout-check-not_met .layout-check-mark {
+  color: #b3261e;
+}
+.layout-check-unclear .layout-check-mark {
+  color: var(--muted);
+}
+/* 과제 폼은 전체 폭이라 칸을 가로로 놓는다 (binding 폼은 좁은 열이라 세로) */
+.contract-form .bf-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.contract-form .bf-row > .bf-control {
+  flex: 1 1 180px;
+}
+.contract-form .bf-options {
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+.contract-form-details > summary {
+  font-weight: 600;
+}

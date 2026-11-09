@@ -13,12 +13,12 @@ const REFERENCE_FORMS = [
   ['selected', 'A list of the positive items'],
 ];
 
-function control(label, node, hint) {
+export function control(label, node, hint) {
   return el('label', { className: 'bf-control' }, el('span', { className: 'bf-label' }, label), node, hint ? el('span', { className: 'hint' }, hint) : null);
 }
 
 /** 지금 값이 목록에 없어도(사람이나 LLM 이 쓴 경로) 그대로 보이고 지워지지 않는다. */
-function selectOf({ id, value, choices, onChange }) {
+export function selectOf({ id, value, choices, onChange }) {
   const pairs = choices.map((choice) => (Array.isArray(choice) ? choice : [choice, choice]));
   const current = value ?? '';
   if (!pairs.some(([option]) => option === current)) pairs.unshift([current, current === '' ? 'Choose…' : current]);
@@ -28,14 +28,14 @@ function selectOf({ id, value, choices, onChange }) {
   return node;
 }
 
-function textOf({ id, value, placeholder, onInput, multiline = false }) {
+export function textOf({ id, value, placeholder, onInput, multiline = false }) {
   const node = multiline ? el('textarea', { id, rows: 2, placeholder }) : el('input', { type: 'text', id, placeholder });
   node.value = value ?? '';
   node.addEventListener('input', () => onInput(node.value));
   return node;
 }
 
-const smallButton = (id, label, onClick) => el('button', { type: 'button', className: 'btn btn-small btn-link', id, onClick }, label);
+export const smallButton = (id, label, onClick) => el('button', { type: 'button', className: 'btn btn-small btn-link', id, onClick }, label);
 
 /** 지금 binding 의 폼. 검사가 가안과 종류를 알아낸 뒤에만 부른다. */
 export function bindingForm({ get, check, reader, onChange }) {
