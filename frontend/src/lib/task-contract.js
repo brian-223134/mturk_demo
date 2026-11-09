@@ -433,6 +433,40 @@ export function harnessContract(contract, reader) {
   };
 }
 
+/** 계약의 task 종류: 영상 값이 있으면 video, 이미지 값이 있으면 vision, 아니면 text. Project 속성의 기본값을 고르는 데 쓴다. */
+export function contractTaskType(contract) {
+  const kinds = fieldsOf(contract).map((field) => field.kind ?? 'text');
+  return kinds.includes('video') ? 'video' : kinds.includes('image') ? 'vision' : 'text';
+}
+
+/**
+ * 화면에 보일 계약의 요약. Requester 가 Agent 가 무엇을 정했는지 읽고 확인하는 데 쓴다.
+ * → { values: [{ label, from, kind, perItem }], questions: [{ name, type, header, answers, perItem, compared, attention }], itemLabel }
+ */
+export function contractOutline(contract) {
+  const references = new Set(referencesOf(contract).map((ref) => ref.question));
+  const answersOf = (question) => {
+    if (question.type === 'likert') return `${question.min ?? 1} to ${question.max ?? 5}${question.min_label || question.max_label ? ` (${question.min_label ?? ''} … ${question.max_label ?? ''})` : ''}`;
+    if (question.type === 'text') return 'written answer';
+    const items = Array.isArray(question.items) ? `items: ${question.items.map((item) => (isObject(item) ? item.text : item)).join(', ')}` : question.items ? `items from ${question.items}` : '';
+    const options = question.type === 'checklist' ? `${question.checked ?? 'yes'} / ${question.unchecked ?? 'no'} for each item` : optionPairs(question.options).map(([, label]) => label).join(' / ');
+    return [options, items].filter(Boolean).join('; ');
+  };
+  return {
+    itemLabel: contract?.repeat ? `${contract.repeat.label ?? 'Item'} (one per element of ${contract.repeat.over})` : null,
+    values: fieldsOf(contract).map((field) => ({ label: field.label ?? field.id, from: field.from, kind: field.kind ?? 'text', perItem: fieldPerItem(field) })),
+    questions: questionsOf(contract).map((question) => ({
+      name: question.name,
+      type: question.type,
+      header: question.header,
+      answers: answersOf(question),
+      perItem: questionPerItem(contract, question),
+      compared: references.has(question.name),
+      attention: contract?.attention?.question === question.name,
+    })),
+  };
+}
+
 /** 게시 설정에 얹을 값 (bindingSettings 와 같은 모양). */
 export function contractSettings(contract) {
   const settings = {};

@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import { boundData, checkBinding, dataReader } from '../src/lib/design-binding.js';
 import { checkAgentHtml } from '../src/lib/html-harness.js';
 import { parseJsonData } from '../src/lib/json-data.js';
-import { buildContractTemplate, checkContract, contractRow, contractSettings, harnessContract, requestContract } from '../src/lib/task-contract.js';
+import { buildContractTemplate, checkContract, contractOutline, contractRow, contractSettings, contractTaskType, harnessContract, requestContract } from '../src/lib/task-contract.js';
 
 const file = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 const readerOf = (path) => dataReader(parseJsonData(file(path), 'x.json'));
@@ -117,6 +117,27 @@ describe('기본 템플릿과 게시용 행', () => {
     assert.deepEqual(contract.questions.map((q) => q.tag), ['ann-choice', 'ann-checklist', 'ann-textarea']);
     assert.ok(checkAgentHtml(contract.html.replace('</ann-form>', '<p>${gold}</p></ann-form>'), contract).errors.some((e) => e.includes('"gold"')));
     assert.deepEqual(contractSettings(passage), { referenceColumn: 'slot_reference', attentionEnabled: true, attentionMode: 'column', attentionColumn: 'slot_attention', attentionMinRatio: 1 });
+  });
+});
+
+describe('화면에 보일 요약', () => {
+  it('값과 문항, 항목마다인지, 대조 기준과 attention 이 붙었는지 보인다', () => {
+    const outline = contractOutline(chunk);
+    assert.equal(outline.itemLabel, 'Chunk (one per element of retrieved_chunk)');
+    assert.deepEqual(outline.values.map((v) => [v.label, v.from, v.perItem]), [['Query', 'query[i]', true], ['Chunk', 'retrieved_chunk[i]', true]]);
+    assert.deepEqual(outline.questions.map((q) => [q.name, q.type, q.compared, q.attention]), [['supported', 'item-choice', true, true], ['confidence', 'likert', false, false]]);
+    assert.equal(outline.questions[1].answers, '1 to 5 (Guessing … Certain)');
+    const passageOutline = contractOutline(passage);
+    assert.equal(passageOutline.itemLabel, null);
+    assert.equal(passageOutline.questions[0].answers, 'Yes / Partly / No');
+    assert.equal(passageOutline.questions[1].answers, 'yes / no for each item; items: Off topic, Outdated, Too vague');
+    assert.equal(passageOutline.questions[2].answers, 'written answer');
+  });
+
+  it('값의 종류로 task 종류를 정한다', () => {
+    assert.equal(contractTaskType(passage), 'text');
+    assert.equal(contractTaskType({ fields: [{ from: 'a', kind: 'image' }] }), 'vision');
+    assert.equal(contractTaskType({ fields: [{ from: 'a', kind: 'image' }, { from: 'b', kind: 'video' }] }), 'video');
   });
 });
 

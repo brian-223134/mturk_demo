@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { dataReader } from '../src/lib/design-binding.js';
-import { checkAgentHtml, compareRendered, contractFor, placeholderRoles, requestHtml } from '../src/lib/html-harness.js';
+import { checkAgentHtml, compareRendered, contractFor, pageRequest, placeholderRoles, requestHtml } from '../src/lib/html-harness.js';
 import { parseJsonData } from '../src/lib/json-data.js';
 
 const example = (name) => readFileSync(new URL(`../../example/6-rough-design/${name}`, import.meta.url), 'utf8');
@@ -52,6 +52,15 @@ describe('checkAgentHtml', () => {
     assert.ok(errorsOf(contract.html.replace('>${slot_data_f2_7}<', ' title="${slot_data_f2_7}"><')).some((e) => e.includes('as visible text')));
   });
 
+  it('한 항목의 값을 맨 위에 한 번 더 쓰거나, 값을 접힌 상자에 넣으면 막는다', () => {
+    // 실제 Agent 가 "모든 Chunk 에 같다"는 요청을 따라 1번 Query 를 맨 위에 두고 탭의 Query 를 접어 숨겼던 경우
+    const repeated = contract.html.replace('<ann-tabs>', '<ann-text label="Query (same for every chunk)">${slot_data_f1_1}</ann-text>\n  <ann-tabs>');
+    assert.ok(errorsOf(repeated).some((e) => e.includes('"slot_data_f1_1" belongs to one item but appears more than once')));
+    const folded = contract.html.replace('<ann-text label="Query">${slot_data_f1_2}</ann-text>', '<details><summary>Query for this chunk</summary><ann-text label="Query">${slot_data_f1_2}</ann-text></details>');
+    assert.ok(errorsOf(folded).some((e) => e.includes('"slot_data_f1_2" is inside a collapsed <details>')));
+    assert.deepEqual(errorsOf(contract.html.replace('<ann-form>', '<ann-form><details><summary>Tips</summary><p>Read carefully.</p></details>')), []);
+  });
+
   it('없는 컬럼, 페이지에 없던 컬럼을 쓰면 막는다', () => {
     const errors = errorsOf(contract.html.replace('<ann-form>', '<ann-form><p>${qid} ${made_up}</p>'));
     assert.ok(errors.some((e) => e.includes('"qid"') && e.includes('not part of this page')));
@@ -87,6 +96,18 @@ describe('checkAgentHtml', () => {
 
   it('빈 답은 빈 페이지로 알린다', () => {
     assert.deepEqual(errorsOf(''), ['The HTML is empty.']);
+  });
+});
+
+describe('pageRequest', () => {
+  it('HTML Agent 에게는 정답지와 보여 줄 컬럼만 보내고, 정답 컬럼은 이름도 보내지 않는다', () => {
+    const request = pageRequest(contract, 'Stack it.', 'text');
+    assert.equal(request.template, contract.html);
+    assert.equal(request.columns.length, contract.shown.length);
+    assert.equal(request.columns[0].role, 'text');
+    const sent = JSON.stringify(request);
+    for (const column of contract.answerColumns) assert.ok(!sent.includes(column), column);
+    assert.ok(request.columns.every((c) => c.sample.length <= 240));
   });
 });
 

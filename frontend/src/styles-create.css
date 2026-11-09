@@ -1335,3 +1335,29 @@ label.btn .dropzone-input {
     box-shadow: 0 0 0 6px transparent;
   }
 }
+
+/* Describe your task: 가안 카드 옆의 입구와 계약 요약 표 (pages/create/describe-task.js) */
+.design-card.describe-card {
+  border-style: dashed;
+  border-color: #7fa3da;
+  background: #f8fafe;
+}
+.design-card.describe-card.active {
+  border-style: solid;
+}
+.task-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.task-outline-table td {
+  vertical-align: top;
+}
+.task-outline-table code {
+  font-size: 12px;
+}
+.tag-ok {
+  background: #e7f4ec;
+  color: #1d6b3a;
+}

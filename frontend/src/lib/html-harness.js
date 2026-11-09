@@ -26,7 +26,8 @@ const SCRIPT_JSON = /<script\b[^>]*type\s*=\s*["']application\/json["'][^>]*>([\
 const TAG_TEXT = /<[^>]*>/g;
 const EXTERNAL = /^\s*(?:https?:)?\/\//i;
 const STYLE_BODY = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
-const DEAD_SELECTOR = /(?:^|[\s,>+~}(])ann-(?:option|item)(?![\w-])/;
+const DETAILS_BODY = /<details\b[^>]*>([\s\S]*?)<\/details\s*>/gi;
+const DEAD_SELECTOR =/(?:^|[\s,>+~}(])ann-(?:option|item)(?![\w-])/;
 
 /** 컬럼이 HTML 의 어디에 쓰였는지: text(화면 글), src(ann-image·ann-video 의 주소), json(항목 목록 script), attribute(그 밖의 속성). */
 export function placeholderRoles(html) {
@@ -134,6 +135,16 @@ export function checkAgentHtml(html, contract) {
     errors.push(`"\${${name}}" must appear ${where}, as in the current template.`);
   }
 
+  // 항목마다의 값(탭 번호가 붙은 컬럼)을 한 번 더 쓰면 한 항목의 값을 모든 항목의 값처럼 보이게 된다 (예: 1번 Query 를 맨 위에 "모두 같음"으로)
+  const source = text.replace(COMMENT, '');
+  if (contract.tabs > 0) {
+    const repeated = contract.shown.filter((name) => /_\d+$/.test(name) && source.split(`\${${name}}`).length - 1 > 1);
+    if (repeated.length > 0) errors.push(`${listed(repeated)} ${repeated.length === 1 ? 'belongs' : 'belong'} to one item but ${repeated.length === 1 ? 'appears' : 'appear'} more than once. Show each item's value once, with its own item; never show one item's value as if it were the same for every item.`);
+  }
+  // 접힌 상자 안의 값은 worker 가 열지 않으면 보지 못한다
+  const folded = [...source.matchAll(DETAILS_BODY)].flatMap((match) => extractPlaceholders(match[1])).filter((name) => contract.shown.includes(name));
+  if (folded.length > 0) errors.push(`${listed([...new Set(folded)])} ${folded.length === 1 ? 'is' : 'are'} inside a collapsed <details>. Every value must be visible without opening anything.`);
+
   // 문항
   const expected = new Map(contract.questions.map((q) => [q.name, q.tag]));
   const actual = new Map(lint.questions.map((q) => [q.name, q.tag]));
@@ -175,6 +186,21 @@ export function compareRendered(contract, reference, rendered) {
     if (missingSrc.length > 0) errors.push({ row, message: `The addresses of ${listed(missingSrc)} are not used by an image or video.` });
   });
   return { errors };
+}
+
+const SAMPLE_CHARS = 200;
+const clip = (text) => (text.length > SAMPLE_CHARS ? `${text.slice(0, SAMPLE_CHARS)}… (${text.length} characters)` : text);
+
+/** HTML Agent(POST /api/agent/pages)에게 보낼 요청. 정답이 든 컬럼은 이름도 넣지 않는다. */
+export function pageRequest(contract, requestText, taskType) {
+  const first = contract.data.rows[0] ?? {};
+  return {
+    task_type: taskType,
+    request: requestText,
+    template: contract.html,
+    columns: contract.shown.map((name) => ({ name, role: contract.roles[name], sample: clip(unescape(first[name] ?? '')) })),
+    questions: contract.questions,
+  };
 }
 
 /**

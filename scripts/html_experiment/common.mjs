@@ -5,23 +5,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 export const ROOT = resolve(import.meta.dirname, '../..');
-const SAMPLE_CHARS = 200;
-
-const unescape = (text) => String(text).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-const clip = (text) => (text.length > SAMPLE_CHARS ? `${text.slice(0, SAMPLE_CHARS)}… (${text.length} characters)` : text);
 export const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
-/** HTML Agent 에게 보낼 요청. 정답이 든 컬럼은 넣지 않는다. */
-export function buildRequest(contract, requestText, taskType) {
-  const first = contract.data.rows[0] ?? {};
-  return {
-    task_type: taskType,
-    request: requestText,
-    template: contract.html,
-    columns: contract.shown.map((name) => ({ name, role: contract.roles[name], sample: clip(unescape(first[name] ?? '')) })),
-    questions: contract.questions,
-  };
-}
+/** HTML Agent 에게 보낼 요청 (콘솔 화면과 같은 함수). */
+export { pageRequest as buildRequest } from '../../frontend/src/lib/html-harness.js';
 
 /** 행마다의 렌더 오류를 같은 문구끼리 묶는다: "HIT 1, 2, 5: …". */
 export function groupRowErrors(errors) {

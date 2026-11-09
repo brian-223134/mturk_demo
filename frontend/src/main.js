@@ -67,6 +67,7 @@ function startConsole(session) {
   route('/create', create.render, { tab: 'create' });
   route('/create/new', create.renderNew, { tab: 'create' });
   route('/create/new/gallery', create.renderGallery, { tab: 'create' });
+  route('/create/new/describe', create.renderDescribe, { tab: 'create' });
   route('/create/new/design/:designId', create.renderDesign, { tab: 'create' });
   route('/create/new/design/:designId/:taskType', create.renderDesign, { tab: 'create' });
   route('/create/new/design/:designId/:taskType/data', create.renderDesignHits, { tab: 'create' });
