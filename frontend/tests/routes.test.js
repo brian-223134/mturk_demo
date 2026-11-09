@@ -49,6 +49,8 @@ describe('AGENT_ROUTES', () => {
       reviewJob: { method: 'PUT', path: '/agent/jobs/:id/review', args: ['id', 'body'] },
       createJobGroup: { method: 'POST', path: '/agent/job-groups', args: ['form'], encoding: 'multipart' },
       createBinding: { method: 'POST', path: '/agent/bindings', args: ['body'] },
+      createContract: { method: 'POST', path: '/agent/contracts', args: ['body'] },
+      createPage: { method: 'POST', path: '/agent/pages', args: ['body'] },
       chooseCandidate: { method: 'PUT', path: '/agent/job-groups/:id/choice', args: ['id', 'job_id'] },
     });
   });

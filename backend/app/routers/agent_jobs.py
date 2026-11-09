@@ -36,6 +36,8 @@ from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
 
 from agent.binding import write_binding
+from agent.contract_writer import write_contract
+from agent.html_writer import write_html
 from agent.config import ConfigError, binding_model_name, load_model_config, selected_model_name
 from agent.planner.openrouter import PlannerError, resolve_api_key
 from agent.spec import SpecError, load_spec
@@ -357,6 +359,96 @@ async def create_binding(request: Request) -> dict:
         raise invalid(f"The model call failed: {error}") from None
     served_by = result.pop("provider", None)  # 설정에 업체가 여럿이면 실제로 답한 업체는 응답을 봐야 안다
     return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
+
+
+# ---- Describe your task: 자유 계약과 페이지 ------------------------------------------------------------
+# 가안 없이 Requester 의 문장으로 HIT 를 만든다. 계약(값과 문항)을 묻는 /contracts, 계약으로 만든 기본 페이지를 요청대로 다시 쓰는
+# /pages 두 단계다. 검사와 재요청은 브라우저가 맡는다 (lib/task-contract.js, lib/html-harness.js).
+
+AGENT_REQUEST_LIMIT = 256 * 1024
+CONTRACT_DIR = "contracts"
+PAGE_DIR = "pages"
+
+
+def _common_retry_fields(data: dict, previous_type: type, previous_name: str) -> tuple[list | None, object]:
+    errors, previous = data.get("errors"), data.get("previous")
+    if errors is not None and not (isinstance(errors, list) and all(isinstance(e, str) for e in errors)):
+        raise invalid('"errors" must be a list of strings.')
+    if previous is not None and not isinstance(previous, previous_type):
+        raise invalid(f'"previous" must be the previous {previous_name}.')
+    return errors, previous
+
+
+def _check_size(data: dict, what: str) -> None:
+    if len(json.dumps(data, ensure_ascii=False)) > AGENT_REQUEST_LIMIT:
+        raise invalid(f"The {what} request is too large (at most {AGENT_REQUEST_LIMIT // 1024} KB). Send a summary of the data, not the data.")
+
+
+def contract_request(body: object) -> dict:
+    """POST /contracts 의 body: 요청 문장과 데이터 요약. 원본 파일은 오지 않는다."""
+    data = object_body(body, "contract request")
+    prompt, summary = data.get("request"), data.get("data")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise invalid('"request" must describe the task: what workers see and which questions they answer.')
+    if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
+        raise invalid('"data" must be a summary of the HIT data with "columns".')
+    errors, previous = _common_retry_fields(data, dict, "contract")
+    _check_size(data, "contract")
+    return {"request": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous}
+
+
+def page_request(body: object) -> dict:
+    """POST /pages 의 body: 기본 템플릿과 그 템플릿이 쓰는 컬럼·문항, 요청 문장. 정답 컬럼은 오지 않는다."""
+    data = object_body(body, "page request")
+    task_type, prompt, template, columns, questions = (data.get(key) for key in ("task_type", "request", "template", "columns", "questions"))
+    if task_type not in ("vision", "video", "text"):
+        raise invalid('"task_type" must be vision, video or text.')
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise invalid('"request" must say how the page should look.')
+    if not isinstance(template, str) or not template.strip():
+        raise invalid('"template" must be the current template HTML.')
+    if not isinstance(columns, list) or not all(isinstance(c, dict) and isinstance(c.get("name"), str) for c in columns):
+        raise invalid('"columns" must list the columns of the template.')
+    if not isinstance(questions, list) or not all(isinstance(q, dict) and isinstance(q.get("name"), str) for q in questions):
+        raise invalid('"questions" must list the questions of the template.')
+    errors, previous = _common_retry_fields(data, str, "page")
+    _check_size(data, "page")
+    return {"task_type": task_type, "request": prompt.strip(), "template": template, "columns": columns, "questions": questions, "errors": errors or [], "previous": previous}
+
+
+async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_api: bool) -> dict:
+    """binding 과 같은 모델 설정으로 Agent 를 부른다. 호출마다 요청과 응답을 output/<folder>/ 에 남긴다."""
+    settings = _settings(request)
+    check_api_allowed(allow_api, settings)
+    name = binding_model_name(settings.env_file)
+    try:
+        config = load_model_config(name, settings.models_dir)
+    except ConfigError as error:
+        raise invalid(f"The model config {name!r} cannot be used: {error}") from None
+    log_dir = settings.output_dir / folder / f"{folder[:-1]}-{now_iso().replace(':', '').replace('.', '-')}-{uuid.uuid4().hex[:6]}"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        result = await asyncio.to_thread(writer, config, resolve_api_key(None, settings.env_file), True, task, log_dir)
+    except PlannerError as error:
+        raise invalid(f"The model call failed: {error}") from None
+    served_by = result.pop("provider", None)
+    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
+
+
+@router.post("/contracts")
+async def create_contract(request: Request) -> dict:
+    """요청 문장과 데이터 요약으로 LLM 에 자유 계약을 쓰게 한다 (유료 호출)."""
+    body = await read_body(request)
+    task = contract_request(body)
+    return await _ask_agent(request, write_contract, task, CONTRACT_DIR, body.get("allow_api") is True)
+
+
+@router.post("/pages")
+async def create_page(request: Request) -> dict:
+    """계약으로 만든 기본 페이지를 요청한 배치와 표현대로 LLM 에 다시 쓰게 한다 (유료 호출)."""
+    body = await read_body(request)
+    task = page_request(body)
+    return await _ask_agent(request, write_html, task, PAGE_DIR, body.get("allow_api") is True)
 
 
 @router.post("/job-groups", status_code=202)

@@ -374,3 +374,88 @@ def test_binding_reports_a_failed_call(make_client, monkeypatch) -> None:
 
 def test_models_names_the_binding_model(client: TestClient) -> None:
     assert client.get("/api/agent/models").json()["binding_model"] == "deepseek-v4.1-flash"
+
+
+# ---- Describe your task: 자유 계약과 페이지 ----
+
+CONTRACT_BODY = {
+    "request": "Ask Yes or No for each passage. gold has the answers.",
+    "data": {"hit_count": 1, "columns": [{"name": "passage", "shape": "str", "samples": ["A passage."]}]},
+    "allow_api": True,
+}
+PAGE_BODY = {
+    "task_type": "text",
+    "request": "Put the question on the right.",
+    "template": '<script src="/elements/ann-elements.js"></script><ann-form><ann-text>${f_passage}</ann-text></ann-form>',
+    "columns": [{"name": "f_passage", "role": "text", "sample": "A passage."}],
+    "questions": [{"tag": "ann-choice", "name": "answer"}],
+    "allow_api": True,
+}
+
+
+def test_contract_and_page_need_both_permissions(client: TestClient, settings: Settings) -> None:
+    """binding 과 같이 요청과 서버가 모두 허용해야 하며, 막히면 OpenRouter 를 부르지 않는다."""
+    for path, body in (("/api/agent/contracts", CONTRACT_BODY), ("/api/agent/pages", PAGE_BODY)):
+        response = client.post(path, json=body)
+        assert response.status_code == 400 and "Calling OpenRouter is not allowed" in response.json()["error"]["message"], path
+        assert client.post(path, json={**body, "allow_api": False}).status_code == 400
+    assert not (settings.output_dir / "contracts").exists() and not (settings.output_dir / "pages").exists()
+
+
+def test_contract_and_page_reject_bad_requests(client: TestClient) -> None:
+    for path, body, change, message in [
+        ("/api/agent/contracts", CONTRACT_BODY, {"request": " "}, '"request"'),
+        ("/api/agent/contracts", CONTRACT_BODY, {"data": {"rows": []}}, '"data"'),
+        ("/api/agent/contracts", CONTRACT_BODY, {"errors": "no"}, '"errors"'),
+        ("/api/agent/contracts", CONTRACT_BODY, {"previous": "x"}, '"previous"'),
+        ("/api/agent/contracts", CONTRACT_BODY, {"data": {"columns": [{"name": "x" * 300_000}]}}, "too large"),
+        ("/api/agent/pages", PAGE_BODY, {"task_type": "audio"}, '"task_type"'),
+        ("/api/agent/pages", PAGE_BODY, {"template": ""}, '"template"'),
+        ("/api/agent/pages", PAGE_BODY, {"columns": ["f_passage"]}, '"columns"'),
+        ("/api/agent/pages", PAGE_BODY, {"questions": "answer"}, '"questions"'),
+        ("/api/agent/pages", PAGE_BODY, {"previous": {"html": "x"}}, '"previous"'),
+    ]:
+        response = client.post(path, json={**body, **change})
+        assert response.status_code == 400, (path, change)
+        assert message in response.json()["error"]["message"], (path, change)
+
+
+def test_contract_and_page_return_the_model_reply(make_client, monkeypatch) -> None:
+    """허용하면 binding 과 같은 모델 설정으로 부르고, 허용 여부는 모델에 보내지 않는다. 네트워크는 쓰지 않는다."""
+    seen = {}
+
+    def fake_contract(config, api_key, allow_api, request, log_dir):
+        seen["contract"] = (config.model, request, log_dir)
+        return {"contract": {"fields": []}, "cannot": None, "message": "ok", "usage": {"calls": 1, "cost": 0.001}, "provider": "Crusoe"}
+
+    def fake_page(config, api_key, allow_api, request, log_dir):
+        seen["page"] = (config.model, request, log_dir)
+        return {"html": "<ann-form></ann-form>", "cannot": None, "message": "moved", "usage": {"calls": 1}, "provider": "Parasail"}
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_contract", fake_contract)
+    monkeypatch.setattr("app.routers.agent_jobs.write_html", fake_page)
+    with make_client(api_allowed=True) as client:
+        contract = client.post("/api/agent/contracts", json={**CONTRACT_BODY, "errors": ["no column"], "previous": {"fields": []}}).json()
+        page = client.post("/api/agent/pages", json=PAGE_BODY).json()
+    assert contract["contract"] == {"fields": []} and contract["model"]["served_by"] == "Crusoe" and "provider" not in contract
+    assert page["html"] == "<ann-form></ann-form>" and page["model"]["served_by"] == "Parasail"
+    model, request, log_dir = seen["contract"]
+    assert model == "deepseek/deepseek-v4.1-flash-1017"
+    assert request["errors"] == ["no column"] and request["previous"] == {"fields": []} and "allow_api" not in request
+    assert log_dir.is_dir() and log_dir.parent.name == "contracts"
+    _, request, log_dir = seen["page"]
+    assert request["template"].startswith("<script") and "allow_api" not in request
+    assert log_dir.parent.name == "pages"
+
+
+def test_contract_reports_a_failed_call(make_client, monkeypatch) -> None:
+    from agent.planner.openrouter import PlannerError
+
+    def fail(*args):
+        raise PlannerError("provider is down")
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_contract", fail)
+    with make_client(api_allowed=True) as client:
+        response = client.post("/api/agent/contracts", json=CONTRACT_BODY)
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "The model call failed: provider is down"

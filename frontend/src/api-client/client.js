@@ -127,6 +127,8 @@ export const agent = {
   reviewJob: (id, body) => call('reviewJob', [id, body]),
   chooseCandidate: (groupId, jobId) => call('chooseCandidate', [groupId, jobId]),
   createBinding: (body) => call('createBinding', [body]),
+  createContract: (body) => call('createContract', [body]),
+  createPage: (body) => call('createPage', [body]),
   createJob,
   createJobGroup,
   fileUrl,
