@@ -185,6 +185,9 @@ function itemsCell(value) {
   return JSON.stringify(items).replace(/</g, '\\u003c');
 }
 
+// 가안 없이 쓰는 자유 계약(lib/task-contract.js)도 같은 방식으로 값을 읽고 넣는다
+export { resolve as resolvePath, displayText, escapeHtml, itemsCell, URL_LIKE, NOT_ENGLISH, NAME as ANSWER_NAME };
+
 /** 행의 셀을 한 번씩만 푸는 읽기 도구. 수 MB 의 데이터를 편집 중에 되풀이해 읽는다. */
 export function dataReader(data) {
   const cache = new Map();
