@@ -54,7 +54,7 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 ## New Project
 
-`New Project`를 열면 화면 배치 가안(rough design)을 먼저 고릅니다. 맞는 가안이 없으면 `F. Others`를 고르고 원하는 화면을 문장으로 설명합니다. 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
+`New Project`를 열면 화면 배치 가안(rough design)을 먼저 고릅니다. 맞는 가안이 없으면 `F. Others`를 고르고 원하는 화면을 문장으로 설명합니다. 문항의 개수와 종류까지 자유롭게 정하려면 가안 옆의 `Describe your task`를 고릅니다([문장으로 HIT 만들기](#문장으로-hit-만들기-describe-your-task)). 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
 
 ### rough design으로 시작하기
 
@@ -248,6 +248,25 @@ LLM이 받는 배치 요소의 설명은 `agent/binding_reference.md`의 `Laying
 고친 배치는 그 가안에 속합니다. 다른 가안으로 옮겼다가 돌아오면 되살아나고, 위쪽의 `Use the rough design layout`을 누르면 가안의 배치로 돌아갑니다. 이때 가안에 없는 칸의 값은 보관됩니다.
 
 모델 설정은 `deepseek-v4.1-flash`(`environment/models/deepseek-v4.1-flash.yaml`)이고, `environment/.env`의 `AGENT_BINDING_MODEL`로 바꿀 수 있습니다. 형식 설명서는 [agent/binding_reference.md](../agent/binding_reference.md)입니다.
+
+### 문장으로 HIT 만들기 (Describe your task)
+
+가안 목록의 `Describe your task` 카드를 고르고 `Next`를 누르면 `/create/new/describe`로 갑니다. 가안을 고르지 않고, 무엇을 어디에 보이고 어떤 문항을 물을지 문장으로 적습니다. 문항은 개수 제한이 없고 `Pick one`(라디오), `Score`(점수), `Check all that apply`(체크리스트), `One answer per item`(항목마다 라디오), `Written answer`(자유 서술)를 섞어 쓸 수 있습니다.
+
+1. HIT 데이터(JSON)를 올립니다. 파일은 이 탭에만 있고, LLM에는 구조와 잘린 표본만 갑니다.
+2. `Your task`에 과제를 적고 `Allow API calls`를 체크한 뒤 `Write the task`를 누릅니다(유료 호출). 정답이 든 컬럼과 attention 표시 컬럼을 함께 적으면 Review가 그 값과 대조합니다.
+3. `The task`에 LLM이 정한 내용이 표로 나옵니다. `What workers see`는 보여 줄 값과 그 값을 읽는 데이터 경로, 항목마다 보이는지입니다. `What workers answer`는 문항, 답의 모양, 대조 기준(`Compared with your labels`)과 `Attention check` 표시입니다. LLM의 설명도 함께 나오며, 요청과 데이터가 다르면(예: "모든 항목에 같다"고 했지만 실제로는 다른 값) 그 사실을 알립니다.
+4. `The page`에 기본 배치로 그린 미리보기가 나옵니다. `Arrange the page`를 누르면 LLM이 같은 문장(또는 `How should the page look?`에 적은 글)대로 배치와 표현을 다시 씁니다(유료 호출). `Use the plain layout`으로 기본 배치로 돌아갑니다.
+5. Project 이름을 확인하고 `Use this task`를 누르면 Project가 저장되고, 게시용 데이터와 대조 기준·attention 설정이 Publish Batch로 넘어갑니다.
+
+콘솔은 LLM의 답을 그대로 쓰지 않고 검사합니다. 걸리면 오류를 붙여 최대 3번 다시 묻고, 그래도 남으면 쓰지 않습니다.
+
+- 과제: 데이터에 있는 경로인지, 문항 이름과 선택지가 맞는지, worker에게 보일 글이 영어인지 봅니다. 정답·attention 컬럼이나 정답처럼 보이는 컬럼(`gold`, `labels`, `attention`, `..._check` 등)을 화면 값으로 쓰면 막습니다. 항목마다 다른 목록을 통째로 또는 고정 번호로 읽는 것도 모든 HIT를 세어 막습니다.
+- 페이지: 기본 배치의 값과 문항이 모두 같은 이름과 자리로 남아 있는지, 정답 컬럼을 쓰지 않는지, 허용한 요소만 쓰고 스크립트·외부 주소가 없는지 봅니다. 한 항목의 값을 모든 항목의 값처럼 한 번 더 보이거나, 값을 접힌 상자에 숨기는 것도 막습니다.
+
+`Edit as JSON (advanced)`에서 과제를 직접 고칠 수 있고, LLM 없이 과제를 붙여 넣어 시작할 수도 있습니다. 형식 설명서는 [agent/contract_reference.md](../agent/contract_reference.md)와 [agent/html_reference.md](../agent/html_reference.md)입니다. 같은 흐름을 시나리오로 시험하는 방법은 [scripts/html_experiment/README.md](../scripts/html_experiment/README.md)에 있습니다.
+
+아직 없는 것: 과제를 대화처럼 고치는 수정 요청(지금은 다시 쓰거나 JSON으로 고칩니다), 폼으로 고치기, 요청한 배치대로 되었는지의 자동 확인(화면으로 확인합니다).
 
 ### 앞으로 할 일
 
