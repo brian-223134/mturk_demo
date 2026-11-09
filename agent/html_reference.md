@@ -12,7 +12,7 @@ Write `message` in the language of `request`. It is not shown to workers.
 
 ## The input you get
 
-- `request`: what the requester wants to change. Follow it as far as the rules below allow.
+- `request`: what the requester wants to change. Follow it as far as the rules below allow. It may also describe the content (values and questions); the current template already has that content, so follow the parts about arrangement and presentation. When the request mentions answer keys or attention checks, the console already handles them: do not mention them in `message`.
 - `template`: the current template. It is correct: every column, question and option in it is required.
 - `columns`: each column the template uses, with its `role` and a `sample` value from one HIT.
   - `text`: shown as visible text, usually inside `<ann-text>`.
