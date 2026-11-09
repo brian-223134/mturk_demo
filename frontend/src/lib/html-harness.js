@@ -206,29 +206,46 @@ export function pageRequest(contract, requestText, taskType) {
 /**
  * Agent 에게 HTML 을 묻고 검사한다. 오류가 있으면 오류와 이전 답을 붙여 maxAttempts 번까지 다시 묻는다 (requestBinding 과 같은 모양).
  * send(body) → { html, message, cannot?, usage? }, check(html) → { errors } (비동기 가능).
- * → { html, message, cannot, errors, attempts, usage, history: [{ attempt, errors, usage }] }
+ * review(html) 가 있으면 검사를 통과한 페이지를 한 번 더 본다 → { notes, checks?, usage? }. notes(요청과 다른 점)가 있으면 남은 시도에서
+ * 고쳐 달라고 다시 묻는다. 판정도 틀릴 수 있으므로 끝까지 notes 가 남아도 검사를 통과한 마지막 페이지를 notes 와 함께 돌려준다.
+ * → { html, message, cannot, errors, notes, checks, attempts, usage, history: [{ attempt, errors, notes, usage }] }
  */
-export async function requestHtml({ send, check, request, maxAttempts = 3 }) {
+export async function requestHtml({ send, check, review, request, maxAttempts = 3 }) {
   let previous = null;
   let errors = [];
   const usage = { calls: 0 };
   const history = [];
   let last = null;
+  let passed = null; // 검사를 통과한 마지막 페이지 { html, message, notes, checks }
+  const addUsage = (part) => {
+    for (const [key, value] of Object.entries(part ?? {})) {
+      if (typeof value === 'number') usage[key] = (usage[key] ?? 0) + value;
+    }
+  };
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const reply = await send(errors.length > 0 ? { ...request, previous, errors } : request);
     last = reply;
-    for (const [key, value] of Object.entries(reply.usage ?? {})) {
-      if (typeof value === 'number') usage[key] = (usage[key] ?? 0) + value;
-    }
-    const common = { message: reply.message ?? null, attempts: attempt, usage, history };
+    addUsage(reply.usage);
+    const common = { attempts: attempt, usage, history };
     if (reply.cannot) {
-      history.push({ attempt, cannot: reply.cannot, errors: [], usage: reply.usage ?? null });
-      return { ...common, html: null, cannot: reply.cannot, errors: [] };
+      history.push({ attempt, cannot: reply.cannot, errors: [], notes: [], usage: reply.usage ?? null });
+      if (passed) return { ...common, ...passed, cannot: null, errors: [] };
+      return { ...common, message: reply.message ?? null, html: null, cannot: reply.cannot, errors: [], notes: [], checks: [] };
     }
     errors = (await check(reply.html)).errors;
-    history.push({ attempt, errors, usage: reply.usage ?? null });
-    if (errors.length === 0) return { ...common, html: reply.html, cannot: null, errors };
+    if (errors.length > 0) {
+      history.push({ attempt, errors, notes: [], usage: reply.usage ?? null });
+      previous = reply.html;
+      continue;
+    }
+    const reviewed = review ? await review(reply.html) : { notes: [], checks: [] };
+    addUsage(reviewed.usage);
+    passed = { html: reply.html, message: reply.message ?? null, notes: reviewed.notes ?? [], checks: reviewed.checks ?? [] };
+    history.push({ attempt, errors: [], notes: passed.notes, usage: reply.usage ?? null });
+    if (passed.notes.length === 0 || attempt === maxAttempts) return { ...common, ...passed, cannot: null, errors: [] };
+    errors = passed.notes;
     previous = reply.html;
   }
-  return { html: last.html, message: last.message ?? null, cannot: null, errors, attempts: maxAttempts, usage, history };
+  if (passed) return { ...passed, cannot: null, errors: [], attempts: maxAttempts, usage, history };
+  return { html: last.html, message: last.message ?? null, cannot: null, errors, notes: [], checks: [], attempts: maxAttempts, usage, history };
 }

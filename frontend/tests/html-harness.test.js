@@ -152,6 +152,28 @@ describe('requestHtml', () => {
     assert.equal(result.history.length, 2);
   });
 
+  it('검사를 통과한 페이지를 판정하고, 요청과 다른 점이 있으면 그것을 붙여 다시 묻는다', async () => {
+    const replies = [{ html: contract.html, message: 'first' }, { html: contract.html.replace('<ann-form>', '<ann-form><p>Read carefully.</p>'), message: 'second' }];
+    const reviews = [{ notes: ['Not as requested: facts on the right'], checks: [{ wish: 'facts on the right', result: 'not_met' }], usage: { cost: 0.001 } }, { notes: [], checks: [{ wish: 'facts on the right', result: 'met' }], usage: { cost: 0.001 } }];
+    const sent = [];
+    const result = await requestHtml({ send: async (body) => (sent.push(body), replies.shift()), check: (html) => checkAgentHtml(html, contract), review: async () => reviews.shift(), request: {} });
+    assert.equal(result.attempts, 2);
+    assert.equal(result.message, 'second');
+    assert.deepEqual(result.notes, []);
+    assert.equal(result.checks[0].result, 'met');
+    assert.deepEqual(sent[1].errors, ['Not as requested: facts on the right']);
+    assert.ok(Math.abs(result.usage.cost - 0.002) < 1e-9);
+  });
+
+  it('판정이 끝까지 맞지 않거나 나중 답이 검사에 걸려도, 검사를 통과한 마지막 페이지를 남은 점과 함께 돌려준다', async () => {
+    const replies = [{ html: contract.html, message: 'ok page' }, { html: '', message: 'broken' }];
+    const result = await requestHtml({ send: async () => replies.shift(), check: (html) => checkAgentHtml(html, contract), review: async () => ({ notes: ['Not as requested: X'], checks: [{ wish: 'X', result: 'not_met' }] }), request: {}, maxAttempts: 2 });
+    assert.equal(result.html, contract.html);
+    assert.equal(result.message, 'ok page');
+    assert.deepEqual(result.notes, ['Not as requested: X']);
+    assert.deepEqual(result.errors, []);
+  });
+
   it('할 수 없다는 답은 다시 묻지 않는다', async () => {
     const result = await requestHtml({ send: async () => ({ cannot: 'format', message: 'no' }), check: () => assert.fail('no check'), request: {} });
     assert.equal(result.cannot, 'format');

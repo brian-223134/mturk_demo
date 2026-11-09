@@ -1,5 +1,7 @@
 // Task 페이지(템플릿) 규약: placeholder 추출, 데이터 주입, 미리보기용 제출 가로채기. prototype/src/domain/template.ts 를 옮겼다.
 
+import { measureLayout } from './layout-check.js';
+
 const PLACEHOLDER = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
 /** html 에서 `${컬럼명}` placeholder 이름을 처음 나온 순서대로, 중복 없이 뽑는다. */
@@ -75,6 +77,9 @@ export function declaredAnswerSchema(declared) {
  *  - 기존 템플릿은 DOM 을 쉬지 않고 바꾼다(초당 수백 번). "조용해지면 읽기"만으로는 영영 읽지 못하므로 최대 대기 시간을 둔다.
  *  - 기존 템플릿은 문항을 한 번에 하나씩만 그린다. 그래서 읽은 문항을 누적한다 (미리보기에서 눌러 본 만큼 모인다).
  *
+ * 배치 재기
+ *  - 문항을 보낼 때 그려진 칸의 위치·폭·굵기·색도 잰다(lib/layout-check.js 의 measureLayout). 요청한 배치대로인지의 자동 확인에 쓴다.
+ *
  * crowd-tabs 줄바꿈
  *  - assets.crowd.aws 의 crowd-tabs 는 탭 머리줄(그림자 DOM 의 .menu)을 줄바꿈하지 않아, 탭이 많으면(Item 10 부터) 오른쪽이 잘린다.
  *    게시한 batch 는 템플릿 사본을 그대로 쓰므로 템플릿을 고치는 대신 여기서 그림자 DOM 에 줄바꿈 스타일을 넣는다.
@@ -121,6 +126,17 @@ const PREVIEW_BRIDGE = `(function () {
   }
 
   var declaredAnswerSchema = ${declaredAnswerSchema.toString()};
+  var measureLayout = ${measureLayout.toString()};
+  var lastLayout = '';
+  function reportLayout() {
+    try {
+      var page = measureLayout(document, window);
+      var text = JSON.stringify(page);
+      if (text === lastLayout) return;
+      lastLayout = text;
+      send({ type: 'layout', page: page });
+    } catch (e) { /* 재지 못하면 보내지 않는다 */ }
+  }
   var byName = {};
   var order = [];
   var lastSchema = '';
@@ -152,7 +168,7 @@ const PREVIEW_BRIDGE = `(function () {
     var now = Date.now();
     if (timer === null) waitingSince = now;
     clearTimeout(timer);
-    timer = setTimeout(function () { timer = null; reportSchema(); }, Math.max(0, Math.min(QUIET_MS, waitingSince + MAX_WAIT_MS - now)));
+    timer = setTimeout(function () { timer = null; reportSchema(); reportLayout(); }, Math.max(0, Math.min(QUIET_MS, waitingSince + MAX_WAIT_MS - now)));
   }
   window.addEventListener('load', scheduleSchema);
   document.addEventListener('DOMContentLoaded', function () {
