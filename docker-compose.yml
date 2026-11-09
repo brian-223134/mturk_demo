@@ -300,6 +300,11 @@ services:
       # lib-csv / lib-data-check 테스트가 README 의 업로드 시나리오대로 example/ 의 파일을 읽고, 시나리오 4 는 data/templates 의 템플릿을 읽는다
       - ./example:/app/example:ro
       - ./data/templates:/app/data/templates:ro
+      # video-media 테스트가 compose 의 /media/ mount 설정과, 그 데이터 폴더가 gitignore 되어 있는지를 읽는다
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./.gitignore:/app/.gitignore:ro
+      # task-contract 테스트가 실험의 합성 데이터와 손으로 쓴 계약을 읽는다
+      - ./scripts/html_experiment:/app/scripts/html_experiment:ro
 
 volumes:
   db:

@@ -1,0 +1,12 @@
+{
+  "design": "compare",
+  "task_type": "vision",
+  "context": [{ "label": "Question", "from": "question", "kind": "text" }],
+  "slots": {
+    "data-a": { "label": "Photo 1", "from": "image_a" },
+    "data-b": { "label": "Photo 2", "from": "image_b" },
+    "compare": { "name": "choice", "header": "Which photo fits the question better?", "options": [["first", "Photo 1"], ["second", "Photo 2"], ["same", "About the same"]] }
+  },
+  "reference": { "value": "gold" },
+  "instructions": "Look at both photos and pick the one that fits the question better."
+}

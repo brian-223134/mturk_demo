@@ -1,0 +1,52 @@
+[
+  {
+    "name": "free-chunk-confidence",
+    "kind": "questions",
+    "data": "example/6-rough-design/chunk-fact-hits.json",
+    "fixture": "scripts/html_experiment/fixtures/free-chunk-confidence.contract.json",
+    "request": "Workers check whether each retrieved chunk supports each atomic fact. Show the query once at the top of the page (it is the same for every chunk), then one tab per chunk with the chunk text on the left and the facts on the right, each answered Grounded or Not grounded. At the bottom of each tab, ask how confident the worker is from 1 (guessing) to 5 (certain). The answer key is chunk_fact_relevance_check, which lists the supported facts of each chunk; attention_check marks attention chunks whose facts must all be Not grounded.",
+    "expect": { "types": { "item-choice": 1, "likert": 1 }, "reference": true, "attention": true, "per_item": ["query"], "hidden": ["chunk_fact_relevance_check", "attention_check"] },
+    "note": "A second question per tab does not fit a rough design. The request wrongly says the query is the same for every chunk: in the data the attention chunk has another query, so the query must stay per chunk and the requester should be told."
+  },
+  {
+    "name": "free-passage-problems",
+    "kind": "questions",
+    "data": "scripts/html_experiment/data/passage-answer.json",
+    "fixture": "scripts/html_experiment/fixtures/free-passage-problems.contract.json",
+    "request": "Put the question in bold at the top, then the title and the passage side by side with the title in a narrow column on the left. Below, ask whether the passage answers the question (Yes / Partly / No), then a checklist of problems: Off topic, Outdated, Too vague. End with an optional comment box. gold has the correct answer to the first question; rows with attention = 1 are attention checks that must be answered No.",
+    "expect": { "types": { "choice": 1, "checklist": 1, "text": 1 }, "reference": true, "attention": true, "hidden": ["gold", "attention"] },
+    "note": "Three question types on one page."
+  },
+  {
+    "name": "free-photo-quality-ko",
+    "kind": "questions",
+    "data": "scripts/html_experiment/data/photo-compare.json",
+    "request": "질문을 맨 위에 두고, 사진 두 장을 나란히 보여 줘. 아래에서 어느 사진이 질문에 더 맞는지(사진 1 / 사진 2 / 비슷함) 고르게 하고, 사진마다 화질을 1~5점으로 따로 매기게 해 줘. 정답은 gold 컬럼에 first / second / same 으로 있어.",
+    "expect": { "types": { "choice": 1, "likert": 2 }, "reference": true, "hidden": ["gold"] },
+    "note": "Korean request; two questions of the same kind; worker texts must be English."
+  },
+  {
+    "name": "free-reviews-list",
+    "kind": "layout",
+    "data": "scripts/html_experiment/data/review-tabs.json",
+    "request": "Show the three reviews as a numbered list on one page, with no tabs. Under each review ask its sentiment (Positive, Neutral, Negative) and a yes/no question: does the review mention a problem with the product? labels holds the sentiment answers.",
+    "expect": { "types": { "choice": 2 }, "reference": true, "no_tabs": true, "hidden": ["labels"] },
+    "note": "Two questions per item and no tabs."
+  },
+  {
+    "name": "free-unsaid-answer-key",
+    "kind": "trap",
+    "data": "scripts/html_experiment/data/passage-answer.json",
+    "request": "Show the question, the title and the passage, plus anything else in the data that could help the worker. Ask Yes / Partly / No: does the passage answer the question?",
+    "expect": { "types": { "choice": 1 }, "hidden": ["gold", "attention"] },
+    "note": "The request never says gold is the answer key. The page must still not show gold or the attention flag."
+  },
+  {
+    "name": "free-trap-show-gold",
+    "kind": "trap",
+    "data": "scripts/html_experiment/data/passage-answer.json",
+    "request": "Show the correct answer from the gold column under the passage so workers can learn from it, and ask Yes / Partly / No: does the passage answer the question?",
+    "expect": { "types": { "choice": 1 }, "hidden": ["gold"] },
+    "note": "Must not reveal the answer key."
+  }
+]

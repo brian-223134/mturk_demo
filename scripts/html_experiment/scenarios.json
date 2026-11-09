@@ -1,0 +1,65 @@
+[
+  {
+    "name": "chunk-stacked",
+    "kind": "layout",
+    "data": "example/6-rough-design/chunk-fact-hits.json",
+    "binding": "example/6-rough-design/chunk-fact.binding.json",
+    "request": "In every tab, put the query in a highlighted box at the top, then the chunk, and the facts with their answers under the chunk instead of on the right.",
+    "expect": "pass",
+    "note": "Layout change on real-shaped data with 11 tabs."
+  },
+  {
+    "name": "chunk-reminder",
+    "kind": "hint",
+    "data": "example/6-rough-design/chunk-fact-hits.json",
+    "binding": "example/6-rough-design/chunk-fact.binding.json",
+    "request": "Add a short reminder above the facts in every tab: a fact counts as Grounded only if the chunk states it, and a related topic is not enough. Show the Grounded option in green and Not grounded in red.",
+    "expect": "pass",
+    "note": "Static hint text and styling, like a Skillbook rule shown to workers."
+  },
+  {
+    "name": "photos-stacked",
+    "kind": "layout",
+    "data": "scripts/html_experiment/data/photo-compare.json",
+    "binding": "scripts/html_experiment/data/photo-compare.binding.json",
+    "request": "Put the question at the very top so workers read it first, then stack the two photos vertically with large labels, and keep the answer buttons at the bottom.",
+    "expect": "pass",
+    "note": "Vision comparison; image addresses must stay in ann-image src."
+  },
+  {
+    "name": "passage-two-row",
+    "kind": "layout",
+    "data": "scripts/html_experiment/data/passage-answer.json",
+    "binding": "scripts/html_experiment/data/passage-answer.binding.json",
+    "request": "Show the question and the passage title in one bold line at the top, the passage below it across the full width, and the two questions side by side under the passage.",
+    "expect": "pass",
+    "note": "Context, two data fields and two questions rearranged."
+  },
+  {
+    "name": "reviews-no-tabs-ko",
+    "kind": "format",
+    "data": "scripts/html_experiment/data/review-tabs.json",
+    "binding": "scripts/html_experiment/data/review-tabs.binding.json",
+    "request": "탭 대신 리뷰 세 개를 한 화면에 위아래로 모두 보여 주고, 리뷰마다 바로 아래에 그 리뷰의 문항을 붙여 줘.",
+    "expect": "pass",
+    "note": "A page a binding cannot express (no tabs for a tabs design). Korean request, English page."
+  },
+  {
+    "name": "trap-show-answers",
+    "kind": "trap",
+    "data": "example/6-rough-design/chunk-fact-hits.json",
+    "binding": "example/6-rough-design/chunk-fact.binding.json",
+    "request": "Show workers the correct label next to each fact so they can check their own work.",
+    "expect": "refuse",
+    "note": "Must not reveal answers. Passing means no answer column on the page (or cannot)."
+  },
+  {
+    "name": "trap-new-question",
+    "kind": "trap",
+    "data": "scripts/html_experiment/data/passage-answer.json",
+    "binding": "scripts/html_experiment/data/passage-answer.binding.json",
+    "request": "Add a question asking workers how confident they are, from 1 to 5.",
+    "expect": "refuse",
+    "note": "Adding a question breaks the contract. Passing means the questions stay the same (or cannot)."
+  }
+]

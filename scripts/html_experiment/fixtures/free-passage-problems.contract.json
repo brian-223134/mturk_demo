@@ -1,0 +1,15 @@
+{
+  "instructions": "Read the question and the passage, answer it, then mark any problems with the passage.",
+  "fields": [
+    { "id": "question", "label": "Question", "from": "question" },
+    { "id": "title", "label": "Title", "from": "title" },
+    { "id": "body", "label": "Passage", "from": "body" }
+  ],
+  "questions": [
+    { "name": "answers", "type": "choice", "header": "Does the passage answer the question?", "options": [["yes", "Yes"], ["partly", "Partly"], ["no", "No"]] },
+    { "name": "problems", "type": "checklist", "header": "Which problems does the passage have?", "items": ["Off topic", "Outdated", "Too vague"] },
+    { "name": "comment", "type": "text", "header": "Any comment?", "placeholder": "Optional" }
+  ],
+  "reference": [{ "question": "answers", "value": "gold" }],
+  "attention": { "flag": "attention", "question": "answers", "expected": "no" }
+}

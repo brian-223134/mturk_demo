@@ -3,12 +3,14 @@
 //   /create/new                        rough design 고르기 ("New Project")                     pages/create/rough-design.js
 //   /create/new/design/:designId(/:taskType)  task 종류 고르기와 예시 미리보기                       pages/create/rough-design.js
 //   /create/new/design/:designId/:taskType/data  HIT 데이터를 올려 가안에 넣어 보기                pages/create/rough-design.js
+//   /create/new/describe               가안 없이 문장으로 HIT 만들기 (Describe your task)              pages/create/describe-task.js
 //   /create/new/gallery                다른 시작 방법: starter, HTML 올리기, 원본 데이터에서 만들기   pages/create/new-project.js
 //   /create/project/:projectId/:tab    Project 편집기: Enter Properties, Design Layout, Preview and Finish  pages/create/project-editor.js
 //   /create/publish/:projectId         Publish Batch: Upload JSON → Preview tasks → Review settings → Confirm and publish  pages/create/publish-batch.js
 //   /create/tutorial                   처음 쓰는 사람을 위한 따라 하기 안내 (한국어)                          pages/create/tutorial.js
 // 서버에서는 템플릿 레코드 하나가 Project 하나다 (layout = html, 속성 = properties, 미리보기 표본 = sampleRow).
 
+import { renderDescribeTask } from './create/describe-task.js';
 import { renderNewProject } from './create/new-project.js';
 import { renderProjectEditor } from './create/project-editor.js';
 import { renderProjects } from './create/projects.js';
@@ -30,6 +32,10 @@ export function renderDesign(root, params, signal) {
 
 export function renderDesignHits(root, params, signal) {
   return renderDesignData(root, params, signal);
+}
+
+export function renderDescribe(root, _params, signal) {
+  return renderDescribeTask(root, signal);
 }
 
 export function renderGallery(root, _params, signal) {

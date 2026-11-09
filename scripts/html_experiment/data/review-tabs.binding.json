@@ -1,0 +1,11 @@
+{
+  "design": "tabs",
+  "task_type": "text",
+  "repeat": { "over": "reviews", "label": "Review" },
+  "slots": {
+    "data": { "label": "Review", "from": "reviews[i]" },
+    "choice": { "name": "sentiment", "header": "What is the overall sentiment of this review?", "options": [["positive", "Positive"], ["neutral", "Neutral"], ["negative", "Negative"]] }
+  },
+  "reference": { "value": "labels[i]" },
+  "instructions": "Read each review and pick its overall sentiment."
+}

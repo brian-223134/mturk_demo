@@ -1,0 +1,44 @@
+[
+  {
+    "question": "When does the city library open on Sundays?",
+    "title": "Library hours",
+    "body": "The city library opens at 10 a.m. from Monday to Saturday. On Sundays the doors open at noon and close at 5 p.m.",
+    "gold": "yes",
+    "attention": 0
+  },
+  {
+    "question": "How much does a monthly bus pass cost?",
+    "title": "Bus passes",
+    "body": "Riders can buy single tickets on the bus. Weekly passes are sold at the central station. Prices change every January.",
+    "gold": "no",
+    "attention": 0
+  },
+  {
+    "question": "Which trail is closed for repairs?",
+    "title": "Park notice",
+    "body": "The river trail is closed until the bridge is repaired. The hill trail and the lake trail remain open, although the lake trail may be muddy.",
+    "gold": "yes",
+    "attention": 0
+  },
+  {
+    "question": "What should residents do with old batteries?",
+    "title": "Recycling guide",
+    "body": "Paper and glass go in the blue bin. Old batteries must not go in any bin; take them to a collection point. Ask staff where the nearest one is.",
+    "gold": "partly",
+    "attention": 0
+  },
+  {
+    "question": "Who won the spring baking contest?",
+    "title": "Weather report",
+    "body": "Light rain is expected on Tuesday morning, followed by clear skies and a cool evening across the region.",
+    "gold": "no",
+    "attention": 1
+  },
+  {
+    "question": "How long is the swimming pool closed?",
+    "title": "Pool update",
+    "body": "The swimming pool will close for cleaning next week. It reopens on Monday after the work is finished.",
+    "gold": "partly",
+    "attention": 0
+  }
+]

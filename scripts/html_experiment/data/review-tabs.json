@@ -1,0 +1,74 @@
+[
+  {
+    "reviews": [
+      "The blender is loud but it crushes ice in seconds.",
+      "Arrived late and the lid was cracked.",
+      "Does what it says. Nothing special."
+    ],
+    "labels": [
+      "positive",
+      "negative",
+      "neutral"
+    ]
+  },
+  {
+    "reviews": [
+      "Comfortable shoes for long walks, I wore them all day.",
+      "The color faded after one wash.",
+      "They fit as expected."
+    ],
+    "labels": [
+      "positive",
+      "negative",
+      "neutral"
+    ]
+  },
+  {
+    "reviews": [
+      "Battery lasts two days even with heavy use.",
+      "The charger stopped working after a week.",
+      "Setup took about ten minutes."
+    ],
+    "labels": [
+      "positive",
+      "negative",
+      "neutral"
+    ]
+  },
+  {
+    "reviews": [
+      "Great value for the price, I bought a second one.",
+      "Customer service never answered my emails.",
+      "The box was smaller than I thought."
+    ],
+    "labels": [
+      "positive",
+      "negative",
+      "neutral"
+    ]
+  },
+  {
+    "reviews": [
+      "The tent kept us dry during a whole night of rain.",
+      "Two poles were missing from the bag.",
+      "It weighs a little over two kilograms."
+    ],
+    "labels": [
+      "positive",
+      "negative",
+      "neutral"
+    ]
+  },
+  {
+    "reviews": [
+      "My kids love the puzzle and finish it every weekend.",
+      "Several pieces did not fit together.",
+      "It has five hundred pieces."
+    ],
+    "labels": [
+      "positive",
+      "negative",
+      "neutral"
+    ]
+  }
+]

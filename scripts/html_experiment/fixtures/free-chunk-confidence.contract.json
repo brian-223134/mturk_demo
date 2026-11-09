@@ -1,0 +1,14 @@
+{
+  "instructions": "For each chunk, decide whether it supports each fact, then rate how confident you are.",
+  "repeat": { "over": "retrieved_chunk", "label": "Chunk" },
+  "fields": [
+    { "id": "query", "label": "Query", "from": "query[i]" },
+    { "id": "chunk", "label": "Chunk", "from": "retrieved_chunk[i]" }
+  ],
+  "questions": [
+    { "name": "supported", "type": "item-choice", "header": "Does this chunk support each fact?", "items": "atomic_facts[i]", "options": [["grounded", "Grounded"], ["not_grounded", "Not grounded"]] },
+    { "name": "confidence", "type": "likert", "header": "How confident are you?", "min": 1, "max": 5, "min_label": "Guessing", "max_label": "Certain" }
+  ],
+  "reference": [{ "question": "supported", "selected": "chunk_fact_relevance_check", "key": "Chunk {i}", "item": "Atomic fact{n}", "yes": "grounded", "no": "not_grounded" }],
+  "attention": { "flag": "attention_check[i]", "question": "supported", "expected": "not_grounded" }
+}
