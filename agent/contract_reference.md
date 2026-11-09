@@ -95,6 +95,15 @@ Request: "Show the question at the top and one tab per review. In each tab ask t
 }
 ```
 
+## Revising a contract
+
+When the input has `current`, the requester already has a contract and `request` says what to change. `earlier_requests` lists what they asked before, oldest first, so that "it" or "that question" can be understood.
+
+- Change only what the request asks. Keep everything else exactly as it is in `current`, including the order of values and questions.
+- Keep each question's `name` unless the request asks to rename it. Names connect answers to Review and results.
+- Never drop `reference` or `attention` unless the request asks for it.
+- Reply with the whole revised contract and say in `message` what you changed. When nothing can be changed, reply `{"cannot": "format", "message": "<why>"}`.
+
 ## When you are told about errors
 
 The console checks your contract and may send back its error messages with your previous contract. Fix exactly those problems and reply with the whole corrected contract in the same JSON form.

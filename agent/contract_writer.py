@@ -35,9 +35,15 @@ def _dump(value: Any) -> str:
 
 
 def build_messages(request: dict) -> list[dict]:
-    """요청 {request, data, previous?, errors?} → messages. errors 가 있으면 이전 계약과 오류를 붙인다."""
+    """요청 {request, data, current?, earlier_requests?, previous?, errors?} → messages.
+    current 가 있으면 있는 계약을 요청대로 고치는 수정 요청이다. errors 가 있으면 이전 계약과 오류를 붙인다."""
     task = {key: request[key] for key in TASK_KEYS if key in request}
-    opening = "Write the task contract for this request. Write `message` in the language of `request`."
+    current = request.get("current")
+    if current:
+        task["current"] = current
+        if request.get("earlier_requests"):
+            task["earlier_requests"] = request["earlier_requests"]
+    opening = ("Revise the current task contract as requested." if current else "Write the task contract for this request.") + " Write `message` in the language of `request`."
     messages = [
         {"role": "system", "content": reference_text()},
         {"role": "user", "content": f"{opening}\n\n```json\n{_dump(task)}\n```"},

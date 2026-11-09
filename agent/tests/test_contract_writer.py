@@ -38,6 +38,19 @@ class MessagesTest(unittest.TestCase):
         self.assertEqual(json.loads(messages[2]["content"]), {"contract": CONTRACT})
         self.assertIn("- no column", messages[3]["content"])
 
+    def test_revision_sends_the_current_contract_and_earlier_requests(self):
+        messages = contract_writer.build_messages({**REQUEST, "current": CONTRACT, "earlier_requests": ["Add a comment box."]})
+        self.assertTrue(messages[1]["content"].startswith("Revise the current task contract"))
+        self.assertIn('"current"', messages[1]["content"])
+        self.assertIn("Add a comment box.", messages[1]["content"])
+        self.assertIn("## Revising a contract", messages[0]["content"])
+
+    def test_first_write_has_no_current_key(self):
+        messages = contract_writer.build_messages({**REQUEST, "current": None, "earlier_requests": ["x"]})
+        self.assertTrue(messages[1]["content"].startswith("Write the task contract"))
+        self.assertNotIn('"current"', messages[1]["content"])
+        self.assertNotIn('"earlier_requests"', messages[1]["content"])
+
 
 class WriteContractTest(unittest.TestCase):
     def fake(self, reply):
