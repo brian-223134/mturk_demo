@@ -7,6 +7,7 @@
 //   node scripts/html_experiment/run-free.mjs --writer reference           fixture 계약과 기본 템플릿으로 흐름만 점검 (호출 없음)
 //   node scripts/html_experiment/run-free.mjs --writer agent --allow-api   실제 LLM 호출 (유료)
 //   옵션: --only a,b  --out DIR  --no-render  --max-attempts 3  --python python3  --model-config NAME
+//         --judge  그려진 페이지를 요청과 대조(agent.layout_judge, 유료). 맞지 않으면 다시 묻고, 기본 페이지도 같은 요청으로 판정해 비교한다
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -15,8 +16,9 @@ import { parseArgs } from 'node:util';
 import { dataReader, parsePath, summarizeData } from '../../frontend/src/lib/design-binding.js';
 import { checkAgentHtml, compareRendered, requestHtml } from '../../frontend/src/lib/html-harness.js';
 import { parseJsonData } from '../../frontend/src/lib/json-data.js';
-import { checkContract, harnessContract, requestContract } from '../../frontend/src/lib/task-contract.js';
-import { ROOT, buildRequest, groupRowErrors, pythonSender, stamp } from './common.mjs';
+import { fixedFromOutline } from '../../frontend/src/lib/layout-check.js';
+import { checkContract, contractOutline, harnessContract, requestContract } from '../../frontend/src/lib/task-contract.js';
+import { ROOT, buildRequest, checksText, groupRowErrors, layoutReviewer, pythonSender, stamp } from './common.mjs';
 import { findChrome, renderPages, screenshot } from './render.mjs';
 
 const { values: args } = parseArgs({
@@ -29,6 +31,7 @@ const { values: args } = parseArgs({
     'max-attempts': { type: 'string', default: '3' },
     python: { type: 'string', default: 'python3' },
     'model-config': { type: 'string' },
+    judge: { type: 'boolean', default: false },
   },
 });
 
@@ -116,18 +119,25 @@ async function runScenario(scenario, outRoot, chrome) {
 
   // 3. HTML
   let attempt = 0;
+  const layouts = new Map(); // html → 첫 HIT 의 측정값
+  if (reference) layouts.set(contract.html, reference[0]?.layout ?? null);
   const check = async (html) => {
     attempt += 1;
     writeFileSync(join(dir, `html-attempt-${attempt}.html`), html ?? '');
     const result = checkAgentHtml(html, contract);
     if (result.errors.length > 0 || !chrome) return result;
     const rendered = renderPages({ html, rows, chrome, workDir: dir, name: `html-attempt-${attempt}` });
+    layouts.set(html, rendered[0]?.layout ?? null);
     return { errors: groupRowErrors(compareRendered(contract, reference, rendered).errors), warnings: result.warnings };
   };
+  const judging = args.judge && chrome && agent;
+  const reviewer = (prefix) => layoutReviewer({ dir, prefix, requestText: scenario.request, render: (html) => layouts.get(html), allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'], fixed: fixedFromOutline(contractOutline(contractResult.contract)) });
+  const review = judging ? reviewer('judge-') : undefined;
   const send = agent
     ? pythonSender({ module: 'agent.html_writer', dir, prefix: 'html-', allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] })
     : async () => ({ html: contract.html, message: 'Used the contract template unchanged.' });
-  const htmlResult = await requestHtml({ send, check, request: buildRequest(contract, scenario.request, taskTypeOf(contractResult.contract)), maxAttempts });
+  const htmlResult = await requestHtml({ send, check, review, request: buildRequest(contract, scenario.request, taskTypeOf(contractResult.contract)), maxAttempts });
+  const templateReview = judging ? await reviewer('judge-template-')(contract.html) : null;
   const outcome = htmlResult.cannot ? 'cannot' : htmlResult.errors.length === 0 ? 'pass' : 'html-fail';
   const failures = outcome === 'pass' ? expectationFailures(contractResult.contract, htmlResult.html, scenario.expect) : [];
   if (outcome === 'pass' && chrome) {
@@ -140,10 +150,12 @@ async function runScenario(scenario, outRoot, chrome) {
     success: outcome === 'pass' && failures.length === 0,
     expectation_failures: failures,
     html_attempts: htmlResult.attempts,
-    html_errors_by_attempt: htmlResult.history.map(({ attempt: n, errors, cannot }) => ({ attempt: n, cannot: cannot ?? null, errors })),
+    html_errors_by_attempt: htmlResult.history.map(({ attempt: n, errors, notes, cannot }) => ({ attempt: n, cannot: cannot ?? null, errors: [...errors, ...(notes ?? [])] })),
     html_message: htmlResult.message,
+    layout_checks: judging ? htmlResult.checks : null,
+    template_layout_checks: templateReview?.checks ?? null,
     questions: contractResult.contract.questions.map((q) => `${q.name}:${q.type}`),
-    cost: addCost(contractResult.usage, htmlResult.usage),
+    cost: addCost(contractResult.usage, htmlResult.usage, templateReview?.usage),
     calls: (contractResult.usage.calls ?? 0) + (htmlResult.usage.calls ?? 0),
     seconds: Math.round((Date.now() - started) / 100) / 10,
     hits: rows.length,
@@ -160,16 +172,24 @@ function summary(results, meta) {
     `- 렌더 검사: ${meta.render ? '했음 (Chrome)' : '하지 않음'}`,
     `- 성공 ${results.filter((r) => r.success && r.outcome !== 'skipped').length} / ${results.filter((r) => r.outcome !== 'skipped').length}, 비용 합계 $${results.reduce((sum, r) => sum + (r.cost ?? 0), 0).toFixed(4)}`,
     '',
-    '| 시나리오 | 종류 | 결과 | 계약 시도 | HTML 시도 | 문항 | 기대와 다른 점 | 비용 | 시간(초) |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| 시나리오 | 종류 | 결과 | 계약 시도 | HTML 시도 | 문항 | 기대와 다른 점 | 배치 판정(최종) | 배치 판정(기본 페이지) | 비용 | 시간(초) |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const r of results) {
-    lines.push(`| ${r.name} | ${r.kind} | ${r.success ? '성공' : '실패'} (${r.outcome}) | ${r.contract_attempts ?? '-'} | ${r.html_attempts ?? '-'} | ${cell((r.questions ?? []).join(', '))} | ${cell((r.expectation_failures ?? []).join('; ') || r.error || '')} | ${r.cost ? `$${r.cost.toFixed(4)}` : '-'} | ${r.seconds ?? '-'} |`);
+    lines.push(`| ${r.name} | ${r.kind} | ${r.success ? '성공' : '실패'} (${r.outcome}) | ${r.contract_attempts ?? '-'} | ${r.html_attempts ?? '-'} | ${cell((r.questions ?? []).join(', '))} | ${cell((r.expectation_failures ?? []).join('; ') || r.error || '')} | ${checksText(r.layout_checks)} | ${checksText(r.template_layout_checks)} | ${r.cost ? `$${r.cost.toFixed(4)}` : '-'} | ${r.seconds ?? '-'} |`);
   }
   lines.push('', '## 시도마다의 오류', '');
   for (const r of results) {
     for (const step of ['contract', 'html']) {
       for (const entry of r[`${step}_errors_by_attempt`] ?? []) if (entry.errors.length > 0) lines.push(`- **${r.name}** ${step} ${entry.attempt}회: ${cell(entry.errors.join(' / '))}`);
+    }
+  }
+  if (results.some((r) => r.layout_checks)) {
+    lines.push('', '## 배치 판정', '');
+    for (const r of results) {
+      for (const [title, checks] of [['최종', r.layout_checks], ['기본 페이지', r.template_layout_checks]]) {
+        for (const check of checks ?? []) lines.push(`- **${r.name}** (${title}) ${check.result}: ${check.wish} — ${check.evidence}`);
+      }
     }
   }
   lines.push('', '## Agent 의 설명(message)', '');

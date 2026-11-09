@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { measureLayout } from '../../frontend/src/lib/layout-check.js';
 import { ELEMENTS_SCRIPT } from '../../frontend/src/lib/layout-lint.js';
 import { jsonForScript, renderTemplate } from '../../frontend/src/lib/template.js';
 
@@ -29,6 +30,7 @@ function runChrome(chrome, workDir, args) {
 }
 
 const COLLECT = `
+const measureLayout = ${measureLayout.toString()};
 (async () => {
   const results = [];
   for (const doc of PAGES) {
@@ -43,13 +45,15 @@ const COLLECT = `
     const clone = page.body.cloneNode(true);
     clone.querySelectorAll('script, style').forEach((node) => node.remove());
     const srcs = [...page.querySelectorAll('[src]')].map((node) => node.getAttribute('src'));
-    results.push({ schema: win.TASK_ANSWER_SCHEMA ?? null, text: clone.textContent, srcs, error: (win.__errors || []).join(' | ') || null });
+    let layout = null;
+    try { layout = measureLayout(page, win); } catch (error) { layout = null; }
+    results.push({ schema: win.TASK_ANSWER_SCHEMA ?? null, text: clone.textContent, srcs, layout, error: (win.__errors || []).join(' | ') || null });
     frame.remove();
   }
   document.getElementById('out').textContent = JSON.stringify(results);
 })();`;
 
-/** 행마다 그려 본 결과 [{ schema, text, srcs, error }]. */
+/** 행마다 그려 본 결과 [{ schema, text, srcs, layout, error }]. layout 은 lib/layout-check.js 의 측정값(폭 1100px)이다. */
 export function renderPages({ html, rows, chrome, workDir, name }) {
   mkdirSync(workDir, { recursive: true });
   const file = join(workDir, `${name}.render.html`);

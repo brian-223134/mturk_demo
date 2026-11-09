@@ -4,6 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { layoutNotes, layoutRequest, layoutSummary } from '../../frontend/src/lib/layout-check.js';
+
 export const ROOT = resolve(import.meta.dirname, '../..');
 export const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
@@ -38,4 +40,25 @@ export function pythonSender({ module, dir, prefix, allowApi, python = 'python3'
     if (reply.error) throw new Error(`The agent call failed: ${reply.error}`);
     return reply;
   };
+}
+
+/**
+ * 배치 판정(agent.layout_judge)을 부르는 review 함수. render(html) 은 첫 HIT 를 그려 측정값을 돌려준다.
+ * → review(html) → { notes, checks, usage }. 판정마다 요청·응답을 dir 에 <prefix>request-<n>.json 으로 남긴다.
+ */
+export function layoutReviewer({ dir, prefix, requestText, render, allowApi, python, modelConfig, fixed = [] }) {
+  const send = pythonSender({ module: 'agent.layout_judge', dir, prefix, allowApi, python, modelConfig });
+  return async (html) => {
+    const page = render(html);
+    if (!page) return { notes: [], checks: [], usage: null };
+    const reply = await send(layoutRequest(requestText, page, fixed));
+    return { notes: layoutNotes(reply.checks), checks: reply.checks ?? [], usage: reply.usage };
+  };
+}
+
+/** 판정 결과의 짧은 글: "met 3 / not_met 1 / unclear 0". */
+export function checksText(checks) {
+  if (!checks) return '-';
+  const counts = layoutSummary(checks);
+  return `met ${counts.met} / not ${counts.not_met} / ? ${counts.unclear}`;
 }

@@ -55,3 +55,7 @@ node scripts/html_experiment/run-free.mjs --writer agent --allow-api    # 실제
 ```
 
 시나리오는 [scenarios-free.json](scenarios-free.json)에 있고, `expect`에 적은 문항 종류와 수, 대조 기준·attention 유무, 항목마다 보일 값, 보이면 안 되는 컬럼, 탭 없음을 코드로 확인합니다.
+
+## 요청한 배치의 자동 확인 (`--judge`)
+
+두 러너에 `--judge`를 주면, harness를 통과한 페이지를 Chrome으로 그려 칸의 위치·폭·탭·굵기·글자 크기·색·강조 상자를 재고([frontend/src/lib/layout-check.js](../../frontend/src/lib/layout-check.js)), 판정 Agent([agent/layout_judge.py](../../agent/layout_judge.py), 설명서 [agent/layout_reference.md](../../agent/layout_reference.md))가 요청의 배치·표현 요구를 하나씩 met / not_met / unclear로 판정합니다. not_met이 있으면 페이지 Agent에게 고쳐 달라고 다시 묻습니다. 기본 페이지(배치를 바꾸기 전)도 같은 요청으로 판정해 `summary.md`에 나란히 적으므로, 판정이 실제 차이를 가려내는지 볼 수 있습니다.

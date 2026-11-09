@@ -5,6 +5,7 @@
 //   node scripts/html_experiment/run.mjs --writer reference            정답지를 그대로 내는 가짜 Agent (harness 자체 점검, 무료)
 //   node scripts/html_experiment/run.mjs --writer agent --allow-api    실제 LLM 호출 (유료)
 //   옵션: --only a,b  --out DIR  --no-render  --max-attempts 3  --python python3  --model-config NAME
+//         --judge  그려진 페이지를 요청과 대조(agent.layout_judge, 유료). 맞지 않으면 다시 묻고, 기본 페이지도 같은 요청으로 판정해 비교한다
 // 결과는 var/html-experiment/<시각>/ 에 남는다 (git 에 넣지 않는다): 시나리오별 시도마다의 HTML, 요청, 응답, 화면 사진, results.json, summary.md.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -14,7 +15,7 @@ import { parseArgs } from 'node:util';
 import { dataReader } from '../../frontend/src/lib/design-binding.js';
 import { checkAgentHtml, compareRendered, contractFor, requestHtml } from '../../frontend/src/lib/html-harness.js';
 import { parseJsonData } from '../../frontend/src/lib/json-data.js';
-import { ROOT, buildRequest, groupRowErrors, pythonSender, stamp } from './common.mjs';
+import { ROOT, buildRequest, checksText, groupRowErrors, layoutReviewer, pythonSender, stamp } from './common.mjs';
 import { findChrome, renderPages, screenshot } from './render.mjs';
 
 const { values: args } = parseArgs({
@@ -27,6 +28,7 @@ const { values: args } = parseArgs({
     'max-attempts': { type: 'string', default: '3' },
     python: { type: 'string', default: 'python3' },
     'model-config': { type: 'string' },
+    judge: { type: 'boolean', default: false },
   },
 });
 
@@ -48,18 +50,24 @@ async function runScenario(scenario, outRoot, chrome) {
   }
 
   let attempt = 0;
+  const layouts = new Map(); // html → 첫 HIT 의 측정값
+  if (reference) layouts.set(contract.html, reference[0]?.layout ?? null);
   const check = async (html) => {
     attempt += 1;
     writeFileSync(join(dir, `attempt-${attempt}.html`), html ?? '');
     const result = checkAgentHtml(html, contract);
     if (result.errors.length > 0 || !chrome) return result;
     const rendered = renderPages({ html, rows, chrome, workDir: dir, name: `attempt-${attempt}` });
+    layouts.set(html, rendered[0]?.layout ?? null);
     return { errors: groupRowErrors(compareRendered(contract, reference, rendered).errors), warnings: result.warnings };
   };
+  const judging = args.judge && chrome && args.writer === 'agent';
+  const review = judging ? layoutReviewer({ dir, prefix: 'judge-', requestText: scenario.request, render: (html) => layouts.get(html), allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] }) : undefined;
   const send = args.writer === 'agent' ? pythonSender({ module: 'agent.html_writer', dir, prefix: '', allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] }) : async () => ({ html: contract.html, message: 'Returned the current template unchanged.' });
 
   const started = Date.now();
-  const result = await requestHtml({ send, check, request: buildRequest(contract, scenario.request, binding.task_type), maxAttempts: Number(args['max-attempts']) });
+  const result = await requestHtml({ send, check, review, request: buildRequest(contract, scenario.request, binding.task_type), maxAttempts: Number(args['max-attempts']) });
+  const templateReview = judging ? await layoutReviewer({ dir, prefix: 'judge-template-', requestText: scenario.request, render: (html) => layouts.get(html), allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] })(contract.html) : null;
   const seconds = Math.round((Date.now() - started) / 100) / 10;
   const outcome = result.cannot ? 'cannot' : result.errors.length === 0 ? 'pass' : 'fail';
   const success = scenario.expect === 'refuse' ? outcome !== 'fail' : outcome === 'pass';
@@ -76,9 +84,11 @@ async function runScenario(scenario, outRoot, chrome) {
     success,
     attempts: result.attempts,
     first_pass: result.history[0]?.errors.length === 0 && !result.history[0]?.cannot,
-    errors_by_attempt: result.history.map(({ attempt: n, errors, cannot }) => ({ attempt: n, cannot: cannot ?? null, errors })),
+    errors_by_attempt: result.history.map(({ attempt: n, errors, notes, cannot }) => ({ attempt: n, cannot: cannot ?? null, errors, notes: notes ?? [] })),
     message: result.message,
-    cost: result.usage.cost ?? null,
+    layout_checks: judging ? result.checks : null,
+    template_layout_checks: templateReview?.checks ?? null,
+    cost: (result.usage.cost ?? 0) + (templateReview?.usage?.cost ?? 0) || null,
     calls: result.usage.calls,
     seconds,
     hits: rows.length,
@@ -94,12 +104,20 @@ function summary(results, meta) {
     `- 렌더 검사: ${meta.render ? '했음 (Chrome)' : '하지 않음'}`,
     `- 성공 ${results.filter((r) => r.success).length} / ${results.length}, 첫 시도 통과 ${results.filter((r) => r.first_pass).length}, 비용 합계 $${results.reduce((sum, r) => sum + (r.cost ?? 0), 0).toFixed(4)}`,
     '',
-    '| 시나리오 | 종류 | 기대 | 결과 | 시도 | 비용 | 시간(초) | 마지막 오류 |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| 시나리오 | 종류 | 기대 | 결과 | 시도 | 배치 판정(최종) | 배치 판정(기본 페이지) | 비용 | 시간(초) | 마지막 오류 |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const r of results) {
     const last = r.errors_by_attempt.at(-1)?.errors ?? [r.error].filter(Boolean);
-    lines.push(`| ${r.name} | ${r.kind} | ${r.expect} | ${r.success ? '성공' : '실패'} (${r.outcome}) | ${r.attempts ?? '-'} | ${r.cost === null || r.cost === undefined ? '-' : `$${r.cost.toFixed(4)}`} | ${r.seconds ?? '-'} | ${last.length ? last.join('<br>').replace(/\|/g, '\\|') : ''} |`);
+    lines.push(`| ${r.name} | ${r.kind} | ${r.expect} | ${r.success ? '성공' : '실패'} (${r.outcome}) | ${r.attempts ?? '-'} | ${checksText(r.layout_checks)} | ${checksText(r.template_layout_checks)} | ${r.cost === null || r.cost === undefined ? '-' : `$${r.cost.toFixed(4)}`} | ${r.seconds ?? '-'} | ${last.length ? last.join('<br>').replace(/\|/g, '\\|') : ''} |`);
+  }
+  if (results.some((r) => r.layout_checks)) {
+    lines.push('', '## 배치 판정', '');
+    for (const r of results) {
+      for (const [title, checks] of [['최종', r.layout_checks], ['기본 페이지', r.template_layout_checks]]) {
+        for (const check of checks ?? []) lines.push(`- **${r.name}** (${title}) ${check.result}: ${check.wish} — ${check.evidence}`);
+      }
+    }
   }
   lines.push('', '## Agent 의 설명(message)', '');
   for (const r of results) lines.push(`- **${r.name}**: ${r.message ?? '(없음)'}`);
