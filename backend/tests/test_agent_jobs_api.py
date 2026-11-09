@@ -459,3 +459,40 @@ def test_contract_reports_a_failed_call(make_client, monkeypatch) -> None:
         response = client.post("/api/agent/contracts", json=CONTRACT_BODY)
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "The model call failed: provider is down"
+
+
+def test_contract_revision_and_layout_check(make_client, monkeypatch) -> None:
+    """수정 요청은 current 와 earlier_requests 를 agent 로 넘기고, 배치 판정은 측정값을 넘긴다. 잘못된 요청은 막는다."""
+    seen = {}
+
+    def fake_contract(config, api_key, allow_api, request, log_dir):
+        seen["contract"] = request
+        return {"contract": {"fields": []}, "cannot": None, "message": "ok", "usage": {"calls": 1}}
+
+    def fake_judge(config, api_key, allow_api, request, log_dir):
+        seen["layout"] = (request, log_dir)
+        return {"checks": [{"wish": "right", "result": "met", "evidence": ""}], "message": None, "usage": {"calls": 1}, "provider": "Crusoe"}
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_contract", fake_contract)
+    monkeypatch.setattr("app.routers.agent_jobs.judge_layout", fake_judge)
+    page = {"width": 1100, "tabs": 0, "blocks": [{"kind": "value", "label": "Passage"}]}
+    with make_client(api_allowed=True) as client:
+        assert client.post("/api/agent/contracts", json={**CONTRACT_BODY, "current": {"fields": []}, "earlier_requests": ["Add a box."]}).status_code == 200
+        for change, message in [({"current": []}, '"current"'), ({"earlier_requests": "no"}, '"earlier_requests"')]:
+            response = client.post("/api/agent/contracts", json={**CONTRACT_BODY, **change})
+            assert response.status_code == 400 and message in response.json()["error"]["message"]
+        body = client.post("/api/agent/layout-checks", json={"request": "Questions on the right.", "page": page, "fixed": ["Query is per item."], "allow_api": True}).json()
+        assert client.post("/api/agent/layout-checks", json={"request": "x", "page": page, "fixed": "no", "allow_api": True}).status_code == 400
+        for bad in [{"request": " ", "page": page}, {"request": "x", "page": {"blocks": []}}, {"request": "x", "page": {"width": 1, "blocks": "no"}}]:
+            assert client.post("/api/agent/layout-checks", json={**bad, "allow_api": True}).status_code == 400
+    assert seen["contract"]["current"] == {"fields": []} and seen["contract"]["earlier_requests"] == ["Add a box."]
+    assert body["checks"][0]["result"] == "met" and body["model"]["served_by"] == "Crusoe"
+    request, log_dir = seen["layout"]
+    assert request == {"request": "Questions on the right.", "page": page, "fixed": ["Query is per item."]}
+    assert log_dir.parent.name == "layout-checks"
+
+
+def test_layout_check_needs_both_permissions(client: TestClient, settings: Settings) -> None:
+    response = client.post("/api/agent/layout-checks", json={"request": "x", "page": {"width": 1, "blocks": []}, "allow_api": True})
+    assert response.status_code == 400 and "Calling OpenRouter is not allowed" in response.json()["error"]["message"]
+    assert not (settings.output_dir / "layout-checks").exists()

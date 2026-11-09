@@ -38,6 +38,7 @@ from starlette.datastructures import UploadFile
 from agent.binding import write_binding
 from agent.contract_writer import write_contract
 from agent.html_writer import write_html
+from agent.layout_judge import judge_layout
 from agent.config import ConfigError, binding_model_name, load_model_config, selected_model_name
 from agent.planner.openrouter import PlannerError, resolve_api_key
 from agent.spec import SpecError, load_spec
@@ -393,8 +394,13 @@ def contract_request(body: object) -> dict:
     if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
         raise invalid('"data" must be a summary of the HIT data with "columns".')
     errors, previous = _common_retry_fields(data, dict, "contract")
+    current, earlier = data.get("current"), data.get("earlier_requests")
+    if current is not None and not isinstance(current, dict):
+        raise invalid('"current" must be the contract to revise.')
+    if earlier is not None and not (isinstance(earlier, list) and all(isinstance(e, str) for e in earlier)):
+        raise invalid('"earlier_requests" must be a list of strings.')
     _check_size(data, "contract")
-    return {"request": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous}
+    return {"request": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous, "current": current, "earlier_requests": earlier or []}
 
 
 def page_request(body: object) -> dict:
@@ -435,6 +441,24 @@ async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_ap
     return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
 
 
+LAYOUT_DIR = "layout-checks"
+
+
+def layout_request(body: object) -> dict:
+    """POST /layout-checks 의 body: 요청 문장과 브라우저가 그려서 잰 페이지."""
+    data = object_body(body, "layout check request")
+    prompt, page = data.get("request"), data.get("page")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise invalid('"request" must be what the requester asked for.')
+    if not isinstance(page, dict) or not isinstance(page.get("blocks"), list) or not isinstance(page.get("width"), (int, float)):
+        raise invalid('"page" must be the measured page with "width" and "blocks".')
+    fixed = data.get("fixed")
+    if fixed is not None and not (isinstance(fixed, list) and all(isinstance(f, str) for f in fixed)):
+        raise invalid('"fixed" must be a list of strings.')
+    _check_size(data, "layout check")
+    return {"request": prompt.strip(), "page": page, "fixed": fixed or []}
+
+
 @router.post("/contracts")
 async def create_contract(request: Request) -> dict:
     """요청 문장과 데이터 요약으로 LLM 에 자유 계약을 쓰게 한다 (유료 호출)."""
@@ -449,6 +473,14 @@ async def create_page(request: Request) -> dict:
     body = await read_body(request)
     task = page_request(body)
     return await _ask_agent(request, write_html, task, PAGE_DIR, body.get("allow_api") is True)
+
+
+@router.post("/layout-checks")
+async def create_layout_check(request: Request) -> dict:
+    """그려진 페이지가 요청한 배치·표현대로인지 LLM 에 판정하게 한다 (유료 호출). 결과는 경고와 고쳐 달라는 요청에만 쓴다."""
+    body = await read_body(request)
+    task = layout_request(body)
+    return await _ask_agent(request, judge_layout, task, LAYOUT_DIR, body.get("allow_api") is True)
 
 
 @router.post("/job-groups", status_code=202)

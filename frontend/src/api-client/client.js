@@ -129,6 +129,7 @@ export const agent = {
   createBinding: (body) => call('createBinding', [body]),
   createContract: (body) => call('createContract', [body]),
   createPage: (body) => call('createPage', [body]),
+  createLayoutCheck: (body) => call('createLayoutCheck', [body]),
   createJob,
   createJobGroup,
   fileUrl,

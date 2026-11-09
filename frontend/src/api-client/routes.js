@@ -56,6 +56,7 @@ export const AGENT_ROUTES = {
   createBinding: { method: 'POST', path: '/agent/bindings', args: ['body'] },
   createContract: { method: 'POST', path: '/agent/contracts', args: ['body'] },
   createPage: { method: 'POST', path: '/agent/pages', args: ['body'] },
+  createLayoutCheck: { method: 'POST', path: '/agent/layout-checks', args: ['body'] },
   chooseCandidate: { method: 'PUT', path: '/agent/job-groups/:id/choice', args: ['id', 'job_id'] },
 };
 
