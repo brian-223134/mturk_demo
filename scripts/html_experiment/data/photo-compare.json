@@ -1,0 +1,38 @@
+[
+  {
+    "question": "Which photo shows more water?",
+    "image_a": "/elements/samples/harbor.svg",
+    "image_b": "/elements/samples/street.svg",
+    "gold": "first"
+  },
+  {
+    "question": "Which photo looks busier?",
+    "image_a": "/elements/samples/park.svg",
+    "image_b": "/elements/samples/street.svg",
+    "gold": "second"
+  },
+  {
+    "question": "Which photo has more trees?",
+    "image_a": "/elements/samples/park.svg",
+    "image_b": "/elements/samples/harbor.svg",
+    "gold": "first"
+  },
+  {
+    "question": "Which photo would suit a travel brochure?",
+    "image_a": "/elements/samples/harbor.svg",
+    "image_b": "/elements/samples/park.svg",
+    "gold": "same"
+  },
+  {
+    "question": "Which photo shows more buildings?",
+    "image_a": "/elements/samples/park.svg",
+    "image_b": "/elements/samples/street.svg",
+    "gold": "second"
+  },
+  {
+    "question": "Which photo looks calmer?",
+    "image_a": "/elements/samples/harbor.svg",
+    "image_b": "/elements/samples/street.svg",
+    "gold": "first"
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "design": "side-by-side",
+  "task_type": "text",
+  "context": [{ "label": "Question", "from": "question" }],
+  "slots": {
+    "data": [{ "label": "Title", "from": "title" }, { "label": "Passage", "from": "body" }],
+    "choice": { "name": "answers", "header": "Does the passage answer the question?", "options": [["yes", "Yes"], ["partly", "Partly"], ["no", "No"]] },
+    "free-text": { "name": "evidence", "header": "Copy the sentence that supports your answer.", "placeholder": "Paste one sentence" }
+  },
+  "reference": { "value": "gold" },
+  "attention": { "flag": "attention", "expected": "no" },
+  "instructions": "Read the question and the passage, then decide whether the passage answers the question."
+}
