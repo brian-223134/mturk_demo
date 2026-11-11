@@ -49,7 +49,8 @@ from app.agent_jobs.models import (INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARK
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
 from app.auth import current_user
 from app.errors import ApiError, invalid
-from app.routers.common import object_body, read_body
+from app.routers.common import db_of, object_body, read_body
+from app.usage import record_call
 from app.settings import ALLOW_API_VARIABLE, Settings
 
 log = logging.getLogger("backend")
@@ -359,7 +360,9 @@ async def create_binding(request: Request) -> dict:
     except PlannerError as error:
         raise invalid(f"The model call failed: {error}") from None
     served_by = result.pop("provider", None)  # 설정에 업체가 여럿이면 실제로 답한 업체는 응답을 봐야 안다
-    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
+    model = {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}
+    await asyncio.to_thread(record_call, db_of(request), current_user(request)["id"], "binding", result, model)   # admin 의 API usage 화면
+    return {**result, "model": model}
 
 
 # ---- Describe your task: 자유 계약과 페이지 ------------------------------------------------------------
@@ -422,7 +425,7 @@ def page_request(body: object) -> dict:
     return {"task_type": task_type, "request": prompt.strip(), "template": template, "columns": columns, "questions": questions, "errors": errors or [], "previous": previous}
 
 
-async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_api: bool) -> dict:
+async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_api: bool, kind: str) -> dict:
     """binding 과 같은 모델 설정으로 Agent 를 부른다. 호출마다 요청과 응답을 output/<folder>/ 에 남긴다."""
     settings = _settings(request)
     check_api_allowed(allow_api, settings)
@@ -438,7 +441,9 @@ async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_ap
     except PlannerError as error:
         raise invalid(f"The model call failed: {error}") from None
     served_by = result.pop("provider", None)
-    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
+    model = {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}
+    await asyncio.to_thread(record_call, db_of(request), current_user(request)["id"], kind, result, model)   # admin 의 API usage 화면
+    return {**result, "model": model}
 
 
 LAYOUT_DIR = "layout-checks"
@@ -464,7 +469,7 @@ async def create_contract(request: Request) -> dict:
     """요청 문장과 데이터 요약으로 LLM 에 자유 계약을 쓰게 한다 (유료 호출)."""
     body = await read_body(request)
     task = contract_request(body)
-    return await _ask_agent(request, write_contract, task, CONTRACT_DIR, body.get("allow_api") is True)
+    return await _ask_agent(request, write_contract, task, CONTRACT_DIR, body.get("allow_api") is True, "contract")
 
 
 @router.post("/pages")
@@ -472,7 +477,7 @@ async def create_page(request: Request) -> dict:
     """계약으로 만든 기본 페이지를 요청한 배치와 표현대로 LLM 에 다시 쓰게 한다 (유료 호출)."""
     body = await read_body(request)
     task = page_request(body)
-    return await _ask_agent(request, write_html, task, PAGE_DIR, body.get("allow_api") is True)
+    return await _ask_agent(request, write_html, task, PAGE_DIR, body.get("allow_api") is True, "page")
 
 
 @router.post("/layout-checks")
@@ -480,7 +485,7 @@ async def create_layout_check(request: Request) -> dict:
     """그려진 페이지가 요청한 배치·표현대로인지 LLM 에 판정하게 한다 (유료 호출). 결과는 경고와 고쳐 달라는 요청에만 쓴다."""
     body = await read_body(request)
     task = layout_request(body)
-    return await _ask_agent(request, judge_layout, task, LAYOUT_DIR, body.get("allow_api") is True)
+    return await _ask_agent(request, judge_layout, task, LAYOUT_DIR, body.get("allow_api") is True, "layout-check")
 
 
 @router.post("/job-groups", status_code=202)

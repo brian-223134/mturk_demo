@@ -97,6 +97,7 @@ docker compose exec backend python -m app.users set-password --email someone@exa
 | listInvitations | `GET /api/admin/invitations` | admin | `{invitations}` (코드 원문은 없습니다) |
 | createInvitation | `POST /api/admin/invitations` | admin | `{role, email?, note?, expiresInDays?}` → `{invitation, code}`. 코드 원문은 이때 한 번만 돌려줍니다 |
 | deleteInvitation | `DELETE /api/admin/invitations/:id` | admin | 쓰지 않은 코드를 지웁니다 (204) |
+| getApiUsage | `GET /api/admin/usage` | admin | 유료 LLM 호출의 비용 보고서와 OpenRouter 잔액입니다. 아래 [API 사용 비용](#api-사용-비용)을 봅니다 |
 
 `user`는 `{id, email, displayName, role, status, workerId, createdAt, lastLoginAt}`입니다. 이 표는 `app/routes.py`의 `ACCOUNT_ROUTES`이고 frontend의 `ACCOUNT_ROUTES`와 같습니다(테스트가 대조합니다). 프로토타입의 mock API에는 계정 API가 없어서, frontend를 mock API에 붙이면 로그인 없이 콘솔이 열립니다.
 
@@ -223,6 +224,14 @@ worker 계정만 부를 수 있습니다(다른 역할은 403). 경로 표는 `a
 - **받을 수 있는 사람**: batch를 만든 Requester가 차단하지 않았고, `requiredPoolIds`의 pool에 모두 들어 있고, `excludedPoolIds`의 pool에는 없는 worker입니다. Masters 같은 MTurk Qualification은 보지 않습니다.
 - **작업 화면의 입력**: 템플릿에 `${컬럼}` placeholder가 있으면 그 컬럼만, 없으면(`window.TASK_DATA`로 행을 읽는 템플릿) attention 기대 답 컬럼과 대조 기준 컬럼을 뺀 나머지를 보냅니다. 정답이 worker의 페이지 소스에 남지 않게 하기 위해서입니다.
 - **제출**: `SubmitTime`, `AutoApprovalTime`(제출 + `AutoApprovalDelayInSeconds`), `workTimeInSeconds`, `answers`, 그리고 batch의 규칙으로 계산한 `attention`을 적습니다. 그 뒤로는 시작 데이터의 응답과 같은 모양이라 Review, Results, worker 지표에 그대로 들어갑니다. 답은 `[{name, value}]`이고 값은 문자열로 저장합니다(2000개, 답 하나 2만 자까지).
+
+### API 사용 비용
+
+admin 화면의 `API usage` 탭이 `GET /api/admin/usage`를 씁니다.
+
+- **기록**: binding(`/api/agent/bindings`)과 Describe your task의 과제·페이지·배치 판정(`/api/agent/contracts`, `/pages`, `/layout-checks`) 호출이 끝날 때마다 `api_usage` 테이블에 한 줄을 남깁니다. 시각, 호출한 계정, 종류, 모델, 실제로 답한 업체, 토큰, 비용이 들어갑니다. Generate from raw data는 job마다 job 기록의 `usage`를 그대로 읽습니다. 비용은 OpenRouter가 응답에 준 실제 청구액(USD)이고, 없으면 비워 두고 따로 셉니다. 기록에 실패해도 호출 결과는 그대로 돌려줍니다.
+- **보고서**: 기록 전체의 합계, 종류별, 사람별 합계와 최근 31일의 줄들(`rows`)입니다. 오늘·7일·30일 합계와 날짜별 묶음은 화면이 보는 사람의 현지 날짜로 계산합니다.
+- **잔액**: `openrouter`에는 OpenRouter 계정의 크레딧(산 금액, 쓴 금액, 남은 금액)과 이 콘솔 키의 한도와 사용액이 들어갑니다. 조회는 비용이 들지 않으며, 키가 없거나 OpenRouter에 닿지 않으면 `available: false`와 이유를 돌려주고 보고서는 그대로 보여 줍니다. 계정 잔액에는 다른 키와 이 콘솔 밖의 사용도 포함됩니다.
 
 ## agent job API
 

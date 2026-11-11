@@ -388,6 +388,21 @@ class Store:
         row = self.connection.execute("SELECT owner_id FROM agent_jobs WHERE id = %s", (id,)).fetchone()
         return row["owner_id"] if row else None
 
+    # ---- 유료 호출 기록 (api_usage). 모양은 app/usage.py 가 정한다 -------------------------------------------
+
+    def insert_usage(self, row: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO api_usage (user_id, kind, model, provider, calls, prompt_tokens, completion_tokens, cost) "
+            "VALUES (%(user_id)s, %(kind)s, %(model)s, %(provider)s, %(calls)s, %(prompt_tokens)s, %(completion_tokens)s, %(cost)s)", row)
+
+    def usage_rows(self) -> list[dict]:
+        """오래된 것부터 모든 기록."""
+        return self._rows("SELECT at, user_id, kind, model, provider, calls, prompt_tokens, completion_tokens, cost FROM api_usage ORDER BY at, id")
+
+    def job_usage_rows(self) -> list[dict]:
+        """사용량이 있는 agent job (created_at 은 ISO 글이다)."""
+        return self._rows("SELECT created_at, owner_id, doc FROM agent_jobs WHERE doc->'usage' IS NOT NULL AND json_typeof(doc->'usage') = 'object' ORDER BY created_at, id")
+
     # ---- 계정 (users, worker_profiles, sessions, invitations). 모양은 app/accounts.py 가 정한다 ---------
 
     _USER_SELECT = ("SELECT u.id, u.email, u.password_hash, u.display_name, u.role, u.status, u.email_verified_at, u.created_at, "

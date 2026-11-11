@@ -11,6 +11,7 @@
     GET  /api/admin/invitations            {invitations} (코드 원문은 없다)
     POST /api/admin/invitations            {role, email?, note?, expiresInDays?} → {invitation, code} (코드 원문은 이때 한 번만)
     DELETE /api/admin/invitations/{id}     쓰지 않은 코드를 지운다 (204)
+    GET  /api/admin/usage                  유료 LLM 호출의 사용 기록과 OpenRouter 잔액 (app/usage.py)
 
 비밀번호 해시는 CPU 를 쓰므로 가입과 로그인은 스레드에서 처리한다 (이벤트 루프를 막지 않게).
 """
@@ -22,7 +23,9 @@ from typing import Callable
 from fastapi import APIRouter, Request, Response
 from starlette.concurrency import run_in_threadpool
 
-from app import accounts
+from agent.planner.openrouter import resolve_api_key
+
+from app import accounts, usage
 from app.accounts import invitation_json, user_json
 from app.auth import SESSION_COOKIE, clear_session_cookie, current_user, load_user, require_roles, set_session_cookie, settings_of
 from app.errors import invalid, not_found
@@ -133,6 +136,21 @@ async def delete_invitation(request: Request, id: str) -> Response:
     return no_content()
 
 
+async def get_api_usage(request: Request) -> dict:
+    """사용 기록 보고서와 OpenRouter 잔액. 잔액 조회는 비용이 들지 않고, 닿지 않아도 보고서는 돌려준다."""
+    db = db_of(request)
+    settings = settings_of(request)
+
+    def work() -> dict:
+        with db.transaction() as store:
+            users = {row["id"]: user_json(row) for row in store.list_users()}
+            return usage.usage_report(store, users, accounts.utcnow())
+
+    report = await run_in_threadpool(work)
+    balance = await run_in_threadpool(usage.openrouter_balance, resolve_api_key(None, settings.env_file))
+    return {**report, "openrouter": balance}
+
+
 HANDLERS: dict[str, Callable] = {
     "getSignupOptions": get_signup_options,
     "signup": signup,
@@ -145,6 +163,7 @@ HANDLERS: dict[str, Callable] = {
     "listInvitations": list_invitations,
     "createInvitation": create_invitation,
     "deleteInvitation": delete_invitation,
+    "getApiUsage": get_api_usage,
 }
 
 
