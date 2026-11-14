@@ -1336,7 +1336,7 @@ label.btn .dropzone-input {
   }
 }
 
-/* Describe your task: 가안 카드 옆의 입구와 계약 요약 표 (pages/create/describe-task.js) */
+/* Draft with AI: New Project 의 첫 카드와 계약 요약 표, 단위 (pages/create/describe-task.js) */
 .design-card.describe-card {
   border-style: dashed;
   border-color: #7fa3da;
@@ -1361,8 +1361,49 @@ label.btn .dropzone-input {
   background: #e7f4ec;
   color: #1d6b3a;
 }
+/* AI 가 정한 annotation 단위와 다른 단위로 바꿔 달라는 버튼 */
+.task-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #d5e2f6;
+  border-left: 4px solid #4a78c2;
+  border-radius: var(--radius);
+  background: #f8fafe;
+}
+.task-unit-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.task-unit-head strong {
+  font-size: 16px;
+}
+.task-unit-why {
+  margin: 0;
+}
+.task-unit-choices {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.task-wishes {
+  margin: 0;
+  padding-left: 18px;
+}
+.task-data-notes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.task-page-pending {
+  font-style: italic;
+}
 
-/* Describe your task 의 과제 폼과 배치 판정 (pages/create/contract-form.js, describe-task.js) */
+/* Draft with AI 의 과제 폼과 배치 판정 (pages/create/contract-form.js, describe-task.js) */
 .bf-heading {
   margin: 4px 0 0;
   font-size: 13px;

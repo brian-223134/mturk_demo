@@ -3,7 +3,7 @@
 //   /create/new                        rough design 고르기 ("New Project")                     pages/create/rough-design.js
 //   /create/new/design/:designId(/:taskType)  task 종류 고르기와 예시 미리보기                       pages/create/rough-design.js
 //   /create/new/design/:designId/:taskType/data  HIT 데이터를 올려 가안에 넣어 보기                pages/create/rough-design.js
-//   /create/new/describe               가안 없이 문장으로 HIT 만들기 (Describe your task)              pages/create/describe-task.js
+//   /create/new/describe               데이터와 한 줄 목표로 AI 가 HIT 초안 (Draft with AI)           pages/create/describe-task.js
 //   /create/new/gallery                다른 시작 방법: starter, HTML 올리기, 원본 데이터에서 만들기   pages/create/new-project.js
 //   /create/project/:projectId/:tab    Project 편집기: Enter Properties, Design Layout, Preview and Finish  pages/create/project-editor.js
 //   /create/publish/:projectId         Publish Batch: Upload JSON → Preview tasks → Review settings → Confirm and publish  pages/create/publish-batch.js

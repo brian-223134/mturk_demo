@@ -1,7 +1,7 @@
 // admin 의 API usage(/admin/usage): 유료 LLM 호출(OpenRouter)에 쓴 비용.
 //   OpenRouter 의 실제 크레딧 잔액과 키 한도 (조회는 비용이 들지 않는다)
 //   이 콘솔에서 쓴 비용: 오늘·7일·30일·기록 전체, 종류별, 사람별, 날짜별, 최근 호출
-// 콘솔의 호출(binding, Describe your task 의 과제·페이지·배치 판정)은 호출마다, Generate from raw data 는 job 마다 기록된다.
+// 콘솔의 호출(binding, Draft with AI 의 과제·페이지·배치 판정)은 호출마다, Generate from raw data 는 job 마다 기록된다.
 // 계산은 lib/api-usage.js, 보고서는 backend 의 app/usage.py 가 만든다.
 
 import { admin } from '../api-client/client.js';
