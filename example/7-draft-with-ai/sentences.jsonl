@@ -1,0 +1,12 @@
+{"doc_id": "d1", "doc_title": "New park opens", "sent_no": 1, "sentence": "The new riverside park opened on Saturday.", "label": "fact"}
+{"doc_id": "d1", "doc_title": "New park opens", "sent_no": 2, "sentence": "It is the most beautiful park in the city.", "label": "opinion"}
+{"doc_id": "d1", "doc_title": "New park opens", "sent_no": 3, "sentence": "The park has two playgrounds and a small lake.", "label": "fact"}
+{"doc_id": "d1", "doc_title": "New park opens", "sent_no": 4, "sentence": "Everyone should visit it at least once.", "label": "opinion"}
+{"doc_id": "d2", "doc_title": "Train timetable changes", "sent_no": 1, "sentence": "From May, the morning train will leave ten minutes earlier.", "label": "fact"}
+{"doc_id": "d2", "doc_title": "Train timetable changes", "sent_no": 2, "sentence": "The change is a sensible improvement.", "label": "opinion"}
+{"doc_id": "d2", "doc_title": "Train timetable changes", "sent_no": 3, "sentence": "Two evening trains will be added on Fridays.", "label": "fact"}
+{"doc_id": "d3", "doc_title": "School lunch survey", "sent_no": 1, "sentence": "The school asked 300 parents about lunch options.", "label": "fact"}
+{"doc_id": "d3", "doc_title": "School lunch survey", "sent_no": 2, "sentence": "Most of them asked for more vegetables.", "label": "fact"}
+{"doc_id": "d3", "doc_title": "School lunch survey", "sent_no": 3, "sentence": "The current menu is far too boring.", "label": "opinion"}
+{"doc_id": "d3", "doc_title": "School lunch survey", "sent_no": 4, "sentence": "A new menu will be tested in June.", "label": "fact"}
+{"doc_id": "d3", "doc_title": "School lunch survey", "sent_no": 5, "sentence": "It will surely be a great success.", "label": "opinion"}

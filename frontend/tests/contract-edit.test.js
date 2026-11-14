@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-import { addOption, addQuestion, addValue, answerValues, pathChoices, referenceOf, removeOption, removeQuestion, removeValue, setItems, setQuestionType, setReferenceValue, updateAttention, updateOption, updateQuestion, updateRepeat, updateValue } from '../src/lib/contract-form.js';
-import { addContractAnswer, describeContractChanges, earlierRequests, isCurrentContract, sameContract } from '../src/lib/contract-revision.js';
+import { addOption, addQuestion, addValue, answerValues, pathChoices, referenceOf, removeOption, removeQuestion, removeValue, setItems, setQuestionType, setReferenceValue, updateAttention, updateLayout, updateOption, updatePerHit, updateQuestion, updateRepeat, updateValue } from '../src/lib/contract-form.js';
+import { addContractAnswer, describeContractChanges, earlierRequests, isCurrentContract, sameContract, setVersionPage, versionPage } from '../src/lib/contract-revision.js';
 import { dataReader } from '../src/lib/design-binding.js';
 import { parseJsonData } from '../src/lib/json-data.js';
 import { checkContract } from '../src/lib/task-contract.js';
@@ -113,7 +113,8 @@ describe('contract-form', () => {
     next = updateAttention(next, 'expected', 'partly');
     assert.equal(next.attention.expected, 'partly');
     assert.equal(updateAttention(next, 'flag', '').attention, undefined);
-    assert.deepEqual(errorsOf(next), []);
+    assert.ok(errorsOf(next)[0].includes('disagrees with the answer key'), '정답은 attention 항목에 "no" 를 준다');
+    assert.deepEqual(errorsOf(updateAttention(next, 'expected', 'no')), []);
     assert.deepEqual(referenceOf(chunk, 'supported').form, 'selected');
     assert.deepEqual(answerValues(chunk.questions[1]), ['1', '2', '3', '4', '5']);
   });
@@ -126,5 +127,47 @@ describe('contract-form', () => {
     assert.equal(flat.repeat, undefined);
     assert.ok(checkContract(flat, chunkReader).errors.some((e) => e.includes('[i] needs "repeat"')));
     assert.equal(updateQuestion(chunk, 1, 'per_item', false).questions[1].per_item, false);
+  });
+});
+
+describe('Draft with AI: 단위와 페이지를 한 대화에서', () => {
+  const unit = { level: 'chunk', why: 'One label per chunk.' };
+  const before = { ...chunk, unit, layout: ['Show the query at the top.'] };
+
+  it('단위와 페이지 바람의 변화도 바뀐 점에 나온다', () => {
+    const after = { ...before, unit: { level: 'sentence', split: { from: 'retrieved_chunk', by: 'sentence' } }, layout: ['Show the query at the top.', 'Make the options green and red.'] };
+    const changes = describeContractChanges(before, after);
+    assert.ok(changes.some((c) => c.what === 'Unit' && c.before === 'chunk' && c.after === 'sentence (retrieved_chunk split into sentences)'));
+    assert.ok(changes.some((c) => c.what === 'Page' && c.before === '' && c.after === 'Make the options green and red.'));
+    assert.ok(!changes.some((c) => c.what === 'Page' && c.before === 'Show the query at the top.'), '그대로인 바람은 나오지 않는다');
+    const removed = describeContractChanges(before, { ...before, layout: [] });
+    assert.deepEqual(removed.map((c) => [c.what, c.before, c.after]), [['Page', 'Show the query at the top.', '']]);
+  });
+
+  it('답 뒤에 그 계약으로 다시 쓴 페이지를 붙이고, Restore 는 그 페이지로 돌아간다', () => {
+    const page = { html: '<ann-form></ann-form>', message: 'Moved.', checks: [{ wish: 'x', result: 'met' }], remaining: false };
+    let versions = addContractAnswer([], { before: null, result: { contract: before, errors: [] }, request: 'goal', meta: 'm' });
+    versions = setVersionPage(versions, page);
+    assert.equal(versionPage(versions[0]), page);
+    // 사람이 고친 계약(그때의 페이지와 함께) → 다음 답
+    const edited = { ...before, instructions: 'Edited.' };
+    const after = { ...edited, layout: [] };
+    versions = addContractAnswer(versions, { before: edited, beforePage: page, result: { contract: after, errors: [] }, request: 'plain page', meta: 'm' });
+    assert.equal(versions[1].kind, 'edit');
+    assert.equal(versionPage(versions[1]), page);
+    versions = setVersionPage(versions, null);
+    assert.equal(versionPage(versions[2]), null, '바람이 없으면 기본 페이지');
+    assert.equal(versionPage({ kind: 'model', text: '{}' }), null, '페이지 기록이 없는 예전 줄은 기본 페이지');
+    assert.deepEqual(setVersionPage([], page), []);
+  });
+
+  it('폼: 페이지 바람은 한 줄에 하나, 단위 수는 1 이상의 정수만', () => {
+    assert.deepEqual(updateLayout(before, 'Query at the top.\n\n  Chunk on the left.  \n').layout, ['Query at the top.', 'Chunk on the left.']);
+    assert.deepEqual(updateLayout(before, '').layout, []);
+    assert.equal(updatePerHit(before, '4').repeat.per_hit, 4);
+    assert.equal('per_hit' in updatePerHit({ ...before, repeat: { ...before.repeat, per_hit: 4 } }, '').repeat, false);
+    assert.equal('per_hit' in updatePerHit(before, '0').repeat, false);
+    assert.equal(updatePerHit(passage, '3'), passage, 'repeat 이 없으면 그대로');
+    assert.deepEqual(errorsOf(updateLayout(before, 'A\nB'), chunkReader), []);
   });
 });

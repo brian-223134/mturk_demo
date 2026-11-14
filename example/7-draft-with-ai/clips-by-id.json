@@ -1,0 +1,5 @@
+{
+  "clip-01": {"video": "/media/example/crossing-01.mp4", "place": "Crosswalk near a school", "frame_times": [1.5, 4.0, 7.25]},
+  "clip-02": {"video": "/media/example/crossing-02.mp4", "place": "Bus stop on a main road", "frame_times": ["0:02", "0:05.5", "0:09"]},
+  "clip-03": {"video": "/media/example/crossing-03.mp4", "place": "Parking lot exit", "frame_times": [3, 6, 12.5]}
+}

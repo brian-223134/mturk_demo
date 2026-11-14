@@ -385,7 +385,7 @@ export function checkBinding(binding, reader) {
     }
     result.tabs = Math.max(...counts);
     if (result.tabs === 0) errors.push(`repeat.over: "${binding.repeat.over}" is empty in every HIT.`);
-    else if (Math.min(...counts) !== result.tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${result.tabs}). Shorter HITs show empty tabs.`);
+    else if (Math.min(...counts) !== result.tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${result.tabs}). Shorter HITs hide the tabs they do not need.`);
     checkFixedPaths({ binding, slots, context, reader, counts, errors });
   }
   if (errors.length > 0) return result;
@@ -680,6 +680,7 @@ const SAMPLE_CHARS = 280;
 const SAMPLE_LIST_ITEMS = 3;
 const SAMPLE_KEYS = 4;
 const SHAPE_ROWS = 20;
+const SUMMARY_KEYS = 16;
 
 /** 값의 모양: str, int, list[11] of str, list[11] of list[str], object{a, b}. */
 function shapeOf(value) {
@@ -725,7 +726,20 @@ export function summarizeData(reader) {
       for (let rowIndex = 0; rowIndex < rowsForShape; rowIndex += 1) shapes.add(shapeOf(reader.cell(rowIndex, name)));
       // 표본은 앞쪽 몇 개뿐이므로, 목록의 값이 서로 다른지는 전체 HIT 에서 세어 알린다
       const distinct = Array.from({ length: reader.rowCount }, (_, rowIndex) => reader.cell(rowIndex, name)).filter(Array.isArray).map(distinctCount);
-      return { name, shape: [...shapes].slice(0, 3).join(' or '), ...(distinct.length > 0 ? { distinct_per_list: { min: Math.min(...distinct), max: Math.max(...distinct) } } : {}), samples: sampleRows.map((rowIndex) => sampleOf(reader.cell(rowIndex, name))) };
+      // 객체(또는 객체 목록)의 키: 표본은 키 몇 개만 보이므로 경로 .key 로 읽을 수 있는 키를 따로 알린다
+      const keyShapes = new Map();
+      for (let rowIndex = 0; rowIndex < rowsForShape; rowIndex += 1) {
+        const value = reader.cell(rowIndex, name);
+        const objects = Array.isArray(value) ? value.filter(isObject) : isObject(value) ? [value] : [];
+        for (const object of objects.slice(0, 20)) {
+          for (const [key, item] of Object.entries(object)) {
+            if (!keyShapes.has(key) && keyShapes.size < SUMMARY_KEYS) keyShapes.set(key, new Set());
+            keyShapes.get(key)?.add(shapeOf(item));
+          }
+        }
+      }
+      const keys = [...keyShapes].map(([key, set]) => ({ name: key, shape: [...set].slice(0, 2).join(' or ') }));
+      return { name, shape: [...shapes].slice(0, 3).join(' or '), ...(distinct.length > 0 ? { distinct_per_list: { min: Math.min(...distinct), max: Math.max(...distinct) } } : {}), ...(keys.length > 0 ? { keys } : {}), samples: sampleRows.map((rowIndex) => sampleOf(reader.cell(rowIndex, name))) };
     }),
   };
 }

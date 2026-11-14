@@ -1,0 +1,26 @@
+{
+  "dataset": "summary-faithfulness-demo",
+  "version": 2,
+  "items": [
+    {
+      "id": "s1",
+      "source": "The town council approved a plan to repair the old river bridge. Work will start in March and is expected to take eight months. During the repairs, buses will use the north crossing. The council said the cost would be shared with the regional government.",
+      "summary": "The council approved repairs to the river bridge. Work starts in March and lasts eight months. Buses will use the south crossing during the work. The regional government will pay the full cost."
+    },
+    {
+      "id": "s2",
+      "source": "A local bakery won the regional bread contest for the third year in a row. The winning loaf used flour from a mill in the same valley. The owner said she would use the prize money to train two new apprentices.",
+      "summary": "A bakery won the regional bread contest again. Its loaf used flour from a nearby mill. The owner plans to hire two apprentices with the prize money."
+    },
+    {
+      "id": "s3",
+      "source": "The city library will open on Sundays starting next month. The extra hours are paid for by a donation from a former teacher. Children's reading sessions will be held every Sunday morning. The library expects about two hundred visitors on each Sunday.",
+      "summary": "The library will open on Sundays from next month. A former teacher donated money for the extra hours. Reading sessions for children will run on Sunday afternoons. The library expects two hundred visitors each Sunday. Entry will cost one euro."
+    },
+    {
+      "id": "s4",
+      "source": "Heavy rain closed two mountain roads on Tuesday. Road crews cleared the first road by evening. The second road stayed closed overnight because of a small landslide. No one was hurt.",
+      "summary": "Rain closed two mountain roads on Tuesday. Both roads were cleared by the evening. Nobody was injured."
+    }
+  ]
+}

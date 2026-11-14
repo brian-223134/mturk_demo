@@ -43,6 +43,18 @@ export function updateRepeat(contract, over, label) {
   return { ...contract, repeat: withValue({ ...(isObject(contract.repeat) ? contract.repeat : {}), over }, 'label', label) };
 }
 
+/** 한 HIT 에 넣을 단위 수 (repeat.per_hit). 비우거나 1 보다 작으면 자르지 않는다. */
+export function updatePerHit(contract, value) {
+  if (!isObject(contract.repeat)) return contract;
+  const number = Number.parseInt(value, 10);
+  return { ...contract, repeat: withValue(contract.repeat, 'per_hit', Number.isInteger(number) && number > 0 ? number : undefined) };
+}
+
+/** 페이지 바람(layout): 한 줄에 하나. 빈 줄은 버린다. */
+export function updateLayout(contract, text) {
+  return { ...contract, layout: String(text ?? '').split('\n').map((line) => line.trim()).filter((line) => line !== '') };
+}
+
 // ---- 값 ----
 
 export function updateValue(contract, index, key, value) {

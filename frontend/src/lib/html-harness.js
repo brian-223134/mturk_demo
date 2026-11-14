@@ -27,7 +27,25 @@ const TAG_TEXT = /<[^>]*>/g;
 const EXTERNAL = /^\s*(?:https?:)?\/\//i;
 const STYLE_BODY = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
 const DETAILS_BODY = /<details\b[^>]*>([\s\S]*?)<\/details\s*>/gi;
+const TAB_BODY = /<ann-tab\b([^>]*)>([\s\S]*?)<\/ann-tab\s*>/gi;
 const DEAD_SELECTOR =/(?:^|[\s,>+~}(])ann-(?:option|item)(?![\w-])/;
+
+/** 요소의 일부(문항 제목, 선택지, 값)를 숨기는 스타일이 있는지. 숨기면 worker 가 문항이나 값을 보지 못한다. */
+function hidesElementParts(styles) {
+  for (const rule of String(styles).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!/(^|[\s,>+~(])\.?ann-/.test(rule[1])) continue;
+    if (/display\s*:\s*none|visibility\s*:\s*hidden|(?:^|;)\s*(?:height|max-height|font-size)\s*:\s*0(?:px|em|rem)?\s*(?:;|$|!)/i.test(rule[2])) return true;
+  }
+  return false;
+}
+
+/** <ann-tab> 마다 present 컬럼과 그 안에서 쓴 컬럼 → [{ present, columns }]. */
+function tabBodies(html) {
+  return [...String(html ?? '').replace(COMMENT, '').matchAll(TAB_BODY)].map((match) => ({
+    present: /\bpresent\s*=\s*["']\$\{([^}]+)\}["']/.exec(match[1])?.[1] ?? null,
+    columns: extractPlaceholders(match[2]),
+  }));
+}
 
 /** 컬럼이 HTML 의 어디에 쓰였는지: text(화면 글), src(ann-image·ann-video 의 주소), json(항목 목록 script), attribute(그 밖의 속성). */
 export function placeholderRoles(html) {
@@ -114,6 +132,7 @@ export function checkAgentHtml(html, contract) {
   if (/@import|url\(\s*["']?\s*(?:https?:)?\/\//i.test(text)) errors.push('The styles load an external address (@import or url(…)). It is not allowed.');
   // 요소는 <ann-option>, <ann-item> 을 숨기고 라벨을 새로 그리므로 그 태그를 겨냥한 스타일은 화면에 닿지 않는다
   const styles = [...text.replace(COMMENT, '').matchAll(STYLE_BODY)].map((match) => match[1]).join('\n');
+  if (hidesElementParts(styles)) errors.push('The styles hide part of an element (display: none, visibility: hidden or a zero size on an ann-* element or a .ann-* part). Question headers, options and values must stay visible; arrange them instead of hiding them.');
   if (DEAD_SELECTOR.test(styles)) errors.push('Styles on <ann-option> or <ann-item> have no effect: the elements hide them and draw their own labels. Put markup inside the option, such as <ann-option value="v"><span class="x">Label</span></ann-option>, and style that class.');
 
   // 컬럼: 정답 누출, 없는 컬럼, 빠진 값, 자리
@@ -131,7 +150,7 @@ export function checkAgentHtml(html, contract) {
     const want = contract.roles[name];
     const have = roles.get(name);
     if (!have || have.has(want)) continue;
-    const where = { text: 'as visible text', src: 'in the src of <ann-image> or <ann-video>', json: 'inside <script type="application/json"> of its question' }[want];
+    const where = { text: 'as visible text', src: 'in the src of <ann-image> or <ann-video>', json: 'inside <script type="application/json"> of its question', attribute: 'in the same attribute' }[want];
     errors.push(`"\${${name}}" must appear ${where}, as in the current template.`);
   }
 
@@ -140,6 +159,14 @@ export function checkAgentHtml(html, contract) {
   if (contract.tabs > 0) {
     const repeated = contract.shown.filter((name) => /_\d+$/.test(name) && source.split(`\${${name}}`).length - 1 > 1);
     if (repeated.length > 0) errors.push(`${listed(repeated)} ${repeated.length === 1 ? 'belongs' : 'belong'} to one item but ${repeated.length === 1 ? 'appears' : 'appear'} more than once. Show each item's value once, with its own item; never show one item's value as if it were the same for every item.`);
+  }
+  // 탭의 present="${t_N}" 은 정답지에서 그 탭에 있던 값들과 같은 탭에 있어야 한다. 콘솔이 이것으로 항목이 없는 탭을 숨긴다
+  const ownTab = new Map(); // 정답지에서 탭 안에 있던 컬럼 → 그 탭의 present 컬럼
+  for (const tab of tabBodies(contract.html)) for (const name of tab.columns) ownTab.set(name, tab.present);
+  for (const tab of tabBodies(source)) {
+    if (!tab.present) continue;
+    const others = tab.columns.filter((name) => ownTab.has(name) && ownTab.get(name) !== tab.present);
+    if (others.length > 0) errors.push(`The <ann-tab> with present="\${${tab.present}}" holds ${listed(others)} of another item. Keep each item's values and questions in the tab with that item's present column, as in the current template.`);
   }
   // 접힌 상자 안의 값은 worker 가 열지 않으면 보지 못한다
   const folded = [...source.matchAll(DETAILS_BODY)].flatMap((match) => extractPlaceholders(match[1])).filter((name) => contract.shown.includes(name));
@@ -207,7 +234,8 @@ export function pageRequest(contract, requestText, taskType) {
  * Agent 에게 HTML 을 묻고 검사한다. 오류가 있으면 오류와 이전 답을 붙여 maxAttempts 번까지 다시 묻는다 (requestBinding 과 같은 모양).
  * send(body) → { html, message, cannot?, usage? }, check(html) → { errors } (비동기 가능).
  * review(html) 가 있으면 검사를 통과한 페이지를 한 번 더 본다 → { notes, checks?, usage? }. notes(요청과 다른 점)가 있으면 남은 시도에서
- * 고쳐 달라고 다시 묻는다. 판정도 틀릴 수 있으므로 끝까지 notes 가 남아도 검사를 통과한 마지막 페이지를 notes 와 함께 돌려준다.
+ * 고쳐 달라고 다시 묻는다. 판정도 틀릴 수 있으므로 끝까지 notes 가 남아도 검사를 통과한 페이지 가운데 notes 가 가장 적은 것(같으면 나중 것)을
+ * notes 와 함께 돌려준다. 고치려다 더 나빠진 페이지를 쓰지 않기 위해서다.
  * → { html, message, cannot, errors, notes, checks, attempts, usage, history: [{ attempt, errors, notes, usage }] }
  */
 export async function requestHtml({ send, check, review, request, maxAttempts = 3 }) {
@@ -216,7 +244,7 @@ export async function requestHtml({ send, check, review, request, maxAttempts = 
   const usage = { calls: 0 };
   const history = [];
   let last = null;
-  let passed = null; // 검사를 통과한 마지막 페이지 { html, message, notes, checks }
+  let passed = null; // 검사를 통과한 페이지 가운데 notes 가 가장 적은 것 { html, message, notes, checks }
   const addUsage = (part) => {
     for (const [key, value] of Object.entries(part ?? {})) {
       if (typeof value === 'number') usage[key] = (usage[key] ?? 0) + value;
@@ -240,10 +268,11 @@ export async function requestHtml({ send, check, review, request, maxAttempts = 
     }
     const reviewed = review ? await review(reply.html) : { notes: [], checks: [] };
     addUsage(reviewed.usage);
-    passed = { html: reply.html, message: reply.message ?? null, notes: reviewed.notes ?? [], checks: reviewed.checks ?? [] };
-    history.push({ attempt, errors: [], notes: passed.notes, usage: reply.usage ?? null });
-    if (passed.notes.length === 0 || attempt === maxAttempts) return { ...common, ...passed, cannot: null, errors: [] };
-    errors = passed.notes;
+    const page = { html: reply.html, message: reply.message ?? null, notes: reviewed.notes ?? [], checks: reviewed.checks ?? [] };
+    if (!passed || page.notes.length <= passed.notes.length) passed = page;
+    history.push({ attempt, errors: [], notes: page.notes, usage: reply.usage ?? null });
+    if (page.notes.length === 0 || attempt === maxAttempts) return { ...common, ...passed, cannot: null, errors: [] };
+    errors = page.notes;
     previous = reply.html;
   }
   if (passed) return { ...passed, cannot: null, errors: [], attempts: maxAttempts, usage, history };

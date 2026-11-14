@@ -136,6 +136,18 @@ describe('compareRendered', () => {
   });
 });
 
+describe('checkAgentHtml: 요소의 일부를 숨기는 스타일', () => {
+  const withStyle = (css) => contract.html.replace('<ann-form>', `<style>${css}</style>\n<ann-form>`);
+  it('문항 제목, 선택지, 요소를 숨기면 막고, 직접 만든 요소의 스타일은 막지 않는다', () => {
+    const hidden = (css) => checkAgentHtml(withStyle(css), contract).errors.some((e) => e.includes('hide part of an element'));
+    assert.equal(hidden('.claim-block + ann-choice .ann-header { display: none; }'), true, '실제 호출에서 Agent 가 쓴 스타일');
+    assert.equal(hidden('ann-item-choice .ann-option-label{visibility:hidden}'), true);
+    assert.equal(hidden('.x .ann-text-body { font-size: 0 }'), true);
+    assert.equal(hidden('.note { display: none } .ann-header { font-size: 1.2rem; }'), false);
+    assert.equal(hidden('/* .ann-header { display: none } */ .ann-card { border: 1px solid #ccc }'), false);
+  });
+});
+
 describe('requestHtml', () => {
   it('누출된 첫 답의 오류를 붙여 다시 묻고, 고친 답에서 멈춘다 (흐름)', async () => {
     const leaky = contract.html.replace('<ann-form>', '<ann-form><p>${slot_reference}</p>');
@@ -163,6 +175,21 @@ describe('requestHtml', () => {
     assert.equal(result.checks[0].result, 'met');
     assert.deepEqual(sent[1].errors, ['Not as requested: facts on the right']);
     assert.ok(Math.abs(result.usage.cost - 0.002) < 1e-9);
+  });
+
+  it('고치려다 판정이 더 나빠지면, 맞지 않은 점이 가장 적은 페이지를 돌려준다 (실제 호출에서 마지막 시도가 더 나빴던 일)', async () => {
+    const first = contract.html.replace('<ann-form>', '<ann-form><div class="a"></div>');
+    const third = contract.html.replace('<ann-form>', '<ann-form><div class="c"></div>');
+    const replies = [{ html: first, message: 'one miss' }, { html: contract.html, message: 'two misses' }, { html: third, message: 'one miss again' }];
+    const reviews = [['Not as requested: B'], ['Not as requested: A', 'Not as requested: B'], ['Not as requested: A']];
+    const result = await requestHtml({ send: async () => replies.shift(), check: (html) => checkAgentHtml(html, contract), review: async () => ({ notes: reviews.shift() }), request: {}, maxAttempts: 3 });
+    assert.equal(result.attempts, 3);
+    assert.equal(result.message, 'one miss again', '같은 수면 나중 것');
+    assert.deepEqual(result.notes, ['Not as requested: A']);
+    const worse = [{ html: first, message: 'one miss' }, { html: contract.html, message: 'two misses' }];
+    const notes = [['Not as requested: B'], ['Not as requested: A', 'Not as requested: B']];
+    const kept = await requestHtml({ send: async () => worse.shift(), check: (html) => checkAgentHtml(html, contract), review: async () => ({ notes: notes.shift() }), request: {}, maxAttempts: 2 });
+    assert.equal(kept.message, 'one miss');
   });
 
   it('판정이 끝까지 맞지 않거나 나중 답이 검사에 걸려도, 검사를 통과한 마지막 페이지를 남은 점과 함께 돌려준다', async () => {
