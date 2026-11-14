@@ -207,8 +207,22 @@
     return (hours > 0 ? hours + ':' + two(minutes) : String(minutes)) + ':' + two(whole % 60) + '.' + two(hundredths);
   }
 
+  /** 주소 끝의 #t=<초> (한 장면을 가리키는 영상). 없으면 null. Draft with AI 의 frame 단위가 이렇게 넘긴다. */
+  function videoFrameTime(src) {
+    var match = /#(?:.*&)?t=(\d+(?:\.\d+)?)(?:[,&]|$)/.exec(String(src || '').trim());
+    return match ? Number(match[1]) : null;
+  }
+
+  /** 탭에 보일 값이 하나도 없는지: 글·이미지·영상 요소가 있고 모두 비어 있으면 빈 항목이다 (목록이 짧은 HIT 의 남는 탭). */
+  function isEmptyItem(values) {
+    if (!values || values.length === 0) return false;
+    return values.every(function (value) { return String(value == null ? '' : value).trim() === ''; });
+  }
+
   var core = {
     isImageSource: isImageSource,
+    videoFrameTime: videoFrameTime,
+    isEmptyItem: isEmptyItem,
     videoSeekTime: videoSeekTime,
     videoTimeText: videoTimeText,
     VIDEO_STEP: VIDEO_STEP,
@@ -521,14 +535,22 @@
       video.playsInline = true;
       video.src = src;
       card.appendChild(video);
-      var controls = videoControls(doc, video);
+      var frameAt = videoFrameTime(src);
+      var controls = videoControls(doc, video, frameAt);
       card.appendChild(controls);
+      if (frameAt !== null) {
+        // 한 장면을 묻는 항목: 그 시각에 멈춰 두고, 돌려 본 뒤 다시 그 장면으로 돌아올 수 있게 한다
+        video.addEventListener('loadedmetadata', function () {
+          if (Math.abs(video.currentTime - frameAt) > 0.05) video.currentTime = frameAt;
+        });
+        card.appendChild(make(doc, 'div', 'ann-video-note', 'This item is the frame at ' + videoTimeText(frameAt) + '.'));
+      }
       video.addEventListener('error', function () { controls.hidden = true; });
       watchLoadError(video, card, 'This video could not be loaded.');
     });
 
     /** 브라우저 컨트롤 아래의 0.1초 이동, 배속, 재생 시각. 폼 안이므로 type="button" 이어야 제출되지 않고, 문항이 아니라 답에도 들어가지 않는다. */
-    function videoControls(doc, video) {
+    function videoControls(doc, video, frameAt) {
       var bar = make(doc, 'div', 'ann-video-controls');
       var button = function (text, title, onClick) {
         var node = make(doc, 'button', 'ann-video-button', text);
@@ -543,6 +565,12 @@
         video.pause();
         video.currentTime = videoSeekTime(video.currentTime, delta, video.duration);
       };
+      if (frameAt !== null && frameAt !== undefined) {
+        button('Go to the frame', 'Back to ' + videoTimeText(frameAt), function () {
+          video.pause();
+          video.currentTime = frameAt;
+        });
+      }
       button('◀ ' + VIDEO_STEP + 's', 'Back ' + VIDEO_STEP + ' second', function () { seek(-VIDEO_STEP); });
       button(VIDEO_STEP + 's ▶', 'Forward ' + VIDEO_STEP + ' second', function () { seek(VIDEO_STEP); });
       bar.appendChild(make(doc, 'span', 'ann-video-label', 'Speed'));
@@ -830,6 +858,24 @@
       function (element) {
         var doc = element.ownerDocument;
         var tabs = Array.prototype.slice.call(element.children).filter(function (child) { return isTag(child, 'ann-tab'); });
+        // 목록이 짧은 HIT 에서 남는 탭은 숨기고 그 안의 문항은 필수에서 뺀다. 콘솔이 present 속성(항목이 있으면 "1", 없으면 빈 값)을
+        // 달아 두면 그것을 따른다. 없으면 보일 값(글·이미지·영상 요소)이 모두 비어 있는지 본다.
+        // ann-text 는 먼저 정의되어 이미 그려져 있다: 제목(label)을 빼고 값 부분만 본다
+        var empty = tabs.map(function (tab) {
+          if (tab.hasAttribute('present')) return String(tab.getAttribute('present')).trim() === '';
+          var values = Array.prototype.map.call(tab.querySelectorAll('ann-text, ann-image, ann-video'), function (node) {
+            if (!isTag(node, 'ann-text')) return node.getAttribute('src');
+            var body = node.querySelector('.ann-text-body');
+            return (body || node).textContent;
+          });
+          return isEmptyItem(values);
+        });
+        if (empty.every(Boolean)) empty = tabs.map(function () { return false; });
+        tabs.forEach(function (tab, index) {
+          if (!empty[index]) return;
+          tab.__annEmpty = true;
+          Array.prototype.forEach.call(tab.querySelectorAll('[required]'), function (node) { node.removeAttribute('required'); });
+        });
         var bar = make(doc, 'div', 'ann-tab-bar');
         bar.setAttribute('role', 'tablist');
         var nav = make(doc, 'div', 'ann-tab-nav');
@@ -847,6 +893,7 @@
           button.appendChild(make(doc, 'span', 'ann-tab-title', tab.getAttribute('header') || 'Item ' + (index + 1)));
           button.appendChild(make(doc, 'span', 'ann-tab-status'));
           button.addEventListener('click', function () { element.annSelect(index); });
+          if (tab.__annEmpty) button.hidden = true;
           bar.appendChild(button);
           tab.setAttribute('role', 'tabpanel');
           return button;
@@ -855,14 +902,20 @@
         next.addEventListener('click', function () { element.annSelect(element.__annIndex + 1); });
         element.__annNav = { prev: prev, next: next };
         element.insertBefore(bar, element.firstChild);
-        if (tabs.length > 1) element.appendChild(nav);
+        if (tabs.filter(function (tab) { return !tab.__annEmpty; }).length > 1) element.appendChild(nav);
         element.annSelect(0);
       },
       {
         annSelect: function (index) {
           var tabs = this.__annTabs || [];
           if (tabs.length === 0) return;
-          var at = Math.min(Math.max(0, index), tabs.length - 1);
+          var shown = tabs.map(function (tab, i) { return tab.__annEmpty ? -1 : i; }).filter(function (i) { return i >= 0; });
+          if (shown.length === 0) return;
+          // 빈 탭은 건너뛴다: 앞으로 가면 다음 보이는 탭, 뒤로 가면 이전 보이는 탭
+          var current = this.__annIndex === undefined ? -1 : this.__annIndex;
+          var wanted = Math.min(Math.max(0, index), tabs.length - 1);
+          var at = shown.indexOf(wanted) >= 0 ? wanted : index < current ? shown.filter(function (i) { return i < wanted; }).pop() : shown.filter(function (i) { return i > wanted; })[0];
+          if (at === undefined) at = index < current ? shown[0] : shown[shown.length - 1];
           this.__annIndex = at;
           tabs.forEach(function (tab, i) {
             tab.hidden = i !== at;
@@ -871,8 +924,8 @@
           });
           (this.__annButtons || []).forEach(function (button, i) { button.setAttribute('aria-selected', i === at ? 'true' : 'false'); });
           if (this.__annNav) {
-            this.__annNav.prev.disabled = at === 0;
-            this.__annNav.next.disabled = at === tabs.length - 1;
+            this.__annNav.prev.disabled = at === shown[0];
+            this.__annNav.next.disabled = at === shown[shown.length - 1];
           }
         },
         /** 탭마다 남은 필수 문항 수를 제목 옆에 보인다. missing 은 탭 → 남은 수를 돌려주는 함수다. */
