@@ -17,7 +17,7 @@ provider: {order: [crusoe, parasail], allow_fallbacks: false, quantizations: [fp
 params:                         # chat completions 요청 본문에 그대로 들어가는 파라미터 (model, messages, provider 는 못 쓴다)
   temperature: 0
   seed: 7                       # 같은 요청의 결과를 되도록 같게 한다
-  max_tokens: 8000              # 출력 상한. reasoning 토큰도 출력 토큰으로 세므로 binding 크기보다 넉넉히 잡는다
+  max_tokens: 12000             # 출력 상한. reasoning 토큰도 출력 토큰으로 세므로 넉넉히 잡는다 (8000 에서 과제 Agent 가 추론만 하다 잘린 일이 있다, 11-14)
   response_format:
     type: json_object           # 답을 JSON 객체 하나로 강제한다
   usage:
