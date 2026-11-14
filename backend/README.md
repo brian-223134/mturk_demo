@@ -229,7 +229,7 @@ worker 계정만 부를 수 있습니다(다른 역할은 403). 경로 표는 `a
 
 admin 화면의 `API usage` 탭이 `GET /api/admin/usage`를 씁니다.
 
-- **기록**: binding(`/api/agent/bindings`)과 Describe your task의 과제·페이지·배치 판정(`/api/agent/contracts`, `/pages`, `/layout-checks`) 호출이 끝날 때마다 `api_usage` 테이블에 한 줄을 남깁니다. 시각, 호출한 계정, 종류, 모델, 실제로 답한 업체, 토큰, 비용이 들어갑니다. Generate from raw data는 job마다 job 기록의 `usage`를 그대로 읽습니다. 비용은 OpenRouter가 응답에 준 실제 청구액(USD)이고, 없으면 비워 두고 따로 셉니다. 기록에 실패해도 호출 결과는 그대로 돌려줍니다.
+- **기록**: binding(`/api/agent/bindings`)과 Draft with AI의 과제·페이지·배치 판정(`/api/agent/contracts`, `/pages`, `/layout-checks`) 호출이 끝날 때마다 `api_usage` 테이블에 한 줄을 남깁니다. 시각, 호출한 계정, 종류, 모델, 실제로 답한 업체, 토큰, 비용이 들어갑니다. Generate from raw data는 job마다 job 기록의 `usage`를 그대로 읽습니다. 비용은 OpenRouter가 응답에 준 실제 청구액(USD)이고, 없으면 비워 두고 따로 셉니다. 기록에 실패해도 호출 결과는 그대로 돌려줍니다.
 - **보고서**: 기록 전체의 합계, 종류별, 사람별 합계와 최근 31일의 줄들(`rows`)입니다. 오늘·7일·30일 합계와 날짜별 묶음은 화면이 보는 사람의 현지 날짜로 계산합니다.
 - **잔액**: `openrouter`에는 OpenRouter 계정의 크레딧(산 금액, 쓴 금액, 남은 금액)과 이 콘솔 키의 한도와 사용액이 들어갑니다. 조회는 비용이 들지 않으며, 키가 없거나 OpenRouter에 닿지 않으면 `available: false`와 이유를 돌려주고 보고서는 그대로 보여 줍니다. 계정 잔액에는 다른 키와 이 콘솔 밖의 사용도 포함됩니다.
 
