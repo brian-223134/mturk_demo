@@ -35,6 +35,19 @@ describe('ann-elements core', () => {
     assert.equal(core.videoSeekTime(undefined, core.VIDEO_STEP, 10), 0.1);
   });
 
+  it('videoFrameTime: 주소 끝의 #t=<초> 만 장면 시각으로 읽는다 (Draft with AI 의 frame 단위)', () => {
+    assert.equal(core.videoFrameTime('/media/clip.mp4#t=7.25'), 7.25);
+    assert.equal(core.videoFrameTime('/media/clip.mp4#t=3,9'), 3);
+    assert.equal(core.videoFrameTime('/media/clip.mp4'), null);
+    assert.equal(core.videoFrameTime('/media/clip.mp4?t=3'), null);
+  });
+
+  it('isEmptyItem: 보일 값이 있고 모두 비어 있을 때만 빈 탭이다 (목록이 짧은 HIT 의 남는 탭)', () => {
+    assert.equal(core.isEmptyItem(['', '  ', null]), true);
+    assert.equal(core.isEmptyItem(['', 'text']), false);
+    assert.equal(core.isEmptyItem([]), false, '값 요소가 없는 탭은 숨기지 않는다');
+  });
+
   it('videoTimeText: 분과 초를 0.01초까지, 1시간이 넘으면 시를 붙인다', () => {
     assert.equal(core.videoTimeText(0), '0:00.00');
     assert.equal(core.videoTimeText(0.3), '0:00.30');

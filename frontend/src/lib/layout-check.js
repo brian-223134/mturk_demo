@@ -7,6 +7,7 @@
  * 그려진 페이지의 측정값 { width, tabs, blocks }. 미리보기 iframe 안(lib/template.js 의 PREVIEW_BRIDGE)과 실험의 headless Chrome
  * (scripts/html_experiment/render.mjs)에서 이 함수의 소스를 그대로 실행하므로 모듈의 다른 것을 쓰지 않고 ES5 로 쓴다.
  * blocks: 보이는 칸을 위에서 아래로. { kind: instructions|value|question|text, label, text, x, w (페이지 폭의 %), y, h (px), tab?, bold?, size?, color?, background?,
+ *   (항목 문항은 items, item_samples, item_style?, item_marker?, item_options: beside|below)
  *          frame? (칸을 감싼 상자의 배경·왼쪽 띠), options?, scale? }
  */
 export function measureLayout(doc, win) {
@@ -14,6 +15,9 @@ export function measureLayout(doc, win) {
   var width = Math.max(1, root.clientWidth || 1);
   var body = doc.body;
   var base = win.getComputedStyle(body);
+  // 글의 기준은 폼의 보통 글이다 (ann-form 이 글자 크기와 색을 정한다). 배경의 기준은 페이지(body)다
+  var form = doc.querySelector('ann-form');
+  var plain = form ? win.getComputedStyle(form) : base;
   var blocks = [];
   var CONTAINERS = { 'ANN-FORM': 1, 'ANN-TABS': 1, 'ANN-TAB': 1, 'ANN-COLUMNS': 1, 'ANN-COLUMN': 1, FORM: 1, BODY: 1 };
   function clip(text) {
@@ -29,13 +33,19 @@ export function measureLayout(doc, win) {
     var out = {};
     if (parseInt(s.fontWeight, 10) >= 600) out.bold = true;
     var size = parseFloat(s.fontSize);
-    if (Math.abs(size - parseFloat(base.fontSize)) >= 1) out.size = Math.round(size);
-    if (s.color !== base.color) out.color = s.color;
+    if (Math.abs(size - parseFloat(plain.fontSize)) >= 1) out.size = Math.round(size);
+    if (s.color !== plain.color) out.color = s.color;
     var parent = el.parentElement ? win.getComputedStyle(el.parentElement).backgroundColor : '';
     if (s.backgroundColor && s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== parent) out.background = s.backgroundColor;
     return out;
   }
   var STOP = { 'ANN-TAB': 1, 'ANN-TABS': 1, 'ANN-FORM': 1, FORM: 1, BODY: 1, HTML: 1 };
+  /** 네 변 모두 선이 있는 상자인지 (min 픽셀 이상). */
+  function boxed(s, min) {
+    return ['Top', 'Right', 'Bottom', 'Left'].every(function (side) {
+      return parseFloat(s['border' + side + 'Width']) >= min && s['border' + side + 'Style'] !== 'none';
+    });
+  }
   /** 칸을 감싼 상자(Agent 가 만든 강조 상자 등): 칸 위로 네 단계까지 배경이나 굵은 왼쪽 띠가 있는 요소. */
   function frameOf(el) {
     var node = el.parentElement;
@@ -45,7 +55,8 @@ export function measureLayout(doc, win) {
       var frame = {};
       if (s.backgroundColor && s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== base.backgroundColor) frame.background = s.backgroundColor;
       if (parseFloat(s.borderLeftWidth) >= 3 && s.borderLeftStyle !== 'none') frame.border = s.borderLeftColor;
-      if (frame.background || frame.border) return frame;
+      else if (boxed(s, 1)) frame.outline = Math.round(parseFloat(s.borderTopWidth)) + 'px ' + s.borderTopColor;
+      if (frame.background || frame.border || frame.outline) return frame;
     }
     return null;
   }
@@ -55,6 +66,11 @@ export function measureLayout(doc, win) {
     var block = { kind: kind, label: clip(label), text: clip(text), x: Math.round((r.left / width) * 100), w: Math.round((r.width / width) * 100), y: Math.round(r.top + (win.scrollY || 0)), h: Math.round(r.height) };
     if (el.closest && el.closest('ann-tab')) block.tab = 1;
     for (var key in extra || {}) block[key] = extra[key];
+    // 칸 자체의 테두리: 기본 카드의 1px 선보다 굵으면 Agent 가 강조한 것이다
+    if (kind === 'value') {
+      var own = win.getComputedStyle(el);
+      if (boxed(own, 2)) block.border = Math.round(parseFloat(own.borderTopWidth)) + 'px ' + own.borderTopColor;
+    }
     if (kind === 'value' || kind === 'question') {
       var frame = frameOf(el.closest ? el.closest('ann-text, ann-image, ann-video, ann-choice, ann-likert, ann-checklist, ann-item-choice, ann-textarea') || el : el);
       if (frame) block.frame = frame;
@@ -64,13 +80,22 @@ export function measureLayout(doc, win) {
   function textOf(el) {
     return el ? el.textContent : '';
   }
+  /** 글의 모양을 잴 요소: 감싼 요소 하나(<strong> 등)만 있으면 그 요소다. */
+  function styledOf(el) {
+    var own = '';
+    el.childNodes.forEach(function (child) {
+      if (child.nodeType === 3) own += child.textContent;
+    });
+    return el.children.length === 1 && own.trim() === '' ? el.firstElementChild : el;
+  }
   doc.querySelectorAll('.ann-instructions').forEach(function (el) {
     add('instructions', el, textOf(el.querySelector('summary')), textOf(el.querySelector('.ann-instructions-body')));
   });
   doc.querySelectorAll('.ann-card').forEach(function (el) {
     var label = el.querySelector('.ann-label');
     var bodyText = el.querySelector('.ann-text-body');
-    add('value', el, textOf(label), textOf(bodyText || el), label ? look(label) : {});
+    // 제목(label)은 늘 작고 굵으므로 값 글의 모양을 잰다
+    add('value', el, textOf(label), textOf(bodyText || el), look(bodyText ? styledOf(bodyText) : el));
   });
   doc.querySelectorAll('.ann-question').forEach(function (el) {
     var seen = {};
@@ -91,9 +116,35 @@ export function measureLayout(doc, win) {
       var ends = el.querySelectorAll('.ann-likert-end');
       extra.scale = clip(points[0].textContent) + ' to ' + clip(points[points.length - 1].textContent) + (ends.length === 2 ? ' (' + clip(ends[0].textContent) + ' … ' + clip(ends[1].textContent) + ')' : '');
     }
-    add('question', el, textOf(el.querySelector('.ann-header')), '', extra);
+    // 항목마다 답하는 문항(ann-item-choice): 항목 수, 앞의 두 항목, 첫 항목의 모양, 선택지가 항목 옆인지 아래인지, 번호 같은 ::before 표시
+    var rows = el.querySelectorAll('.ann-item-row');
+    if (rows.length) {
+      var firstText = rows[0].querySelector('.ann-item-text');
+      var firstOption = rows[0].querySelector('.ann-options');
+      extra.items = rows.length;
+      extra.item_samples = Array.prototype.slice.call(rows, 0, 2).map(function (row) { return clip(textOf(row.querySelector('.ann-item-text'))).slice(0, 60); });
+      if (firstText) {
+        var itemStyle = look(styledOf(firstText));
+        if (Object.keys(itemStyle).length) extra.item_style = itemStyle;
+        var marker = win.getComputedStyle(firstText, '::before').content;
+        if (marker && marker !== 'none' && marker !== 'normal' && marker !== '""') extra.item_marker = marker.slice(0, 40);
+      }
+      if (firstText && firstOption) {
+        var a = firstText.getBoundingClientRect();
+        var b = firstOption.getBoundingClientRect();
+        extra.item_options = b.top < a.bottom - 2 && b.left >= a.right - 2 ? 'beside' : 'below';
+      }
+    }
+    var header = el.querySelector('.ann-header');
+    var headerStyle = header ? look(header) : {};
+    for (var key in headerStyle) extra[key] = headerStyle[key];
+    add('question', el, textOf(header), '', extra);
+    // 문항 안의 글(힌트, Agent 가 옮겨 넣은 값): 글을 가진 자식이 여럿이면 하나씩 잰다 (작은 제목과 큰 본문이 함께 있을 수 있다)
     el.querySelectorAll('.ann-description').forEach(function (description) {
-      if (clip(description.textContent)) add('text', description, 'inside: ' + clip(textOf(el.querySelector('.ann-header'))), description.textContent, look(description.firstElementChild || description));
+      var where = 'inside: ' + clip(textOf(el.querySelector('.ann-header')));
+      var parts = Array.prototype.filter.call(description.children, function (child) { return clip(child.textContent); });
+      if (parts.length > 1) parts.forEach(function (part) { add('text', part, where, part.textContent, look(styledOf(part))); });
+      else if (clip(description.textContent)) add('text', description, where, description.textContent, look(styledOf(description)));
     });
   });
   // Agent 가 직접 쓴 글(안내 상자, 제목 등). ann 요소 안의 글은 위에서 다뤘다
@@ -113,7 +164,7 @@ export function measureLayout(doc, win) {
   blocks.sort(function (a, b) {
     return a.y - b.y || a.x - b.x;
   });
-  return { width: width, tabs: doc.querySelectorAll('ann-tab').length, blocks: blocks.slice(0, 80) };
+  return { width: width, base_size: Math.round(parseFloat(plain.fontSize)), tabs: doc.querySelectorAll('ann-tab').length, blocks: blocks.slice(0, 80) };
 }
 
 /** 판정 Agent 에게 보낼 요청. fixed 는 계약이 정해서 페이지가 바꿀 수 없는 것들이다 (그런 바람은 판정하지 않는다). */
@@ -121,7 +172,11 @@ export function layoutRequest(requestText, page, fixed = []) {
   return { request: requestText, page, fixed: [...ALWAYS_FIXED, ...fixed] };
 }
 
-const ALWAYS_FIXED = ['Answer keys and attention checks are never shown to workers.', 'Values and questions are decided by the task, not by the page: adding, removing or rewording them is not a layout wish.'];
+const ALWAYS_FIXED = [
+  'Answer keys and attention checks are never shown to workers.',
+  'Values and questions are decided by the task, not by the page: adding, removing or rewording them is not a layout wish.',
+  "Every question shows its header above its options. A wish to put options directly under a value is met when that question (header and options) comes right after the value.",
+];
 
 /** 계약 요약(contractOutline)에서 페이지가 바꿀 수 없는 것: 항목마다 다른 값은 한 번만 보일 수 없다. */
 export function fixedFromOutline(outline) {

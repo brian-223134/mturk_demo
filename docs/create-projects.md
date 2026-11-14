@@ -54,7 +54,7 @@ layout의 종류는 `Elements`(`<ann-*>` 요소), `crowd-html`(MTurk의 crowd-ht
 
 ## New Project
 
-`New Project`를 열면 화면 배치 가안(rough design)을 먼저 고릅니다. 맞는 가안이 없으면 `F. Others`를 고르고 원하는 화면을 문장으로 설명합니다. 문항의 개수와 종류까지 자유롭게 정하려면 가안 옆의 `Describe your task`를 고릅니다([문장으로 HIT 만들기](#문장으로-hit-만들기-describe-your-task)). 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
+`New Project`의 첫 카드는 `Draft with AI`입니다. 데이터와 한 줄 목표를 주면 AI가 annotation 단위(sentence, chunk, document, full video, frame), 문항, 페이지를 먼저 정하고, 사람은 대화 한 곳에서 고칩니다([AI로 초안 만들기](#ai로-초안-만들기-draft-with-ai)). 화면 배치를 직접 고르려면 그 뒤의 가안(rough design) 5개 중 하나를 고르고, 맞는 가안이 없으면 `F. Others`를 고르고 원하는 화면을 문장으로 설명합니다. 다른 방법으로 시작하려면 같은 화면 아래의 `Other ways to start`를 씁니다.
 
 ### rough design으로 시작하기
 
@@ -249,33 +249,83 @@ LLM이 받는 배치 요소의 설명은 `agent/binding_reference.md`의 `Laying
 
 모델 설정은 `deepseek-v4.1-flash`(`environment/models/deepseek-v4.1-flash.yaml`)이고, `environment/.env`의 `AGENT_BINDING_MODEL`로 바꿀 수 있습니다. 형식 설명서는 [agent/binding_reference.md](../agent/binding_reference.md)입니다.
 
-### 문장으로 HIT 만들기 (Describe your task)
+### AI로 초안 만들기 (Draft with AI)
 
-가안 목록의 `Describe your task` 카드를 고르고 `Next`를 누르면 `/create/new/describe`로 갑니다. 가안을 고르지 않고, 무엇을 어디에 보이고 어떤 문항을 물을지 문장으로 적습니다. 문항은 개수 제한이 없고 `Pick one`(라디오), `Score`(점수), `Check all that apply`(체크리스트), `One answer per item`(항목마다 라디오), `Written answer`(자유 서술)를 섞어 쓸 수 있습니다.
+`New Project`의 첫 카드인 `Draft with AI`를 고르고 `Next`를 누르면 `/create/new/describe`로 갑니다. framework의 Pipeline Design 단계와 같이, 데이터와 한 줄 목표를 주면 AI가 먼저 annotation 단위, 보여 줄 값과 문항, 페이지의 모양을 정하고, 사람은 그 초안을 보며 대화 한 곳에서 고쳐 나갑니다. 문항은 개수 제한이 없고 `Pick one`(라디오), `Score`(점수), `Check all that apply`(체크리스트), `One answer per item`(항목마다 라디오), `Written answer`(자유 서술)를 섞어 쓸 수 있습니다.
 
-1. HIT 데이터(JSON)를 올립니다. 파일은 이 탭에만 있고, LLM에는 구조와 잘린 표본만 갑니다.
-2. `Your task`에 과제를 적고 `Allow API calls`를 체크한 뒤 `Write the task`를 누릅니다(유료 호출). 정답이 든 컬럼과 attention 표시 컬럼을 함께 적으면 Review가 그 값과 대조합니다.
-3. `The task`에 LLM이 정한 내용이 표로 나옵니다. `What workers see`는 보여 줄 값과 그 값을 읽는 데이터 경로, 항목마다 보이는지입니다. `What workers answer`는 문항, 답의 모양, 대조 기준(`Compared with your labels`)과 `Attention check` 표시입니다. LLM의 설명도 함께 나오며, 요청과 데이터가 다르면(예: "모든 항목에 같다"고 했지만 실제로는 다른 값) 그 사실을 알립니다.
-4. 과제를 고치는 방법은 세 가지입니다.
-   - **요청으로 고치기**: 과제가 생기면 입력 칸이 `What should change?`로 바뀝니다. 고칠 점을 적고 `Revise the task`를 누르면(유료 호출) 요청과 답이 대화처럼 쌓이고, 답마다 바뀐 점이 보입니다. 문항이 없어지거나 대조 기준·attention이 사라지면 빨간색으로 표시하며, `Restore`로 어느 때로든 돌아갈 수 있습니다. 처음부터 다시 쓰려면 `Start over`를 누릅니다.
-   - **폼으로 고치기**: `Edit the task`에서 안내문, 항목 반복, 보여 줄 값(제목, 데이터 경로, 종류), 문항(질문, 답의 종류, 선택지의 값과 글, 항목, 점수 범위, 필수 여부, 항목마다 묻기), 대조 기준, attention을 고칩니다. 문항을 지우면 그 문항의 대조 기준과 attention도 함께 지워집니다.
-   - **JSON으로 고치기**: `Edit as JSON (advanced)`.
-5. `The page`에 기본 배치로 그린 미리보기가 나옵니다. `Arrange the page`를 누르면 LLM이 처음 문장(또는 `How should the page look?`에 적은 글)대로 배치와 표현을 다시 씁니다(유료 호출). `Use the plain layout`으로 기본 배치로 돌아갑니다.
-6. **요청한 배치대로 되었는지 자동 확인**: 다시 쓴 페이지는 화면 밖에서 실제로 그려 칸의 위치, 폭, 탭, 굵기, 글자 크기, 색, 강조 상자를 재고, 판정 LLM이 문장의 배치·표현 요구를 하나씩 `met`(✓), `not met`(✗), `unclear`(?)로 판정합니다(유료 호출). 맞지 않는 것이 있으면 LLM에게 고쳐 달라고 다시 묻고, 끝까지 남으면 페이지는 쓰되 경고로 보입니다. `Check against my description`은 지금 페이지(기본 배치 포함)를 판정만 합니다. 과제가 정한 것(정답을 보이지 않는다, 항목마다 다른 값은 항목마다 보인다)과 어긋나는 요구는 판정하지 않고 `unclear`로 둡니다.
-7. Project 이름을 확인하고 `Use this task`를 누르면 Project가 저장되고, 게시용 데이터와 대조 기준·attention 설정이 Publish Batch로 넘어갑니다.
+#### 올릴 수 있는 데이터
+
+어느 정도 정리된 JSON이면 모양에 상관없이 기록(record) 목록을 찾아 읽습니다. 파일은 이 탭에만 있고, LLM에는 구조와 잘린 표본만 갑니다.
+
+- 기록의 목록: `[{...}, {...}]`. 값만 있는 목록(`["text", ...]`)은 기록마다 `value` 하나가 됩니다.
+- 기록을 감싼 객체: `{"dataset": "...", "items": [{...}]}`. 깊이 3까지에서 가장 긴 객체 목록을 기록으로 읽고, 목록 옆의 단순 값(`dataset`, `version` 등)은 기록마다 복사합니다.
+- id로 묶인 객체: `{"clip-01": {...}, "clip-02": {...}}`. 이름은 `key` 컬럼이 됩니다.
+- JSON Lines(`.jsonl`): 줄마다 기록 하나입니다.
+- 기록 하나뿐인 객체도 받습니다. 기록 안의 객체와 목록은 그대로 두고 `meta.title`, `chunks[i]` 같은 경로로 읽습니다. 이름에 빈칸이나 점이 있는 키는 `_`로 바꿉니다.
+
+어디서 몇 개를 읽었는지는 업로드 칸 아래에 표시됩니다. 예시 파일은 [example/7-draft-with-ai/](../example/7-draft-with-ai/)에 있습니다.
+
+#### AI가 먼저 정하는 것
+
+목표 칸(`What should workers label?`)에 한 줄을 적고 `Allow API calls`를 체크한 뒤 `Draft the task`를 누릅니다(유료 호출). 목표를 비워 두면 AI가 데이터의 라벨 컬럼 등으로 목표를 짐작하고, 무엇을 가정했는지 알려 줍니다. 정답이 든 컬럼을 함께 적으면 Review가 그 값과 대조합니다.
+
+AI는 먼저 **annotation 단위**를 정합니다. 단위는 답 하나가 무엇에 대한 것인지입니다.
+
+| 데이터 | 단위 |
+|---|---|
+| 글 | `Document`(글 전체), `Chunk`(문단이나 데이터에 있는 chunk 목록), `Sentence`(문장) |
+| 이미지 | `Image` |
+| 영상 | `Full video`(클립 전체), `Frame`(한 장면) |
+
+데이터의 라벨이 문장마다 하나면 문장, chunk마다 하나면 chunk를 고르는 식으로 정하고, 그 이유를 `The task`의 단위 상자에 보입니다. AI는 계획만 쓰고, 기록을 HIT로 바꾸는 일은 콘솔의 코드가 합니다.
+
+- **글 나누기**: 데이터에 문서 전체만 있으면 글을 문장이나 문단으로 나눠 새 목록 컬럼(예: `summary_sentences`)을 만듭니다. 원래 글은 그대로 남아 맥락으로 보일 수 있습니다.
+- **기록 묶기**: 문장 하나가 기록 하나이고 같은 문서의 기록이 `doc_id` 같은 컬럼을 공유하면, 같은 값의 기록을 HIT 하나로 묶습니다. 모든 묶음에서 값이 같은 컬럼(`doc_title`)은 하나로 남고, 나머지(`sentence`, `label`)는 기록마다 하나씩인 목록이 됩니다.
+- **HIT당 단위 수**: 단위가 많으면(대략 10개 넘게) HIT를 여러 개로 자릅니다. 잘린 HIT에는 몇 번째 부분인지(`unit_part`)와 첫 단위의 번호(`unit_start`)가 남고, 단위 목록과 길이가 같은 목록(라벨 등)도 함께 잘립니다. 미리보기의 HIT 목록에 `HIT 2 (part 2)`처럼 표시됩니다.
+- **영상 frame**: 데이터에 frame 이미지 목록이나 시각 목록(초 또는 `m:ss`)이 있을 때만 frame 단위를 고릅니다. 시각이면 그 시각에 멈춘 영상을 보이고, 카드에 `This item is the frame at 0:01.50.`과 `Go to the frame` 버튼이 나옵니다. 영상 주소만 있으면 `Full video`로 정하고 이유를 알립니다.
+
+목록 길이가 HIT마다 다르면 짧은 HIT에서 남는 탭(보일 값이 모두 빈 탭)은 숨기고, 그 안의 문항은 필수에서 뺍니다.
+
+AI는 페이지의 모양도 짧은 문장 몇 개(`How the page looks`)로 정합니다. 문장이 있으면 페이지 LLM이 기본 배치를 그대로 다시 쓰고, 판정 LLM이 그린 페이지를 문장마다 대조합니다(아래). 문장이 없으면 기본 배치(값 다음 문항)를 씁니다.
+
+#### 대화 한 곳에서 고치기
+
+초안이 생기면 목표 칸이 `Ask for a change`로 바뀝니다. 과제의 내용, 단위, 페이지의 모양 중 무엇을 바꾸든 이 칸 하나에 적고 `Send`를 누릅니다(유료 호출, Ctrl/Cmd+Enter도 됩니다). AI가 요청이 무엇에 대한 것인지 판단해 그 부분만 바꿉니다.
+
+- 내용: "add a 1 to 5 confidence question", "rename the options to Supported and Not supported"
+- 단위: "make it sentence level", "one HIT per document". 단위 상자의 `Ask for another unit` 버튼(`Document`, `Chunk` 등)을 누르면 같은 요청이 대화로 갑니다.
+- 페이지: "put the passage on the left and the questions on the right", "make the options green"
+
+과제가 바뀌면 페이지도 자동으로 다시 쓰고 판정합니다. 답 하나에 AI의 설명, 바뀐 점(단위, 값, 문항, 대조 기준, 페이지 문장), 페이지 결과와 판정이 함께 나옵니다. 문항이 없어지거나 대조 기준·attention이 사라지면 빨간색으로 표시하며, `Restore`를 누르면 그때의 과제와 페이지로 함께 돌아갑니다(호출 없음). 처음부터 다시 하려면 `Start over`를 누릅니다.
+
+대화 대신 직접 고칠 수도 있습니다.
+
+- **폼으로 고치기**: `Edit the task`에서 안내문, 항목 반복과 HIT당 단위 수(`Units per HIT`), 페이지 문장(`How the page looks`, 한 줄에 하나), 보여 줄 값, 문항, 대조 기준, attention을 고칩니다. 문항을 지우면 그 문항의 대조 기준과 attention도 함께 지워집니다. 단위는 대화로 바꿉니다.
+- **JSON으로 고치기**: `Edit as JSON (advanced)`.
+
+직접 고친 뒤에는 페이지가 바뀐 내용을 아직 따르지 않을 수 있어 `The page`에 안내와 `Arrange the page again` 버튼이 나옵니다. 고친 과제와 맞지 않게 된 페이지는 쓰지 않고 기본 배치로 돌아갑니다.
+
+#### 페이지 판정
+
+다시 쓴 페이지는 화면 밖에서 실제로 그려 칸의 위치, 폭, 탭, 굵기, 글자 크기, 색, 강조 상자를 재고, 판정 LLM이 페이지 문장을 하나씩 `met`(✓), `not met`(✗), `unclear`(?)로 판정합니다(유료 호출). 맞지 않는 것이 있으면 페이지 LLM에게 고쳐 달라고 다시 묻고, 끝까지 남으면 페이지는 쓰되 경고로 보입니다. 과제가 정한 것(정답을 보이지 않는다, 단위마다 다른 값은 단위마다 보인다)과 어긋나는 요구는 판정하지 않고 `unclear`로 둡니다.
+
+Project 이름을 확인하고 `Use this task`를 누르면 Project가 저장되고, 단위대로 만든 HIT와 대조 기준·attention 설정이 Publish Batch로 넘어갑니다.
+
+#### 콘솔의 검사
 
 콘솔은 LLM의 답을 그대로 쓰지 않고 검사합니다. 걸리면 오류를 붙여 최대 3번 다시 묻고, 그래도 남으면 쓰지 않습니다.
 
-- 과제: 데이터에 있는 경로인지, 문항 이름과 선택지가 맞는지, worker에게 보일 글이 영어인지 봅니다. 정답·attention 컬럼이나 정답처럼 보이는 컬럼(`gold`, `labels`, `attention`, `..._check` 등)을 화면 값으로 쓰면 막습니다. 항목마다 다른 목록을 통째로 또는 고정 번호로 읽는 것도 모든 HIT를 세어 막습니다.
-- 페이지: 기본 배치의 값과 문항이 모두 같은 이름과 자리로 남아 있는지, 정답 컬럼을 쓰지 않는지, 허용한 요소만 쓰고 스크립트·외부 주소가 없는지 봅니다. 한 항목의 값을 모든 항목의 값처럼 한 번 더 보이거나, 값을 접힌 상자에 숨기는 것도 막습니다.
+- 단위: 단위가 있는지, 나눌 글과 묶을 컬럼이 데이터에 있는지, frame 단위에 영상이나 이미지 값이 있는지, frame 시각을 읽을 수 있는지 봅니다. HIT를 자르는 것은 키에 번호가 든 대조 기준(`map`, `selected`)과 함께 쓸 수 없습니다.
+- 과제: 단위대로 만든 HIT에 있는 경로인지, 문항 이름과 선택지가 맞는지, worker에게 보일 글이 영어인지 봅니다. 정답·attention 컬럼이나 정답처럼 보이는 컬럼(`gold`, `labels`, `attention`, `..._check` 등)을 화면 값으로 쓰면 막습니다. 단위마다 다른 목록을 통째로 또는 고정 번호로 읽는 것도 모든 HIT를 세어 막습니다.
+- 페이지: 기본 배치의 값과 문항이 모두 같은 이름과 자리로 남아 있는지, 정답 컬럼을 쓰지 않는지, 허용한 요소만 쓰고 스크립트·외부 주소가 없는지 봅니다. 한 단위의 값을 모든 단위의 값처럼 한 번 더 보이거나, 값을 접힌 상자에 숨기는 것도 막습니다.
 
-LLM 없이 과제를 붙여 넣어 시작할 수도 있습니다. 형식 설명서는 [agent/contract_reference.md](../agent/contract_reference.md), [agent/html_reference.md](../agent/html_reference.md), [agent/layout_reference.md](../agent/layout_reference.md)입니다. 같은 흐름을 시나리오로 시험하는 방법은 [scripts/html_experiment/README.md](../scripts/html_experiment/README.md)에 있습니다.
+LLM 없이 과제를 붙여 넣어 시작할 수도 있습니다(`Paste a task contract instead`). 형식 설명서는 [agent/contract_reference.md](../agent/contract_reference.md), [agent/html_reference.md](../agent/html_reference.md), [agent/layout_reference.md](../agent/layout_reference.md)입니다. 같은 흐름을 시나리오로 시험하는 방법은 [scripts/html_experiment/README.md](../scripts/html_experiment/README.md)에 있습니다.
 
-판정은 잰 값만 보므로 그림의 내용이나 글의 뜻은 판단하지 못하고, 판정 자체가 틀릴 수 있습니다. 미리보기도 함께 확인합니다.
+판정은 잰 값만 보므로 그림의 내용이나 글의 뜻은 판단하지 못하고, 판정 자체가 틀릴 수 있습니다. 미리보기도 함께 확인합니다. 글은 문장 부호와 줄바꿈으로 나누므로 약어(`Dr.`)가 많은 글은 문장이 잘못 나뉠 수 있습니다.
 
 ### 앞으로 할 일
 
-1. **원본 파일 올리기**: 지금은 이미 HIT로 묶인 파일만 받습니다. 원본 데이터를 받으려면 HIT 묶기와 attention 생성까지 함께 맡아야 합니다.
+1. **원본 파일 올리기**: `Draft with AI`는 정리된 JSON을 단위대로 묶고 나누지만, 가안으로 시작하는 흐름은 아직 이미 HIT로 묶인 파일만 받습니다. attention 항목을 만드는 일도 아직 없습니다.
 
 ### 다른 방법으로 시작하기
 

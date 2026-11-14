@@ -1,4 +1,4 @@
-// Describe your task 화면의 과제 폼. LLM 이 쓴 계약(값, 문항, 대조 기준, attention)을 드롭다운과 글 칸으로 고친다.
+// Draft with AI 화면의 과제 폼. LLM 이 쓴 계약(값, 문항, 대조 기준, attention)을 드롭다운과 글 칸으로 고친다.
 // JSON 편집기와 같은 계약을 고치며, 계산은 lib/contract-form.js 에 있다.
 // onChange(contract, structural): 드롭다운과 추가·삭제는 structural 이라 폼을 다시 그리고, 글을 치는 동안은 다시 그리지 않는다.
 
@@ -19,7 +19,9 @@ import {
   setReferenceValue,
   updateAttention,
   updateInstructions,
+  updateLayout,
   updateOption,
+  updatePerHit,
   updateQuestion,
   updateRepeat,
   updateValue,
@@ -51,7 +53,9 @@ export function contractForm({ get, reader, onChange }) {
       { className: 'bf-row' },
       control('Repeat for each element of', selectOf({ id: 'cf-repeat-over', value: contract.repeat?.over ?? '', choices: [['', 'Nothing (one item per HIT)'], ...choices.repeats], onChange: (value) => change((c) => updateRepeat(c, value, c.repeat?.label ?? 'Item')) }), 'Each element becomes its own tab or block, with its own answers.'),
       repeating ? control('Item title', textOf({ id: 'cf-repeat-label', value: contract.repeat?.label, placeholder: 'Item', onInput: (value) => type((c) => updateRepeat(c, c.repeat?.over, value)) })) : null,
+      repeating ? control('Units per HIT', textOf({ id: 'cf-per-hit', value: contract.repeat?.per_hit === undefined ? '' : String(contract.repeat.per_hit), placeholder: 'All of a record', onInput: (value) => type((c) => updatePerHit(c, value)) }), 'Longer records are cut into several HITs.') : null,
     ),
+    control('How the page looks', textOf({ id: 'cf-layout', value: (Array.isArray(contract.layout) ? contract.layout : []).join('\n'), placeholder: 'One wish per line, for example: Put the passage on the left and the questions on the right.', multiline: true, onInput: (value) => type((c) => updateLayout(c, value)) }), 'One wish per line. After you change them, arrange the page again. Ask in the chat to change the unit.'),
   );
 
   const values = el(

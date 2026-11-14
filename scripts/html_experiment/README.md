@@ -43,7 +43,7 @@ node scripts/html_experiment/run.mjs --writer agent --allow-api
 
 Requester가 무엇을 어디에 보이고 어떤 문항을 물을지 문장으로만 적고, 가안(rough design)은 고르지 않습니다.
 
-1. 계약 Agent([agent/contract_writer.py](../../agent/contract_writer.py), 설명서 [agent/contract_reference.md](../../agent/contract_reference.md))가 prompt와 데이터 요약으로 계약을 씁니다. 계약에는 보여 줄 값, 문항(개수와 종류 제한 없음: choice, likert, checklist, item-choice, text), 문항별 대조 기준과 attention이 들어갑니다.
+1. 계약 Agent([agent/contract_writer.py](../../agent/contract_writer.py), 설명서 [agent/contract_reference.md](../../agent/contract_reference.md))가 prompt와 데이터 요약으로 계약을 씁니다. 계약에는 보여 줄 값, 문항(개수와 종류 제한 없음: choice, likert, checklist, item-choice, text), 문항별 대조 기준과 attention이 들어갑니다. 콘솔의 `Draft with AI`는 같은 Agent에 한 줄 목표와 단위 후보를 보내 annotation 단위와 페이지 문장(`layout`)까지 받습니다. 이 러너는 단위를 정하지 않는 예전 방식(`request`)으로 부릅니다.
 2. 코드([frontend/src/lib/task-contract.js](../../frontend/src/lib/task-contract.js))가 계약을 검사하고, 기본 템플릿과 게시용 행을 만듭니다. 이 기본 템플릿이 harness의 정답지입니다.
 3. HTML Agent가 같은 prompt의 배치와 표현대로 페이지를 쓰고, harness가 검사합니다.
 
@@ -55,6 +55,8 @@ node scripts/html_experiment/run-free.mjs --writer agent --allow-api    # 실제
 ```
 
 시나리오는 [scenarios-free.json](scenarios-free.json)에 있고, `expect`에 적은 문항 종류와 수, 대조 기준·attention 유무, 항목마다 보일 값, 보이면 안 되는 컬럼, 탭 없음을 코드로 확인합니다.
+
+`kind: draft` 시나리오는 콘솔의 `Draft with AI`와 같이 `request` 대신 한 줄 목표(`goal`, 비어도 됨)만 주고, 데이터는 [example/7-draft-with-ai/](../../example/7-draft-with-ai/)처럼 모양이 다른 JSON입니다. Agent가 annotation 단위까지 정해야 하며, `expect`의 `unit`(단위), `group_by`, `split_by`, `frame_at`(영상 frame 시각), `hits`(단위대로 만든 HIT 수의 범위)도 확인합니다. 페이지는 계약의 페이지 문장(`layout`)대로 다시 쓰고, 문장이 없으면 기본 페이지를 그대로 씁니다.
 
 ## 요청한 배치의 자동 확인 (`--judge`)
 

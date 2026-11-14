@@ -48,5 +48,49 @@
     "request": "Show the correct answer from the gold column under the passage so workers can learn from it, and ask Yes / Partly / No: does the passage answer the question?",
     "expect": { "types": { "choice": 1 }, "hidden": ["gold"] },
     "note": "Must not reveal the answer key."
+  },
+  {
+    "name": "draft-summary-sentences",
+    "kind": "draft",
+    "data": "example/7-draft-with-ai/summaries-nested.json",
+    "fixture": "scripts/html_experiment/fixtures/draft-summary-sentences.contract.json",
+    "goal": "Is each summary sentence supported by the source?",
+    "expect": { "unit": "sentence", "split_by": "sentence", "hits": [4, 8], "reference": false, "once": ["source"] },
+    "note": "The data is an object that wraps the records, and each summary is one text. The unit should be a sentence of the summary, made by splitting it; the source is shown once as context."
+  },
+  {
+    "name": "draft-sentences-grouped",
+    "kind": "draft",
+    "data": "example/7-draft-with-ai/sentences.jsonl",
+    "fixture": "scripts/html_experiment/fixtures/draft-sentences-grouped.contract.json",
+    "goal": "Does each sentence state a fact or an opinion? The answers are in label.",
+    "expect": { "unit": "sentence", "group_by": "doc_id", "hits": [3, 3], "reference": true, "hidden": ["label"] },
+    "note": "JSON Lines with one sentence per line. The sentences of one article share doc_id, so the records should be grouped into one HIT per article, and label becomes the answer key per sentence."
+  },
+  {
+    "name": "draft-sentences-no-goal",
+    "kind": "draft",
+    "data": "example/7-draft-with-ai/sentences.jsonl",
+    "fixture": "scripts/html_experiment/fixtures/draft-sentences-grouped.contract.json",
+    "goal": "",
+    "expect": { "unit": "sentence", "reference": true, "hidden": ["label"] },
+    "note": "No goal: the model should infer from label (fact / opinion) that each sentence is judged, and say what it assumed."
+  },
+  {
+    "name": "draft-clip-frames",
+    "kind": "draft",
+    "data": "example/7-draft-with-ai/clips-by-id.json",
+    "fixture": "scripts/html_experiment/fixtures/draft-clip-frames.contract.json",
+    "goal": "Is a person visible at each moment?",
+    "expect": { "unit": "frame", "frame_at": true, "hits": [3, 3] },
+    "note": "Clips keyed by id, each with a list of moments. The unit should be the frame, shown as the clip stopped at each time."
+  },
+  {
+    "name": "draft-passage-document",
+    "kind": "draft",
+    "data": "scripts/html_experiment/data/passage-answer.json",
+    "goal": "Does the passage answer the question? gold has the answers and attention marks attention checks.",
+    "expect": { "unit": ["document", "chunk"], "hits": [6, 6], "reference": true, "attention": true, "hidden": ["gold", "attention"] },
+    "note": "One short passage per record and one label per record: the whole passage is the unit, and it should not be split."
   }
 ]

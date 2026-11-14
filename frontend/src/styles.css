@@ -947,3 +947,8 @@ p.muted {
     border-right: none;
   }
 }
+
+/* admin 의 API usage: 한 줄에 놓인 두 숫자 칸의 높이를 맞춘다 (pages/admin-usage.js) */
+#usage-spent .stat-row .stat + .stat {
+  margin-top: 0;
+}

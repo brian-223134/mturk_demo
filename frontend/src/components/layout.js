@@ -1,5 +1,5 @@
 // 레이아웃 세 가지.
-//   createLayout        Requester 콘솔: 제목 줄(환경 배지, 잔액, 계정 메뉴), 탭(Create, Manage, Worker Pool, admin 이면 Users), 오류 띠, 내용 영역
+//   createLayout        Requester 콘솔: 제목 줄(환경 배지, 잔액, 계정 메뉴), 탭(Create, Manage, Worker Pool, admin 이면 Users 와 API usage), 오류 띠, 내용 영역
 //   createWorkerLayout  worker 화면: 제목 줄(Worker ID, 계정 메뉴), 탭, 내용 영역
 //   createAuthLayout    로그인 전(로그인, 가입): 내용 영역만
 // 환경 배지와 잔액은 getAccount 로 채운다. 실패하면(backend 가 내려가 있음) 오류 띠에 안내를 보여 주고 화면은 계속 뜬다.
@@ -18,7 +18,10 @@ const TABS = [
   { key: 'manage', label: 'Manage', href: '/manage' },
   { key: 'workers', label: 'Worker Pool', href: '/workers' },
 ];
-const ADMIN_TABS = [{ key: 'users', label: 'Users', href: '/admin/users' }];
+const ADMIN_TABS = [
+  { key: 'users', label: 'Users', href: '/admin/users' },
+  { key: 'usage', label: 'API usage', href: '/admin/usage' },
+];
 const WORKER_TABS = [
   { key: 'worker-home', label: 'HITs', href: '/worker' },
   { key: 'worker-history', label: 'Your HITs', href: '/worker/history' },

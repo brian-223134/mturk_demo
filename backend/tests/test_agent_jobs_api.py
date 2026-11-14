@@ -376,7 +376,7 @@ def test_models_names_the_binding_model(client: TestClient) -> None:
     assert client.get("/api/agent/models").json()["binding_model"] == "deepseek-v4.1-flash"
 
 
-# ---- Describe your task: 자유 계약과 페이지 ----
+# ---- Draft with AI: 자유 계약과 페이지 --------
 
 CONTRACT_BODY = {
     "request": "Ask Yes or No for each passage. gold has the answers.",
@@ -459,6 +459,32 @@ def test_contract_reports_a_failed_call(make_client, monkeypatch) -> None:
         response = client.post("/api/agent/contracts", json=CONTRACT_BODY)
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "The model call failed: provider is down"
+
+
+def test_contract_draft_from_a_goal(make_client, monkeypatch) -> None:
+    """Draft with AI: 첫 초안은 한 줄 목표(비어도 됨)와 단위 후보로 쓴다. 고칠 때는 요청이 있어야 한다."""
+    seen = []
+
+    def fake_contract(config, api_key, allow_api, request, log_dir):
+        seen.append(request)
+        return {"contract": {"fields": []}, "cannot": None, "message": "ok", "usage": {"calls": 1}}
+
+    monkeypatch.setattr("app.routers.agent_jobs.write_contract", fake_contract)
+    units = {"records": 1, "split": []}
+    draft = {"goal": " Is each sentence supported? ", "data": CONTRACT_BODY["data"], "units": units, "allow_api": True}
+    with make_client(api_allowed=True) as client:
+        assert client.post("/api/agent/contracts", json=draft).status_code == 200
+        assert client.post("/api/agent/contracts", json={**draft, "goal": ""}).status_code == 200
+        for change, message in [
+            ({"goal": None}, '"request" must describe the task'),
+            ({"goal": 3}, '"goal"'),
+            ({"units": []}, '"units"'),
+            ({"current": {"fields": []}}, '"request" must say what to change'),
+        ]:
+            response = client.post("/api/agent/contracts", json={**draft, **change})
+            assert response.status_code == 400 and message in response.json()["error"]["message"], change
+    assert seen[0]["goal"] == "Is each sentence supported?" and seen[0]["units"] == units and seen[0]["request"] == ""
+    assert seen[1]["goal"] == ""
 
 
 def test_contract_revision_and_layout_check(make_client, monkeypatch) -> None:

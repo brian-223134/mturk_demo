@@ -49,7 +49,8 @@ from app.agent_jobs.models import (INPUT_DIR, PROMPT_TEXT_FILE, PROMPT_TEXT_MARK
 from app.agent_jobs.runner import SPEC_FILE, JobRunner
 from app.auth import current_user
 from app.errors import ApiError, invalid
-from app.routers.common import object_body, read_body
+from app.routers.common import db_of, object_body, read_body
+from app.usage import record_call
 from app.settings import ALLOW_API_VARIABLE, Settings
 
 log = logging.getLogger("backend")
@@ -359,12 +360,15 @@ async def create_binding(request: Request) -> dict:
     except PlannerError as error:
         raise invalid(f"The model call failed: {error}") from None
     served_by = result.pop("provider", None)  # 설정에 업체가 여럿이면 실제로 답한 업체는 응답을 봐야 안다
-    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
+    model = {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}
+    await asyncio.to_thread(record_call, db_of(request), current_user(request)["id"], "binding", result, model)   # admin 의 API usage 화면
+    return {**result, "model": model}
 
 
-# ---- Describe your task: 자유 계약과 페이지 ------------------------------------------------------------
-# 가안 없이 Requester 의 문장으로 HIT 를 만든다. 계약(값과 문항)을 묻는 /contracts, 계약으로 만든 기본 페이지를 요청대로 다시 쓰는
-# /pages 두 단계다. 검사와 재요청은 브라우저가 맡는다 (lib/task-contract.js, lib/html-harness.js).
+# ---- Draft with AI: 자유 계약과 페이지 ----------------------------------------------------------------
+# 가안 없이 HIT 를 만든다 (Draft with AI). 데이터와 한 줄 목표로 계약(단위, 값과 문항, 배치 바람)을 묻는 /contracts, 계약으로 만든
+# 기본 페이지를 배치 바람대로 다시 쓰는 /pages, 그린 페이지를 바람과 대조하는 /layout-checks 다. 검사와 재요청은 브라우저가 맡는다
+# (lib/task-unit.js, lib/task-contract.js, lib/html-harness.js).
 
 AGENT_REQUEST_LIMIT = 256 * 1024
 CONTRACT_DIR = "contracts"
@@ -386,21 +390,31 @@ def _check_size(data: dict, what: str) -> None:
 
 
 def contract_request(body: object) -> dict:
-    """POST /contracts 의 body: 요청 문장과 데이터 요약. 원본 파일은 오지 않는다."""
+    """POST /contracts 의 body: 데이터 요약과 한 줄 목표(goal, 비어도 됨) 또는 요청 문장, 단위 후보(units). 원본 파일은 오지 않는다.
+    처음 초안은 goal 만으로 쓸 수 있고(Draft with AI), 고칠 때(current)는 request 가 있어야 한다."""
     data = object_body(body, "contract request")
-    prompt, summary = data.get("request"), data.get("data")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise invalid('"request" must describe the task: what workers see and which questions they answer.')
-    if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
-        raise invalid('"data" must be a summary of the HIT data with "columns".')
-    errors, previous = _common_retry_fields(data, dict, "contract")
+    prompt, goal, summary, units = data.get("request"), data.get("goal"), data.get("data"), data.get("units")
     current, earlier = data.get("current"), data.get("earlier_requests")
+    if prompt is not None and not isinstance(prompt, str):
+        raise invalid('"request" must be a sentence.')
+    if goal is not None and not isinstance(goal, str):
+        raise invalid('"goal" must be one line about what to label.')
     if current is not None and not isinstance(current, dict):
         raise invalid('"current" must be the contract to revise.')
+    if current is not None and not (prompt or "").strip():
+        raise invalid('"request" must say what to change.')
+    if current is None and goal is None and not (prompt or "").strip():
+        raise invalid('"request" must describe the task, or "goal" must say what to label (it may be empty).')
+    if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
+        raise invalid('"data" must be a summary of the HIT data with "columns".')
+    if units is not None and not isinstance(units, dict):
+        raise invalid('"units" must be the unit options the console counted.')
+    errors, previous = _common_retry_fields(data, dict, "contract")
     if earlier is not None and not (isinstance(earlier, list) and all(isinstance(e, str) for e in earlier)):
         raise invalid('"earlier_requests" must be a list of strings.')
     _check_size(data, "contract")
-    return {"request": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous, "current": current, "earlier_requests": earlier or []}
+    return {"request": (prompt or "").strip(), "goal": (goal or "").strip(), "data": summary, "units": units, "errors": errors or [], "previous": previous,
+            "current": current, "earlier_requests": earlier or []}
 
 
 def page_request(body: object) -> dict:
@@ -422,7 +436,7 @@ def page_request(body: object) -> dict:
     return {"task_type": task_type, "request": prompt.strip(), "template": template, "columns": columns, "questions": questions, "errors": errors or [], "previous": previous}
 
 
-async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_api: bool) -> dict:
+async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_api: bool, kind: str) -> dict:
     """binding 과 같은 모델 설정으로 Agent 를 부른다. 호출마다 요청과 응답을 output/<folder>/ 에 남긴다."""
     settings = _settings(request)
     check_api_allowed(allow_api, settings)
@@ -438,7 +452,9 @@ async def _ask_agent(request: Request, writer, task: dict, folder: str, allow_ap
     except PlannerError as error:
         raise invalid(f"The model call failed: {error}") from None
     served_by = result.pop("provider", None)
-    return {**result, "model": {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}}
+    model = {"name": config.name, "model": config.model, "provider_tag": config.provider_tag, "served_by": served_by}
+    await asyncio.to_thread(record_call, db_of(request), current_user(request)["id"], kind, result, model)   # admin 의 API usage 화면
+    return {**result, "model": model}
 
 
 LAYOUT_DIR = "layout-checks"
@@ -464,7 +480,7 @@ async def create_contract(request: Request) -> dict:
     """요청 문장과 데이터 요약으로 LLM 에 자유 계약을 쓰게 한다 (유료 호출)."""
     body = await read_body(request)
     task = contract_request(body)
-    return await _ask_agent(request, write_contract, task, CONTRACT_DIR, body.get("allow_api") is True)
+    return await _ask_agent(request, write_contract, task, CONTRACT_DIR, body.get("allow_api") is True, "contract")
 
 
 @router.post("/pages")
@@ -472,7 +488,7 @@ async def create_page(request: Request) -> dict:
     """계약으로 만든 기본 페이지를 요청한 배치와 표현대로 LLM 에 다시 쓰게 한다 (유료 호출)."""
     body = await read_body(request)
     task = page_request(body)
-    return await _ask_agent(request, write_html, task, PAGE_DIR, body.get("allow_api") is True)
+    return await _ask_agent(request, write_html, task, PAGE_DIR, body.get("allow_api") is True, "page")
 
 
 @router.post("/layout-checks")
@@ -480,7 +496,7 @@ async def create_layout_check(request: Request) -> dict:
     """그려진 페이지가 요청한 배치·표현대로인지 LLM 에 판정하게 한다 (유료 호출). 결과는 경고와 고쳐 달라는 요청에만 쓴다."""
     body = await read_body(request)
     task = layout_request(body)
-    return await _ask_agent(request, judge_layout, task, LAYOUT_DIR, body.get("allow_api") is True)
+    return await _ask_agent(request, judge_layout, task, LAYOUT_DIR, body.get("allow_api") is True, "layout-check")
 
 
 @router.post("/job-groups", status_code=202)

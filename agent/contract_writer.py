@@ -1,9 +1,11 @@
-"""Agent 가 Requester 의 prompt 와 데이터 요약으로 자유 계약(task contract)을 쓰는 단계. 실험용이다 (scripts/html_experiment/).
+"""Design Agent: 데이터 요약과 한 줄 목표로 자유 계약(task contract)을 쓰고, 대화 한 곳에서 고친다 (Draft with AI, scripts/html_experiment/).
 
     build_messages(request)                                     요청 → chat completions 의 messages
     write_contract(config, api_key, allow_api, request, log_dir)  OpenRouter 호출 → {"contract", "message", "cannot", "usage", "provider"}
 
-계약은 보여 줄 값(fields)과 문항(questions)을 몇 개든 적고, 문항마다 대조 기준과 attention 을 단다. 가안(rough design)은 쓰지 않는다.
+계약은 annotation 단위(unit: sentence/chunk/document, image, video/frame)와 그 이유, 보여 줄 값(fields)과 문항(questions),
+문항마다 대조 기준과 attention, 페이지의 배치 바람(layout)을 적는다. 가안(rough design)은 쓰지 않는다.
+단위대로 기록을 묶고 나누는 일은 frontend/src/lib/task-unit.js 가 하고, 그 후보(units)를 요청에 담아 보낸다.
 검사·조립은 frontend/src/lib/task-contract.js 가 맡고, 실패하면 오류를 errors 에 담아 다시 부른다. 설명서는 contract_reference.md 다.
 
 명령줄: python3 -m agent.contract_writer <request.json> --out <reply.json> [--log-dir DIR] [--model-config NAME] [--allow-api]
@@ -23,7 +25,7 @@ from agent.planner.openrouter import OpenRouterPlanner, PlannerError, resolve_ap
 REFERENCE_FILE = Path(__file__).with_name("contract_reference.md")
 DEFAULT_MODEL = "deepseek-v4.1-flash"
 DEFAULT_ENV_FILE = Path("environment/.env")
-TASK_KEYS = ("request", "data")
+TASK_KEYS = ("goal", "request", "data", "units")
 
 
 def reference_text() -> str:
@@ -34,16 +36,29 @@ def _dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
+def _opening(request: dict, current: object) -> str:
+    if current:
+        return ("Revise the current task contract as requested. Decide whether the request changes the content, the unit or the page (layout), "
+                "and change only that. Write `message` in the language of `request`.")
+    if request.get("request"):
+        return "Write the task contract for this request. Decide the unit first. Write `message` in the language of `request`."
+    if str(request.get("goal") or "").strip():
+        return "Draft the task contract for this data and goal. Decide the unit first. Write `message` in the language of `goal`."
+    return ("Draft the task contract for this data. The requester gave no goal: infer the most likely goal from the data, "
+            "decide the unit, and say in `message` (in English) what you assumed.")
+
+
 def build_messages(request: dict) -> list[dict]:
-    """요청 {request, data, current?, earlier_requests?, previous?, errors?} → messages.
-    current 가 있으면 있는 계약을 요청대로 고치는 수정 요청이다. errors 가 있으면 이전 계약과 오류를 붙인다."""
-    task = {key: request[key] for key in TASK_KEYS if key in request}
+    """요청 {goal?, request?, data, units?, current?, earlier_requests?, previous?, errors?} → messages.
+    current 가 있으면 있는 계약을 요청대로 고치는 수정 요청이다. 처음에는 goal(한 줄 목표, 비어도 됨)이나 request 로 초안을 쓴다.
+    errors 가 있으면 이전 계약과 오류를 붙인다."""
+    task = {key: request[key] for key in TASK_KEYS if request.get(key) not in (None, "")}
     current = request.get("current")
     if current:
         task["current"] = current
         if request.get("earlier_requests"):
             task["earlier_requests"] = request["earlier_requests"]
-    opening = ("Revise the current task contract as requested." if current else "Write the task contract for this request.") + " Write `message` in the language of `request`."
+    opening = _opening(request, current)
     messages = [
         {"role": "system", "content": reference_text()},
         {"role": "user", "content": f"{opening}\n\n```json\n{_dump(task)}\n```"},

@@ -75,6 +75,7 @@ export const ACCOUNT_ROUTES = {
   listInvitations: { method: 'GET', path: '/admin/invitations', args: [] },
   createInvitation: { method: 'POST', path: '/admin/invitations', args: ['body'] },
   deleteInvitation: { method: 'DELETE', path: '/admin/invitations/:id', args: ['id'] },
+  getApiUsage: { method: 'GET', path: '/admin/usage', args: [] },
 };
 
 /** worker 의 작업 API. backend 에만 있고 worker 계정만 부른다 (backend/app/routes.py 의 WORKER_ROUTES 와 같다). */

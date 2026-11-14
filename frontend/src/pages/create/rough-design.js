@@ -1,6 +1,6 @@
 // New Project 의 첫 흐름: rough design 고르기 → task 종류 고르기와 예시 미리보기 → HIT 데이터를 넣어 미리 보기 → Publish Batch.
 //   /create/new                               가안 고르기. 도형 배치만 보이고, 아래에 다른 시작 방법으로 가는 링크가 있다.
-//       가안 옆의 Describe your task 카드는 가안 없이 문장으로 만드는 /create/new/describe 로 간다 (describe-task.js)
+//       맨 앞의 Draft with AI 카드는 데이터와 한 줄 목표로 AI 가 과제를 정하는 /create/new/describe 로 간다 (describe-task.js)
 //   /create/new/design/:designId(/:taskType)  Vision / Video / Text 고르기. 고른 가안에 예시 자료를 넣어 worker 화면으로 보인다
 //   /create/new/design/:designId/:taskType/data  이미 HIT 로 묶인 JSON 을 올리고 binding 으로 칸에 넣어 실제 데이터로 미리 본다.
 //       binding 은 요청 문장을 받아 LLM 이 쓰거나(유료 호출, 사용자가 허용해야 한다) 사람이 고친다.
@@ -29,7 +29,7 @@ import { pendingProjectNotice, presetChoice } from './new-project.js';
 
 const STEP_TITLES = ['Rough design', 'Task type and preview', 'HIT data'];
 const DESIGN_KEY = 'mturk-console:rough-design';
-const DESCRIBE = 'describe'; // 가안 대신 문장으로 시작하는 카드 (pages/create/describe-task.js)
+const DESCRIBE = 'describe'; // AI 가 먼저 정하는 Draft with AI 카드 (pages/create/describe-task.js)
 const PREVIEW_HEIGHT = 880;
 const CHECK_DEBOUNCE_MS = 400;
 const SAMPLE_ROW_LIMIT = 60 * 1024; // backend 의 sampleRow 상한(64KB)보다 조금 작게
@@ -112,15 +112,16 @@ export async function renderRoughDesigns(root, signal) {
   const next = el('button', { type: 'button', className: 'btn btn-primary', id: 'design-next', disabled: !chosen }, 'Next');
   next.addEventListener('click', () => chosen && navigate(chosen === DESCRIBE ? '/create/new/describe' : designPath(chosen)));
   const pendingSlot = el('div', { id: 'pending-project' });
+  // AI 가 먼저 정하고 사람이 고치는 Draft with AI 가 첫 카드다 (framework 의 Pipeline Design). 가안은 손으로 시작하는 길로 남긴다
   const choices = [
-    ...ROUGH_DESIGNS.map((design) => ({ id: design.id, className: '', picture: wireframe(design), title: `${design.letter}. ${design.title}`, summary: design.summary })),
     {
       id: DESCRIBE,
       className: ' describe-card',
-      picture: el('div', { className: 'wire', 'aria-hidden': 'true' }, el('div', { className: 'wire-instructions' }, 'Your words'), el('div', { className: 'wire-row', style: { flexGrow: '1' } }, el('div', { className: 'wire-box wire-open' }, el('span', {}, 'Values, questions and layout from your description')))),
-      title: 'Describe your task',
-      summary: 'No rough design. Describe what workers see, where it goes, and which questions they answer: any number and kind of questions.',
+      picture: el('div', { className: 'wire', 'aria-hidden': 'true' }, el('div', { className: 'wire-instructions' }, 'Your data + one-line goal'), el('div', { className: 'wire-row', style: { flexGrow: '1' } }, el('div', { className: 'wire-box wire-open' }, el('span', {}, 'The AI picks the unit, the questions and the page')))),
+      title: 'Draft with AI',
+      summary: 'Upload your data and say what to label. The AI decides the unit (sentence, chunk or document; full video or frame), the questions and the page; you refine it in one chat.',
     },
+    ...ROUGH_DESIGNS.map((design) => ({ id: design.id, className: '', picture: wireframe(design), title: `${design.letter}. ${design.title}`, summary: design.summary })),
   ];
   const cards = choices.map((design) => {
     const card = el(
@@ -157,7 +158,7 @@ export async function renderRoughDesigns(root, signal) {
       'section',
       { className: 'panel', id: 'rough-designs' },
       el('div', { className: 'panel-head' }, el('h3', { className: 'panel-title' }, 'Select a rough design')),
-      muted('Choose how the HIT is arranged on the page. These are layouts only; the next step shows one filled with sample data. Or choose Describe your task to write the whole HIT in your own words.'),
+      muted('Draft with AI lets the model design the whole HIT from your data and a one-line goal. Or choose a rough design to arrange the HIT yourself: these are layouts only, and the next step shows one filled with sample data.'),
       el('div', { className: 'choice-grid design-grid', id: 'design-grid' }, cards),
       el('div', { className: 'step-footer' }, next),
     ),
@@ -299,7 +300,7 @@ export function renderDesignTask(root, params, signal) {
   };
 }
 
-/** Project 를 저장한다. 이름과 layout 이 같은 Project 가 있으면 그것을 쓴다. Describe your task 화면도 쓴다. */
+/** Project 를 저장한다. 이름과 layout 이 같은 Project 가 있으면 그것을 쓴다. Draft with AI 화면도 쓴다. */
 export async function saveProject({ name, html, settings, sampleRow }) {
   const templates = await api.listTemplates();
   return findSameProject(templates, name, html) ?? api.saveTemplate(toSaveRequest({ projectId: null, name, html, settings, sampleRow }));

@@ -105,6 +105,7 @@ export const admin = {
   listInvitations: () => call('listInvitations'),
   createInvitation: (body) => call('createInvitation', [body]),
   deleteInvitation: (id) => call('deleteInvitation', [id]),
+  getApiUsage: () => call('getApiUsage'),
 };
 
 /** worker 의 작업 API (HIT 받기, 작업 화면, 제출, 반납, 내 HIT). */

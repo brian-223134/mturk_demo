@@ -9,7 +9,12 @@
 //   harnessContract(contract, reader)              → html-harness 가 쓰는 계약 { html, data, tabs, shown, hidden, roles, questions, answerColumns }
 //   requestContract({ send, check, request })      → Agent 에게 계약을 묻고 검사해 최대 3번 다시 묻는다
 //
-// 컬럼 이름: 값은 f_<id>(항목마다면 f_<id>_<탭>), 항목 목록은 q_<문항>_items(_<탭>). 답 이름은 <문항>(_<탭>), 항목별 문항은 그 뒤에 _<항목>.
+// 컬럼 이름: 값은 f_<id>(항목마다면 f_<id>_<탭>), 항목 목록은 q_<문항>_items(_<탭>), 탭에 항목이 있는지는 t_<탭>. 답 이름은 <문항>(_<탭>), 항목별 문항은 그 뒤에 _<항목>.
+//
+// Draft with AI 에서 더한 키 (계약 검사는 단위대로 바꾼 HIT 표로 한다. lib/task-unit.js):
+//   unit    annotation 단위와 그 이유. 기록을 묶고 나누는 계획도 여기 있다 (task-unit.js 가 읽는다)
+//   layout  페이지의 배치·표현 바람 목록 (영어 문장). 페이지 Agent 가 이대로 다시 쓰고 판정 Agent 가 대조한다
+//   fields[].at  영상의 한 장면(frame): 시각(초 또는 m:ss)의 경로. 주소 뒤에 #t=<초> 를 붙여 그 시각에서 멈춘 영상을 보인다
 
 import { ANSWER_NAME, NOT_ENGLISH, URL_LIKE, displayText, escapeHtml, itemsCell, parsePath, resolvePath } from './design-binding.js';
 import { placeholderRoles } from './html-harness.js';
@@ -25,6 +30,8 @@ const CHECK_ROWS = 20;
 // 정답처럼 보이는 컬럼 이름. 대조 기준으로 밝히지 않고 화면에 쓰면 오류다 (Requester 가 정답 컬럼을 말하지 않은 경우를 막는다)
 // attention 표시도 worker 에게 보이면 어느 항목이 attention 인지 드러나므로 같이 막는다
 const ANSWER_LIKE = /(^|_)(gold|labels?|answers?|expected|truth|correct|check|attention)$/i;
+const TIME = /^\s*(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)\s*$/;
+const LAYOUT_WISHES = 12;
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const asItems = (value) => (Array.isArray(value) ? value : value === null || value === undefined || value === '' ? [] : [value]);
@@ -36,15 +43,30 @@ const fieldsOf = (contract) => (Array.isArray(contract?.fields) ? contract.field
 const questionsOf = (contract) => (Array.isArray(contract?.questions) ? contract.questions.filter(isObject) : []);
 const referencesOf = (contract) => (contract?.reference === undefined ? [] : asItems(contract.reference).filter(isObject));
 
-/** 값 하나가 탭마다 다른지: 경로에 [i] 가 있으면 항목마다다. */
-const fieldPerItem = (field) => {
-  const parsed = parsePath(field.from);
+/** "12.5", 12.5, "1:05", "0:01:05.2" → 초. 읽을 수 없으면 null. */
+export function timeSeconds(value) {
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
+  const text = String(value ?? '').trim();
+  if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
+  const match = TIME.exec(text);
+  if (!match) return null;
+  return Number(match[1] ?? 0) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+/** 값 하나가 탭마다 다른지: 경로(또는 frame 시각의 경로)에 [i] 가 있으면 항목마다다. */
+const fieldPerItem = (field) => [field.from, field.at].some((path) => {
+  const parsed = path === undefined ? null : parsePath(path);
   return Boolean(parsed && usesItem(parsed));
-};
+});
+const layoutOf = (contract) => (Array.isArray(contract?.layout) ? contract.layout.filter((wish) => typeof wish === 'string' && wish.trim() !== '') : []);
+/** 페이지 Agent 와 판정 Agent 에게 보낼 배치 바람. 없으면 ''. */
+export const layoutText = (contract) => layoutOf(contract).map((wish) => `- ${wish.trim()}`).join('\n');
 /** 문항이 탭마다 따로인지: repeat 이 있으면 기본으로 그렇고, per_item: false 면 HIT 에 한 번이다. */
 const questionPerItem = (contract, question) => Boolean(contract.repeat) && question.per_item !== false;
 
 const fieldColumn = (field, tab) => `f_${field.id}${tab === null ? '' : `_${tab + 1}`}`;
+/** 탭에 이 HIT 의 항목이 있는지 ("1" 또는 ''). <ann-tab present> 가 읽어 빈 탭을 숨긴다 (Agent 가 값을 어떤 요소에 넣든 같게) */
+export const presentColumn = (tab) => `t_${tab + 1}`;
 const itemsColumn = (question, tab) => `q_${question.name}_items${tab === null ? '' : `_${tab + 1}`}`;
 const answerBase = (question, tab) => `${question.name}${tab === null ? '' : `_${tab + 1}`}`;
 
@@ -175,12 +197,16 @@ export function checkContract(contract, reader) {
       else {
         tabs = Math.max(0, ...counts);
         if (tabs === 0) errors.push(`repeat.over: "${contract.repeat.over}" is empty in every HIT.`);
-        else if (Math.min(...counts) !== tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${tabs}). Shorter HITs show empty items.`);
+        else if (Math.min(...counts) !== tabs) warnings.push(`HITs have different numbers of items (${Math.min(...counts)} to ${tabs}). Shorter HITs hide the tabs they do not need.`);
       }
     }
   }
 
   if (typeof contract.instructions !== 'string' || contract.instructions.trim() === '') errors.push('"instructions" must be one or two sentences for workers.');
+  if (contract.layout !== undefined) {
+    if (!Array.isArray(contract.layout) || contract.layout.some((wish) => typeof wish !== 'string')) errors.push('"layout" must be a list of short sentences about the page, like ["Put the passage on the left and the questions on the right."].');
+    else if (contract.layout.length > LAYOUT_WISHES) errors.push(`"layout" has ${contract.layout.length} wishes; keep at most ${LAYOUT_WISHES}.`);
+  }
 
   // fields: 보여 줄 값
   const fields = fieldsOf(contract);
@@ -194,6 +220,19 @@ export function checkContract(contract, reader) {
     const kind = field.kind ?? 'text';
     if (!FIELD_KINDS.includes(kind)) errors.push(`${where}: "kind" must be text, image or video.`);
     const parsed = checkPath(`${where}.from`, field.from);
+    if (field.at !== undefined) {
+      const at = kind === 'video' ? checkPath(`${where}.at`, field.at) : null;
+      if (kind !== 'video') errors.push(`${where}: "at" (a frame time) is only for a video value.`);
+      else if (at) {
+        for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+          const value = resolvePath(at, reader.cell(rowIndex, at.column), 0);
+          if (value !== undefined && value !== null && value !== '' && timeSeconds(value) === null) {
+            errors.push(`${where}.at: "${field.at}" is not a time in HIT ${rowIndex + 1} (${JSON.stringify(value)}). Use seconds (12.5) or m:ss (1:05).`);
+            break;
+          }
+        }
+      }
+    }
     if (parsed && kind !== 'text') {
       for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
         const value = displayText(resolvePath(parsed, reader.cell(rowIndex, parsed.column), 0));
@@ -332,6 +371,26 @@ export function checkContract(contract, reader) {
       else if (answers === 0) warnings.push(`reference for "${ref.question}" covers no answers.`);
     }
   }
+  // attention 의 기대 답은 대조 기준(정답)이 attention 항목에 주는 라벨과 같아야 한다. Agent 는 표본에서 attention 항목을 못 볼 수 있다
+  if (errors.length === 0 && contract.attention?.expected !== undefined && referencesOf(contract).some((ref) => ref.question === contract.attention.question)) {
+    const keyOnly = { ...contract, attention: undefined };
+    const labels = new Map(); // 라벨 → attention 항목이 있는 HIT 번호들
+    for (let rowIndex = 0; rowIndex < reader.rowCount; rowIndex += 1) {
+      const expected = attentionValues(contract, tabs, reader, rowIndex);
+      if (Object.keys(expected).length === 0) continue;
+      const key = referenceValues(keyOnly, tabs, reader, rowIndex).values;
+      for (const name of Object.keys(expected)) {
+        if (key[name] === undefined) continue;
+        if (!labels.has(key[name])) labels.set(key[name], new Set());
+        labels.get(key[name]).add(rowIndex + 1);
+      }
+    }
+    const expected = String(contract.attention.expected);
+    if (labels.size === 1 && !labels.has(expected)) {
+      const [[label, hits]] = [...labels];
+      errors.push(`attention.expected: "${expected}" disagrees with the answer key, which gives "${label}" to every attention item (HIT ${[...hits].slice(0, 5).join(', ')}). Use "${label}".`);
+    } else if (labels.size > 1 && !labels.has(expected)) warnings.push(`The answer key gives attention items ${[...labels.keys()].map((label) => `"${label}"`).join(' or ')}, but attention checks expect "${expected}".`);
+  }
   return { errors: [...new Set(errors)], warnings, tabs };
 }
 
@@ -366,6 +425,11 @@ function questionLines(contract, question, tab) {
   }
 }
 
+/** 템플릿에 탭이 생기는지: 항목 목록이 있고 항목마다 보일 값이나 문항이 있을 때다. */
+function hasTabs(contract, tabs) {
+  return Boolean(contract.repeat) && tabs > 0 && (fieldsOf(contract).some(fieldPerItem) || questionsOf(contract).some((q) => questionPerItem(contract, q)));
+}
+
 /** 계약의 기본 템플릿: 한 번만 보일 값 → 항목마다의 값과 문항(탭) → 한 번만 묻는 문항. 배치를 바꾸는 것은 Agent 의 HTML 이다. */
 export function buildContractTemplate(contract, tabs) {
   const fields = fieldsOf(contract);
@@ -375,10 +439,10 @@ export function buildContractTemplate(contract, tabs) {
   for (const field of fields.filter((f) => !fieldPerItem(f))) lines.push(...indent(fieldLines(field, null), 1));
   const itemFields = fields.filter(fieldPerItem);
   const itemQuestions = questions.filter((q) => questionPerItem(contract, q));
-  if (contract.repeat && tabs > 0 && (itemFields.length > 0 || itemQuestions.length > 0)) {
+  if (hasTabs(contract, tabs)) {
     lines.push('', '  <ann-tabs>');
     for (let tab = 0; tab < tabs; tab += 1) {
-      lines.push(`    <ann-tab header="${attr(contract.repeat.label ?? 'Item')} ${tab + 1}">`);
+      lines.push(`    <ann-tab header="${attr(contract.repeat.label ?? 'Item')} ${tab + 1}" present="\${${presentColumn(tab)}}">`);
       for (const field of itemFields) lines.push(...indent(fieldLines(field, tab), 3));
       for (const question of itemQuestions) lines.push(...indent(questionLines(contract, question, tab), 3));
       lines.push('    </ann-tab>');
@@ -396,17 +460,25 @@ export function buildContractTemplate(contract, tabs) {
 export function contractRow(contract, tabs, reader, rowIndex) {
   const fields = fieldsOf(contract);
   const questions = questionsOf(contract);
-  const consumed = new Set([...fields.map((f) => f.from), ...questions.filter((q) => typeof q.items === 'string').map((q) => q.items)].map((path) => parsePath(path)?.column).filter(Boolean));
+  const consumed = new Set([...fields.flatMap((f) => [f.from, f.at].filter((path) => path !== undefined)), ...questions.filter((q) => typeof q.items === 'string').map((q) => q.items)].map((path) => parsePath(path)?.column).filter(Boolean));
   const row = {};
   for (const column of reader.columns) if (!consumed.has(column)) row[column] = reader.raw(rowIndex, column);
   for (const field of fields) {
     for (const tab of tabIndexes(fieldPerItem(field), tabs)) {
       const text = displayText(readPath(field.from, reader, rowIndex, tab));
-      row[fieldColumn(field, tab)] = (field.kind ?? 'text') === 'text' ? escapeHtml(text) : text.replace(/"/g, '%22');
+      // frame: 주소 뒤의 #t=<초> 로 그 시각의 장면을 보인다 (ann-video 가 멈춰 둔다)
+      const seconds = field.at === undefined ? null : timeSeconds(readPath(field.at, reader, rowIndex, tab));
+      const src = seconds === null ? text : `${text.replace(/#.*$/, '')}#t=${seconds}`;
+      row[fieldColumn(field, tab)] = (field.kind ?? 'text') === 'text' ? escapeHtml(text) : src.replace(/"/g, '%22');
     }
   }
   for (const question of questions.filter((q) => typeof q.items === 'string')) {
     for (const tab of tabIndexes(questionPerItem(contract, question), tabs)) row[itemsColumn(question, tab)] = itemsCell(readPath(question.items, reader, rowIndex, tab));
+  }
+  if (hasTabs(contract, tabs)) {
+    const items = readPath(contract.repeat.over, reader, rowIndex, null);
+    const count = Array.isArray(items) ? items.length : 0;
+    for (let tab = 0; tab < tabs; tab += 1) row[presentColumn(tab)] = tab < count ? '1' : '';
   }
   if (referencesOf(contract).length > 0) row[REFERENCE_COLUMN] = JSON.stringify(referenceValues(contract, tabs, reader, rowIndex).values);
   if (contract.attention?.expected !== undefined) row[ATTENTION_COLUMN] = JSON.stringify(attentionValues(contract, tabs, reader, rowIndex));
@@ -441,7 +513,7 @@ export function contractTaskType(contract) {
 
 /**
  * 화면에 보일 계약의 요약. Requester 가 Agent 가 무엇을 정했는지 읽고 확인하는 데 쓴다.
- * → { values: [{ label, from, kind, perItem }], questions: [{ name, type, header, answers, perItem, compared, attention }], itemLabel }
+ * → { values: [{ label, from, kind, perItem }], questions: [{ name, type, header, answers, perItem, compared, attention }], itemLabel, layout: [바람] }
  */
 export function contractOutline(contract) {
   const references = new Set(referencesOf(contract).map((ref) => ref.question));
@@ -453,8 +525,9 @@ export function contractOutline(contract) {
     return [options, items].filter(Boolean).join('; ');
   };
   return {
-    itemLabel: contract?.repeat ? `${contract.repeat.label ?? 'Item'} (one per element of ${contract.repeat.over})` : null,
-    values: fieldsOf(contract).map((field) => ({ label: field.label ?? field.id, from: field.from, kind: field.kind ?? 'text', perItem: fieldPerItem(field) })),
+    itemLabel: contract?.repeat ? `${contract.repeat.label ?? 'Item'} (one per element of ${contract.repeat.over}${contract.repeat.per_hit ? `, at most ${contract.repeat.per_hit} per HIT` : ''})` : null,
+    values: fieldsOf(contract).map((field) => ({ label: field.label ?? field.id, from: field.at === undefined ? field.from : `${field.from} at ${field.at}`, kind: field.at === undefined ? field.kind ?? 'text' : 'frame', perItem: fieldPerItem(field) })),
+    layout: layoutOf(contract),
     questions: questionsOf(contract).map((question) => ({
       name: question.name,
       type: question.type,

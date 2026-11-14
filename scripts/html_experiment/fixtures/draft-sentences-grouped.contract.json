@@ -1,0 +1,49 @@
+{
+  "unit": {
+    "level": "sentence",
+    "why": "label has one label per sentence, and sentences of one article share doc_id.",
+    "group_by": "doc_id"
+  },
+  "instructions": "Decide whether each sentence states a fact or an opinion.",
+  "repeat": {
+    "over": "sentence",
+    "label": "Sentence"
+  },
+  "fields": [
+    {
+      "id": "title",
+      "label": "Article",
+      "from": "doc_title"
+    },
+    {
+      "id": "sentence",
+      "label": "Sentence",
+      "from": "sentence[i]"
+    }
+  ],
+  "questions": [
+    {
+      "name": "kind",
+      "type": "choice",
+      "header": "Does this sentence state a fact or an opinion?",
+      "options": [
+        [
+          "fact",
+          "Fact"
+        ],
+        [
+          "opinion",
+          "Opinion"
+        ]
+      ],
+      "layout": "horizontal"
+    }
+  ],
+  "reference": [
+    {
+      "question": "kind",
+      "value": "label[i]"
+    }
+  ],
+  "layout": []
+}

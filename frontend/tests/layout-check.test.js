@@ -29,6 +29,7 @@ describe('layout-check', () => {
     assert.equal(request.request, 'Put it left.');
     assert.deepEqual(request.page, { width: 1, blocks: [] });
     assert.ok(request.fixed.some((rule) => rule.includes('never shown to workers')));
+    assert.ok(request.fixed.some((rule) => rule.includes('header above its options')), '문항 제목을 숨기라는 판정이 나오지 않게');
     assert.equal(request.fixed.at(-1), 'X is fixed.');
   });
 
