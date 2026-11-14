@@ -1,8 +1,9 @@
-// 자유 계약 실험의 러너: Requester 의 prompt 하나로 가안 없이 HIT 페이지를 만든다.
-//   1. 계약 Agent(agent.contract_writer): prompt + 데이터 요약 → 계약(값, 문항 몇 개든, 문항별 대조 기준·attention). checkContract 로 검사, 최대 3번
-//   2. 코드: 계약 → 기본 템플릿(정답지)과 게시용 행 (lib/task-contract.js)
-//   3. HTML Agent(agent.html_writer): 같은 prompt 의 배치·표현대로 페이지를 쓴다. html-harness 의 정적 검사와 Chrome 렌더 검사, 최대 3번
-// 시나리오의 expect(문항 종류와 수, 대조 기준·attention 유무, 한 번만·항목마다 보일 값, 보이면 안 되는 컬럼, 탭 없음)도 코드로 확인한다.
+// 자유 계약 실험의 러너: Requester 의 prompt 하나(또는 Draft with AI 처럼 한 줄 목표)로 가안 없이 HIT 페이지를 만든다.
+//   1. 계약 Agent(agent.contract_writer): prompt 나 goal + 데이터 요약 + 단위 후보 → 계약(단위, 값, 문항 몇 개든, 문항별 대조 기준·attention,
+//      페이지 문장). checkDesign 으로 단위대로 HIT 표를 만들어 검사, 최대 3번. goal 시나리오는 unit 이 있어야 한다
+//   2. 코드: 계약 → 기본 템플릿(정답지)과 게시용 행 (lib/task-unit.js, lib/task-contract.js)
+//   3. HTML Agent(agent.html_writer): 계약의 페이지 문장(layout, 없으면 prompt)대로 페이지를 쓴다. html-harness 의 정적 검사와 Chrome 렌더 검사, 최대 3번
+// 시나리오의 expect(단위, HIT 수, 문항 종류와 수, 대조 기준·attention 유무, 한 번만·항목마다 보일 값, 보이면 안 되는 컬럼, 탭 없음)도 코드로 확인한다.
 //
 //   node scripts/html_experiment/run-free.mjs --writer reference           fixture 계약과 기본 템플릿으로 흐름만 점검 (호출 없음)
 //   node scripts/html_experiment/run-free.mjs --writer agent --allow-api   실제 LLM 호출 (유료)
@@ -15,9 +16,10 @@ import { parseArgs } from 'node:util';
 
 import { dataReader, parsePath, summarizeData } from '../../frontend/src/lib/design-binding.js';
 import { checkAgentHtml, compareRendered, requestHtml } from '../../frontend/src/lib/html-harness.js';
-import { parseJsonData } from '../../frontend/src/lib/json-data.js';
+import { parseRecordsJson } from '../../frontend/src/lib/json-records.js';
 import { fixedFromOutline } from '../../frontend/src/lib/layout-check.js';
-import { checkContract, contractOutline, harnessContract, requestContract } from '../../frontend/src/lib/task-contract.js';
+import { contractOutline, harnessContract, layoutText, requestContract } from '../../frontend/src/lib/task-contract.js';
+import { checkDesign, unitOptions } from '../../frontend/src/lib/task-unit.js';
 import { ROOT, buildRequest, checksText, groupRowErrors, layoutReviewer, pythonSender, stamp } from './common.mjs';
 import { findChrome, renderPages, screenshot } from './render.mjs';
 
@@ -38,9 +40,15 @@ const { values: args } = parseArgs({
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 const addCost = (...usages) => usages.reduce((sum, usage) => sum + (usage?.cost ?? 0), 0);
 
-/** 계약과 최종 HTML 이 시나리오의 기대와 다른 점들. */
-export function expectationFailures(contract, html, expect = {}) {
+/** 계약과 최종 HTML 이 시나리오의 기대와 다른 점들. hits 는 단위대로 만든 HIT 수다. */
+export function expectationFailures(contract, html, expect = {}, hits = null) {
   const failures = [];
+  const unit = contract?.unit ?? {};
+  if (expect.unit && !(Array.isArray(expect.unit) ? expect.unit : [expect.unit]).includes(unit.level)) failures.push(`단위 ${[expect.unit].flat().join(' 또는 ')} 를 기대했으나 ${unit.level ?? '없음'}`);
+  if (expect.group_by !== undefined && unit.group_by !== expect.group_by) failures.push(`group_by ${expect.group_by} 를 기대했으나 ${unit.group_by ?? '없음'}`);
+  if (expect.split_by !== undefined && unit.split?.by !== expect.split_by) failures.push(`split ${expect.split_by} 를 기대했으나 ${unit.split?.by ?? '없음'}`);
+  if (expect.frame_at && !(contract?.fields ?? []).some((field) => field.kind === 'video' && field.at)) failures.push('영상 값에 frame 시각(at)이 없음');
+  if (expect.hits && hits !== null && (hits < expect.hits[0] || hits > expect.hits[1])) failures.push(`HIT ${expect.hits[0]}~${expect.hits[1]}개를 기대했으나 ${hits}개`);
   const questions = contract?.questions ?? [];
   const fields = contract?.fields ?? [];
   if (expect.types) {
@@ -77,7 +85,10 @@ function taskTypeOf(contract) {
 async function runScenario(scenario, outRoot, chrome) {
   const dir = join(outRoot, scenario.name);
   mkdirSync(dir, { recursive: true });
-  const reader = dataReader(parseJsonData(read(scenario.data), scenario.data));
+  const data = parseRecordsJson(read(scenario.data), scenario.data);
+  const reader = dataReader(data);
+  const drafting = scenario.goal !== undefined; // Draft with AI: 한 줄 목표만 준다
+  const checkOf = (contract) => checkDesign(contract, data, { requireUnit: drafting });
   const maxAttempts = Number(args['max-attempts']);
   const agent = args.writer === 'agent';
   const started = Date.now();
@@ -86,11 +97,12 @@ async function runScenario(scenario, outRoot, chrome) {
   let contractResult;
   if (agent) {
     const send = pythonSender({ module: 'agent.contract_writer', dir, prefix: 'contract-', allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] });
-    contractResult = await requestContract({ send, check: (contract) => checkContract(contract, reader), request: { request: scenario.request, data: summarizeData(reader) }, maxAttempts });
+    const ask = drafting ? { goal: scenario.goal } : { request: scenario.request };
+    contractResult = await requestContract({ send, check: checkOf, request: { ...ask, data: summarizeData(reader), units: unitOptions(reader) }, maxAttempts });
   } else {
     if (!scenario.fixture) return { name: scenario.name, kind: scenario.kind, outcome: 'skipped', success: true, note: 'fixture 가 없어 reference 실행에서 건너뜀' };
     const contract = JSON.parse(read(scenario.fixture));
-    contractResult = { contract, message: null, cannot: null, errors: checkContract(contract, reader).errors, attempts: 0, usage: { calls: 0 }, history: [] };
+    contractResult = { contract, message: null, cannot: null, errors: checkOf(contract).errors, attempts: 0, usage: { calls: 0 }, history: [] };
   }
   writeFileSync(join(dir, 'contract.json'), JSON.stringify(contractResult.contract, null, 2));
   const base = {
@@ -105,9 +117,10 @@ async function runScenario(scenario, outRoot, chrome) {
     return { ...base, outcome, success: scenario.kind === 'trap' && outcome === 'cannot', expectation_failures: [], cost: addCost(contractResult.usage), seconds: (Date.now() - started) / 1000 };
   }
 
-  // 2. 정답지
-  const contract = harnessContract(contractResult.contract, reader);
+  // 2. 정답지 (단위대로 만든 HIT 표로)
+  const contract = harnessContract(contractResult.contract, checkOf(contractResult.contract).reader);
   const rows = contract.data.rows;
+  const wish = layoutText(contractResult.contract) || scenario.request || ''; // 콘솔처럼 계약의 페이지 문장으로 다시 쓴다
   writeFileSync(join(dir, 'template.html'), contract.html);
   let reference = null;
   if (chrome) {
@@ -131,15 +144,18 @@ async function runScenario(scenario, outRoot, chrome) {
     return { errors: groupRowErrors(compareRendered(contract, reference, rendered).errors), warnings: result.warnings };
   };
   const judging = args.judge && chrome && agent;
-  const reviewer = (prefix) => layoutReviewer({ dir, prefix, requestText: scenario.request, render: (html) => layouts.get(html), allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'], fixed: fixedFromOutline(contractOutline(contractResult.contract)) });
-  const review = judging ? reviewer('judge-') : undefined;
+  const reviewer = (prefix) => layoutReviewer({ dir, prefix, requestText: wish, render: (html) => layouts.get(html), allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'], fixed: fixedFromOutline(contractOutline(contractResult.contract)) });
+  const review = judging && wish ? reviewer('judge-') : undefined;
   const send = agent
     ? pythonSender({ module: 'agent.html_writer', dir, prefix: 'html-', allowApi: args['allow-api'], python: args.python, modelConfig: args['model-config'] })
     : async () => ({ html: contract.html, message: 'Used the contract template unchanged.' });
-  const htmlResult = await requestHtml({ send, check, review, request: buildRequest(contract, scenario.request, taskTypeOf(contractResult.contract)), maxAttempts });
-  const templateReview = judging ? await reviewer('judge-template-')(contract.html) : null;
+  // 페이지 문장이 없으면 기본 페이지를 그대로 쓴다 (콘솔과 같음)
+  const htmlResult = wish
+    ? await requestHtml({ send, check, review, request: buildRequest(contract, wish, taskTypeOf(contractResult.contract)), maxAttempts })
+    : { html: contract.html, message: 'No page wishes: the plain layout.', cannot: null, errors: (await check(contract.html)).errors, notes: [], checks: [], attempts: 0, usage: { calls: 0 }, history: [] };
+  const templateReview = judging && wish ? await reviewer('judge-template-')(contract.html) : null;
   const outcome = htmlResult.cannot ? 'cannot' : htmlResult.errors.length === 0 ? 'pass' : 'html-fail';
-  const failures = outcome === 'pass' ? expectationFailures(contractResult.contract, htmlResult.html, scenario.expect) : [];
+  const failures = outcome === 'pass' ? expectationFailures(contractResult.contract, htmlResult.html, scenario.expect, rows.length) : [];
   if (outcome === 'pass' && chrome) {
     screenshot({ html: htmlResult.html, row: rows[0], chrome, workDir: dir, file: 'final-wide', width: 1100 });
     screenshot({ html: htmlResult.html, row: rows[0], chrome, workDir: dir, file: 'final-phone', width: 420, height: 1600 });
@@ -155,6 +171,8 @@ async function runScenario(scenario, outRoot, chrome) {
     layout_checks: judging ? htmlResult.checks : null,
     template_layout_checks: templateReview?.checks ?? null,
     questions: contractResult.contract.questions.map((q) => `${q.name}:${q.type}`),
+    unit: contractResult.contract.unit ?? null,
+    layout: contractResult.contract.layout ?? null,
     cost: addCost(contractResult.usage, htmlResult.usage, templateReview?.usage),
     calls: (contractResult.usage.calls ?? 0) + (htmlResult.usage.calls ?? 0),
     seconds: Math.round((Date.now() - started) / 100) / 10,
@@ -172,11 +190,12 @@ function summary(results, meta) {
     `- 렌더 검사: ${meta.render ? '했음 (Chrome)' : '하지 않음'}`,
     `- 성공 ${results.filter((r) => r.success && r.outcome !== 'skipped').length} / ${results.filter((r) => r.outcome !== 'skipped').length}, 비용 합계 $${results.reduce((sum, r) => sum + (r.cost ?? 0), 0).toFixed(4)}`,
     '',
-    '| 시나리오 | 종류 | 결과 | 계약 시도 | HTML 시도 | 문항 | 기대와 다른 점 | 배치 판정(최종) | 배치 판정(기본 페이지) | 비용 | 시간(초) |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| 시나리오 | 종류 | 결과 | 계약 시도 | HTML 시도 | 단위 | HIT | 문항 | 기대와 다른 점 | 배치 판정(최종) | 배치 판정(기본 페이지) | 비용 | 시간(초) |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const r of results) {
-    lines.push(`| ${r.name} | ${r.kind} | ${r.success ? '성공' : '실패'} (${r.outcome}) | ${r.contract_attempts ?? '-'} | ${r.html_attempts ?? '-'} | ${cell((r.questions ?? []).join(', '))} | ${cell((r.expectation_failures ?? []).join('; ') || r.error || '')} | ${checksText(r.layout_checks)} | ${checksText(r.template_layout_checks)} | ${r.cost ? `$${r.cost.toFixed(4)}` : '-'} | ${r.seconds ?? '-'} |`);
+    const unit = r.unit ? `${r.unit.level}${r.unit.group_by ? `, group_by ${r.unit.group_by}` : ''}${r.unit.split ? `, split ${r.unit.split.by}` : ''}` : '-';
+    lines.push(`| ${r.name} | ${r.kind} | ${r.success ? '성공' : '실패'} (${r.outcome}) | ${r.contract_attempts ?? '-'} | ${r.html_attempts ?? '-'} | ${cell(unit)} | ${r.hits ?? '-'} | ${cell((r.questions ?? []).join(', '))} | ${cell((r.expectation_failures ?? []).join('; ') || r.error || '')} | ${checksText(r.layout_checks)} | ${checksText(r.template_layout_checks)} | ${r.cost ? `$${r.cost.toFixed(4)}` : '-'} | ${r.seconds ?? '-'} |`);
   }
   lines.push('', '## 시도마다의 오류', '');
   for (const r of results) {
@@ -192,8 +211,8 @@ function summary(results, meta) {
       }
     }
   }
-  lines.push('', '## Agent 의 설명(message)', '');
-  for (const r of results) lines.push(`- **${r.name}**: 계약 — ${r.contract_message ?? '(없음)'} / 페이지 — ${r.html_message ?? '(없음)'}`);
+  lines.push('', '## Agent 의 설명(message)과 단위의 이유', '');
+  for (const r of results) lines.push(`- **${r.name}**: 계약 — ${r.contract_message ?? '(없음)'} / 단위 — ${r.unit?.why ?? '(없음)'} / 페이지 — ${r.html_message ?? '(없음)'} / 페이지 문장 — ${cell((r.layout ?? []).join(' · ')) || '(없음)'}`);
   return `${lines.join('\n')}\n`;
 }
 

@@ -1,0 +1,46 @@
+{
+  "unit": {
+    "level": "frame",
+    "why": "frame_times lists the moments to judge in each clip."
+  },
+  "instructions": "Look at the clip at each moment and say whether a person is visible.",
+  "repeat": {
+    "over": "frame_times",
+    "label": "Frame"
+  },
+  "fields": [
+    {
+      "id": "place",
+      "label": "Place",
+      "from": "place"
+    },
+    {
+      "id": "clip",
+      "label": "Clip",
+      "from": "video",
+      "kind": "video",
+      "at": "frame_times[i]"
+    }
+  ],
+  "questions": [
+    {
+      "name": "person",
+      "type": "choice",
+      "header": "Is a person visible at this moment?",
+      "options": [
+        [
+          "yes",
+          "Yes"
+        ],
+        [
+          "no",
+          "No"
+        ]
+      ],
+      "layout": "horizontal"
+    }
+  ],
+  "layout": [
+    "Show the place above the clip in small grey text."
+  ]
+}

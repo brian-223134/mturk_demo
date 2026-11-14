@@ -1,0 +1,50 @@
+{
+  "unit": {
+    "level": "sentence",
+    "why": "Each summary sentence can be supported or not on its own.",
+    "split": {
+      "from": "summary",
+      "by": "sentence"
+    }
+  },
+  "instructions": "Read the source, then decide whether each summary sentence is supported by it.",
+  "repeat": {
+    "over": "summary_sentences",
+    "label": "Sentence",
+    "per_hit": 3
+  },
+  "fields": [
+    {
+      "id": "source",
+      "label": "Source",
+      "from": "source"
+    },
+    {
+      "id": "sentence",
+      "label": "Summary sentence",
+      "from": "summary_sentences[i]"
+    }
+  ],
+  "questions": [
+    {
+      "name": "supported",
+      "type": "choice",
+      "header": "Is this sentence supported by the source?",
+      "options": [
+        [
+          "yes",
+          "Supported"
+        ],
+        [
+          "no",
+          "Not supported"
+        ]
+      ],
+      "layout": "horizontal"
+    }
+  ],
+  "layout": [
+    "Show the source at the top in a framed box.",
+    "Show each summary sentence in bold."
+  ]
+}
