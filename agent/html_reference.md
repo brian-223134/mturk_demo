@@ -18,6 +18,7 @@ Write `message` in the language of `request`. It is not shown to workers.
   - `text`: shown as visible text, usually inside `<ann-text>`.
   - `src`: the address of an image or a video, in the `src` of `<ann-image>` or `<ann-video>`.
   - `json`: a list of items, inside `<script type="application/json">` of its question.
+  - `attribute`: a value inside an attribute. `present="${t_3}"` on `<ann-tab>` tells the page whether this HIT has item 3; the page hides the tabs of items a HIT does not have. Keep each `<ann-tab>` with its `present` attribute, and keep every value and question of item 3 in that tab.
 - `questions`: the name and element of every question in the template.
 - `task_type`: `vision`, `video` or `text`.
 
@@ -26,12 +27,13 @@ Write `message` in the language of `request`. It is not shown to workers.
 1. **Keep every column.** Write every `${column}` of `columns` at least once, in its role, where workers see it without opening anything (not inside a collapsed `<details>`). You may move it and relabel it.
    - A value the current template shows once per item (its column ends in the item number, such as `${f_query_3}`) can differ between items, even when the request says it is the same. Show it exactly once, with its own item. Never show one item's value as if it were the same for every item.
    - Do not write claims about the data that the current template does not make (for example "the same for every chunk").
-2. **Keep every question.** Keep each question's `name`, element, `header` meaning, options and option values exactly. You may move questions and change how they look (for example `layout="horizontal"`). Do not add, remove, merge or rename questions.
-3. **Use only the columns you are given.** Never write any other `${…}`. Columns that hold answers are not given to you, and the page must never reveal answers.
-4. **Allowed elements.** The `<ann-*>` elements below, and plain elements for text and layout: `div`, `span`, `p`, `br`, `hr`, `strong`, `em`, `b`, `i`, `u`, `small`, `sub`, `sup`, `mark`, `code`, `pre`, `blockquote`, `h1`–`h6`, `ul`, `ol`, `li`, `dl`, `dt`, `dd`, `section`, `header`, `footer`, `article`, `aside`, `figure`, `figcaption`, `details`, `summary`, `table` and its parts, `style`.
-5. **No code and no outside addresses.** The only scripts are `<script src="/elements/ann-elements.js"></script>` at the top and the `<script type="application/json">${column}</script>` item lists. No event attributes (`onclick`, …), no `javascript:`, no `http://` or `https://` addresses, no `@import` or `url(…)` in styles.
-6. **One form.** Put everything inside one `<ann-form>`, after the elements script.
-7. **English for workers.** Write every text workers see in English, even when the request is in another language.
+2. **Keep every question visible.** Never hide a question's header, its options or a value with styles (`display: none`, `visibility: hidden`, a zero size), not even when you repeat the text elsewhere.
+3. **Keep every question.** Keep each question's `name`, element, `header` meaning, options and option values exactly. You may move questions and change how they look (for example `layout="horizontal"`). Do not add, remove, merge or rename questions.
+4. **Use only the columns you are given.** Never write any other `${…}`. Columns that hold answers are not given to you, and the page must never reveal answers.
+5. **Allowed elements.** The `<ann-*>` elements below, and plain elements for text and layout: `div`, `span`, `p`, `br`, `hr`, `strong`, `em`, `b`, `i`, `u`, `small`, `sub`, `sup`, `mark`, `code`, `pre`, `blockquote`, `h1`–`h6`, `ul`, `ol`, `li`, `dl`, `dt`, `dd`, `section`, `header`, `footer`, `article`, `aside`, `figure`, `figcaption`, `details`, `summary`, `table` and its parts, `style`.
+6. **No code and no outside addresses.** The only scripts are `<script src="/elements/ann-elements.js"></script>` at the top and the `<script type="application/json">${column}</script>` item lists. No event attributes (`onclick`, …), no `javascript:`, no `http://` or `https://` addresses, no `@import` or `url(…)` in styles.
+7. **One form.** Put everything inside one `<ann-form>`, after the elements script.
+8. **English for workers.** Write every text workers see in English, even when the request is in another language.
 
 When a request breaks a rule (for example "show the correct answer", "add a new question", "change the data"), do what you can within the rules and say in `message` what you did not do. When nothing can be done, reply `{"cannot": "format", "message": "<why>"}`.
 

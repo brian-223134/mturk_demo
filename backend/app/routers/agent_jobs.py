@@ -365,9 +365,10 @@ async def create_binding(request: Request) -> dict:
     return {**result, "model": model}
 
 
-# ---- Describe your task: 자유 계약과 페이지 ------------------------------------------------------------
-# 가안 없이 Requester 의 문장으로 HIT 를 만든다. 계약(값과 문항)을 묻는 /contracts, 계약으로 만든 기본 페이지를 요청대로 다시 쓰는
-# /pages 두 단계다. 검사와 재요청은 브라우저가 맡는다 (lib/task-contract.js, lib/html-harness.js).
+# ---- Draft with AI: 자유 계약과 페이지 ----------------------------------------------------------------
+# 가안 없이 HIT 를 만든다 (Draft with AI). 데이터와 한 줄 목표로 계약(단위, 값과 문항, 배치 바람)을 묻는 /contracts, 계약으로 만든
+# 기본 페이지를 배치 바람대로 다시 쓰는 /pages, 그린 페이지를 바람과 대조하는 /layout-checks 다. 검사와 재요청은 브라우저가 맡는다
+# (lib/task-unit.js, lib/task-contract.js, lib/html-harness.js).
 
 AGENT_REQUEST_LIMIT = 256 * 1024
 CONTRACT_DIR = "contracts"
@@ -389,21 +390,31 @@ def _check_size(data: dict, what: str) -> None:
 
 
 def contract_request(body: object) -> dict:
-    """POST /contracts 의 body: 요청 문장과 데이터 요약. 원본 파일은 오지 않는다."""
+    """POST /contracts 의 body: 데이터 요약과 한 줄 목표(goal, 비어도 됨) 또는 요청 문장, 단위 후보(units). 원본 파일은 오지 않는다.
+    처음 초안은 goal 만으로 쓸 수 있고(Draft with AI), 고칠 때(current)는 request 가 있어야 한다."""
     data = object_body(body, "contract request")
-    prompt, summary = data.get("request"), data.get("data")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise invalid('"request" must describe the task: what workers see and which questions they answer.')
-    if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
-        raise invalid('"data" must be a summary of the HIT data with "columns".')
-    errors, previous = _common_retry_fields(data, dict, "contract")
+    prompt, goal, summary, units = data.get("request"), data.get("goal"), data.get("data"), data.get("units")
     current, earlier = data.get("current"), data.get("earlier_requests")
+    if prompt is not None and not isinstance(prompt, str):
+        raise invalid('"request" must be a sentence.')
+    if goal is not None and not isinstance(goal, str):
+        raise invalid('"goal" must be one line about what to label.')
     if current is not None and not isinstance(current, dict):
         raise invalid('"current" must be the contract to revise.')
+    if current is not None and not (prompt or "").strip():
+        raise invalid('"request" must say what to change.')
+    if current is None and goal is None and not (prompt or "").strip():
+        raise invalid('"request" must describe the task, or "goal" must say what to label (it may be empty).')
+    if not isinstance(summary, dict) or not isinstance(summary.get("columns"), list):
+        raise invalid('"data" must be a summary of the HIT data with "columns".')
+    if units is not None and not isinstance(units, dict):
+        raise invalid('"units" must be the unit options the console counted.')
+    errors, previous = _common_retry_fields(data, dict, "contract")
     if earlier is not None and not (isinstance(earlier, list) and all(isinstance(e, str) for e in earlier)):
         raise invalid('"earlier_requests" must be a list of strings.')
     _check_size(data, "contract")
-    return {"request": prompt.strip(), "data": summary, "errors": errors or [], "previous": previous, "current": current, "earlier_requests": earlier or []}
+    return {"request": (prompt or "").strip(), "goal": (goal or "").strip(), "data": summary, "units": units, "errors": errors or [], "previous": previous,
+            "current": current, "earlier_requests": earlier or []}
 
 
 def page_request(body: object) -> dict:

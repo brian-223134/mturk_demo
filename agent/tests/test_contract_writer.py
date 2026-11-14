@@ -45,6 +45,28 @@ class MessagesTest(unittest.TestCase):
         self.assertIn("Add a comment box.", messages[1]["content"])
         self.assertIn("## Revising a contract", messages[0]["content"])
 
+    def test_a_goal_drafts_the_whole_task_with_the_unit_options(self):
+        units = {"records": 2, "split": [{"from": "passage", "sentence": {"per_record": {"min": 2, "max": 4}, "makes": "passage_sentences"}}]}
+        request = {"goal": "Is each sentence supported?", "request": "", "data": REQUEST["data"], "units": units}
+        messages = contract_writer.build_messages(request)
+        self.assertTrue(messages[1]["content"].startswith("Draft the task contract for this data and goal. Decide the unit first."))
+        task = json.loads(messages[1]["content"].split("```json\n")[1].split("\n```")[0])
+        self.assertEqual(task["goal"], "Is each sentence supported?")
+        self.assertEqual(task["units"], units)
+        self.assertNotIn("request", task, "빈 요청은 보내지 않는다")
+        self.assertIn("## Deciding the unit", messages[0]["content"])
+        self.assertIn("## The page", messages[0]["content"])
+
+    def test_no_goal_asks_the_model_to_infer_it(self):
+        messages = contract_writer.build_messages({"goal": "", "data": REQUEST["data"]})
+        self.assertIn("The requester gave no goal", messages[1]["content"])
+        self.assertNotIn('"goal"', messages[1]["content"])
+
+    def test_a_revision_may_change_content_unit_or_page(self):
+        messages = contract_writer.build_messages({**REQUEST, "request": "Put the passage on the left.", "goal": "x", "current": CONTRACT})
+        self.assertIn("content, the unit or the page", messages[1]["content"])
+        self.assertIn('"goal": "x"', messages[1]["content"], "고칠 때도 목표를 함께 보낸다")
+
     def test_first_write_has_no_current_key(self):
         messages = contract_writer.build_messages({**REQUEST, "current": None, "earlier_requests": ["x"]})
         self.assertTrue(messages[1]["content"].startswith("Write the task contract"))

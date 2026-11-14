@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("backend")
 
-KINDS = {"binding": "Binding", "contract": "Task (Describe your task)", "page": "Page layout", "layout-check": "Layout check", "job": "Generate from raw data"}
+KINDS = {"binding": "Binding", "contract": "Task (Draft with AI)", "page": "Page layout", "layout-check": "Layout check", "job": "Generate from raw data"}
 RECENT_DAYS = 31
 OPENROUTER = "https://openrouter.ai/api/v1"
 BALANCE_TIMEOUT = 10
